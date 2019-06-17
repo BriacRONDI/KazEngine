@@ -1393,13 +1393,73 @@ namespace Engine
     /**
      * Création d'un Mesh
      */
-    uint32_t Vulkan::CreateMesh(uint32_t model_id)
+    uint32_t Vulkan::CreateMesh(uint32_t model_id, uint32_t texture_id)
     {
         uint32_t mesh_index = this->last_mesh_index;
 
         MESH new_mesh;
         new_mesh.offset = this->ubo_alignement * mesh_index;
         new_mesh.vertex_buffer_index = model_id;
+
+        ///////////////////////////////////
+        // Allocation des descriptor Set //
+        ///////////////////////////////////
+
+        VkDescriptorSetAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.pNext = nullptr;
+        alloc_info.descriptorPool = this->descriptor_pool.pool;
+        alloc_info.descriptorSetCount = 1;
+        alloc_info.pSetLayouts = &this->descriptor_pool.layout;
+
+        VkResult result = vkAllocateDescriptorSets(this->device, &alloc_info, &new_mesh.descriptor_set);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout <<"CreateMesh => vkAllocateDescriptorSets : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        ///////////////////////////////////
+        // Mise à jour du descriptor Set //
+        ///////////////////////////////////
+
+        VkWriteDescriptorSet writes[2];
+
+        VkDescriptorImageInfo descriptor_image_info = {};
+        descriptor_image_info.sampler = this->textures[texture_id].sampler;
+        descriptor_image_info.imageView = this->textures[texture_id].view;
+        descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[0].pNext = nullptr;
+        writes[0].dstSet = new_mesh.descriptor_set;
+        writes[0].dstBinding = 0;
+        writes[0].dstArrayElement = 0;
+        writes[0].descriptorCount = 1;
+        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        writes[0].pImageInfo = &descriptor_image_info;
+        writes[0].pBufferInfo = nullptr;
+        writes[0].pTexelBufferView = nullptr;
+
+        VkDescriptorBufferInfo buffer_info = {};
+        buffer_info.buffer = this->uniform_buffer.handle;
+        buffer_info.offset = 0;
+        buffer_info.range = static_cast<VkDeviceSize>(sizeof(Matrix4x4));
+
+        writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[1].pNext = nullptr;
+        writes[1].dstSet = new_mesh.descriptor_set;
+        writes[1].dstBinding = 1;
+        writes[1].dstArrayElement = 0;
+        writes[1].descriptorCount = 1;
+        writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        writes[1].pImageInfo = nullptr;
+        writes[1].pBufferInfo = &buffer_info;
+        writes[1].pTexelBufferView = nullptr;
+        writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+
+        vkUpdateDescriptorSets(this->device, 2, writes, 0, nullptr);
 
         this->meshes[mesh_index] = new_mesh;
         this->last_mesh_index++;
@@ -1861,26 +1921,6 @@ namespace Engine
             #endif
             return false;
         }
-
-        std::vector<VkDescriptorSetLayout> layouts(this->swap_chain.images.size(), this->descriptor_pool.layout);
-        VkDescriptorSetAllocateInfo alloc_info = {};
-        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        alloc_info.pNext = nullptr;
-        alloc_info.descriptorPool = this->descriptor_pool.pool;
-        alloc_info.descriptorSetCount = static_cast<uint32_t>(this->swap_chain.images.size());
-        alloc_info.pSetLayouts = layouts.data();
-
-        std::vector<VkDescriptorSet> descriptor_sets(this->swap_chain.images.size());
-        result = vkAllocateDescriptorSets(this->device, &alloc_info, descriptor_sets.data());
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout <<"CreateDescriptorSet => vkAllocateDescriptorSets : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        // On récupère les descriptor sets alloués pour les placer dans chaque ressource de thread
-        for(uint16_t i=0; i<this->swap_chain.images.size(); i++) this->rendering[i].descriptor_set = descriptor_sets[i];
         
         // Succès
         #if defined(_DEBUG)
@@ -2062,8 +2102,8 @@ namespace Engine
         Matrix4x4 translation = TranslationMatrix(1.8f, 0.0f, -7.0f);
         this->meshes[0].transformations = projection * translation * rotationX * rotationY;
 
-        //rotationX = RotationMatrix(angle_x, {-1.0f, 0.0f, 0.0f});
-        rotationY = RotationMatrix(angle_y, {0.0f, -1.0f, 0.0f});
+        rotationX = RotationMatrix(angle_x, {-1.0f, 0.0f, 0.0f});
+        rotationY = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
         translation = TranslationMatrix(-1.8f, 0.0f, -7.0f);
         this->meshes[1].transformations = projection * translation * rotationX * rotationY;
 
@@ -2443,49 +2483,6 @@ namespace Engine
             }
         }
 
-        ///////////////////////////////////
-        // Mise à jour du descriptor Set //
-        ///////////////////////////////////
-
-        for(auto resource : this->rendering) {
-            VkWriteDescriptorSet writes[2];
-
-            VkDescriptorImageInfo descriptor_image_info = {};
-            descriptor_image_info.sampler = texture.sampler;
-            descriptor_image_info.imageView = texture.view;
-            descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-            writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[0].pNext = nullptr;
-            writes[0].dstSet = resource.descriptor_set;
-            writes[0].dstBinding = 0;
-            writes[0].dstArrayElement = 0;
-            writes[0].descriptorCount = 1;
-            writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writes[0].pImageInfo = &descriptor_image_info;
-            writes[0].pBufferInfo = nullptr;
-            writes[0].pTexelBufferView = nullptr;
-
-            VkDescriptorBufferInfo buffer_info = {};
-            buffer_info.buffer = this->uniform_buffer.handle;
-            buffer_info.offset = 0;
-            buffer_info.range = static_cast<VkDeviceSize>(sizeof(Matrix4x4));
-
-            writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[1].pNext = nullptr;
-            writes[1].dstSet = resource.descriptor_set;
-            writes[1].dstBinding = 1;
-            writes[1].dstArrayElement = 0;
-            writes[1].descriptorCount = 1;
-            writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-            writes[1].pImageInfo = nullptr;
-            writes[1].pBufferInfo = &buffer_info;
-            writes[1].pTexelBufferView = nullptr;
-            writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-
-            vkUpdateDescriptorSets(this->device, 2, writes, 0, nullptr);
-        }
-
         // Ajout de la texture dans la mémoire
         uint32_t texture_index = this->last_texture_index;
         this->textures[texture_index] = texture;
@@ -2801,7 +2798,7 @@ namespace Engine
                 VkDeviceSize offset = 0;
                 VULKAN_BUFFER vertex_buffer = self->vertex_buffers[mesh.second.vertex_buffer_index];
                 vkCmdBindVertexBuffers(command_buffer, 0, 1, &vertex_buffer.handle, &offset);
-                vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.layout, 0, 1, &current_rendering_resource.descriptor_set, 0, &mesh.second.offset);
+                vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.layout, 0, 1, &mesh.second.descriptor_set, 0, &mesh.second.offset);
 
                 uint32_t vertex_count = static_cast<uint32_t>(vertex_buffer.size / sizeof(VERTEX));
                 vkCmdDraw(command_buffer, vertex_count, 1, 0, 0);

@@ -34,14 +34,25 @@ int main(int argc, char** argv)
     Engine::Vulkan* engine = Engine::Vulkan::GetInstance();
     engine->Initialize(main_window, VK_MAKE_VERSION(0, 0, 1), "Cube");
 
-    // Chargement d'une image depuis un fichier
+    // Chargement de la première texture
     int width, height, format;
+    uint32_t texture1_id;
     stbi_uc* stbi_data = stbi_load("./Assets/texture.png", &width, &height, &format, STBI_rgb_alpha);
     if(stbi_data != nullptr) {
         std::vector<unsigned char> image_data(width * height * STBI_rgb_alpha);
         std::memcpy(image_data.data(), stbi_data, width * height * STBI_rgb_alpha);
         stbi_image_free(stbi_data);
-        engine->CreateTexture(image_data, width, height);
+        texture1_id = engine->CreateTexture(image_data, width, height);
+    }
+
+    // Chargement de la seconde texture
+    uint32_t texture2_id;
+    stbi_data = stbi_load("./Assets/leaf.jpg", &width, &height, &format, STBI_rgb_alpha);
+    if(stbi_data != nullptr) {
+        std::vector<unsigned char> image_data(width * height * STBI_rgb_alpha);
+        std::memcpy(image_data.data(), stbi_data, width * height * STBI_rgb_alpha);
+        stbi_image_free(stbi_data);
+        texture2_id = engine->CreateTexture(image_data, width, height);
     }
 
     #if defined(_DEBUG)
@@ -51,7 +62,7 @@ int main(int argc, char** argv)
     #define VERT_COORD(x,y,z) {x,y,z,1.0f}
     #define TEXT_COORD(u,v) {u,v}
 
-    std::vector<Engine::Vulkan::VERTEX> vertex_data = {
+    std::vector<Engine::Vulkan::VERTEX> cube_data = {
             {VERT_COORD(-1, -1, 1), TEXT_COORD(0, 0)},
             {VERT_COORD(-1, 1, 1), TEXT_COORD(0, 1)},
             {VERT_COORD(1, -1, 1), TEXT_COORD(1, 0)},
@@ -95,10 +106,37 @@ int main(int argc, char** argv)
             {VERT_COORD(-1, 1, 1), TEXT_COORD(0, 1)}
     };
 
-    //engine->UpdateVertexBuffer(vertex_data);
-    uint32_t cube_model = engine->CreateVertexBuffer(vertex_data);
-    uint32_t cube1 = engine->CreateMesh(cube_model);
-    uint32_t cube2 = engine->CreateMesh(cube_model);
+    std::vector<Engine::Vulkan::VERTEX> prisme_data = {
+            {VERT_COORD(0, -1, 0), TEXT_COORD(0.5f, 0)},
+            {VERT_COORD(-1, 1, -1), TEXT_COORD(0, 1)},
+            {VERT_COORD(-1, 1, 1), TEXT_COORD(1, 1)},
+
+            {VERT_COORD(0, -1, 0), TEXT_COORD(0.5f, 0)},
+            {VERT_COORD(-1, 1, 1), TEXT_COORD(0, 1)},
+            {VERT_COORD(1, 1, 1), TEXT_COORD(1, 1)},
+
+            {VERT_COORD(0, -1, 0), TEXT_COORD(0.5f, 0)},
+            {VERT_COORD(1, 1, 1), TEXT_COORD(0, 1)},
+            {VERT_COORD(1, 1, -1), TEXT_COORD(1, 1)},
+
+            {VERT_COORD(0, -1, 0), TEXT_COORD(0.5f, 0)},
+            {VERT_COORD(1, 1, -1), TEXT_COORD(0, 1)},
+            {VERT_COORD(-1, 1, -1), TEXT_COORD(1, 1)},
+
+            {VERT_COORD(1, 1, -1), TEXT_COORD(1, 0)},
+            {VERT_COORD(1, 1, 1), TEXT_COORD(1, 1)},
+            {VERT_COORD(-1, 1, 1), TEXT_COORD(0, 1)},
+            {VERT_COORD(-1, 1, -1), TEXT_COORD(0, 0)},
+            {VERT_COORD(1, 1, -1), TEXT_COORD(1, 0)},
+            {VERT_COORD(-1, 1, 1), TEXT_COORD(0, 1)}
+    };
+
+    uint32_t cube_model = engine->CreateVertexBuffer(cube_data);
+    uint32_t cube = engine->CreateMesh(cube_model, texture1_id);
+
+    uint32_t prisme_model = engine->CreateVertexBuffer(prisme_data);
+    uint32_t prisme = engine->CreateMesh(prisme_model, texture2_id);
+
     engine->Start();
 
     // Boucle principale

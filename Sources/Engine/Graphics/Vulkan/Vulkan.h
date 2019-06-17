@@ -74,7 +74,7 @@ namespace Engine
             void Stop();
             uint32_t CreateTexture(std::vector<unsigned char> data, uint32_t width, uint32_t height);                               // Copie d'une texture dans la carte graphique
             uint32_t CreateVertexBuffer(std::vector<VERTEX>& data);                                                                 // Création d'un vertex buffer
-            uint32_t CreateMesh(uint32_t model_id);                                                                                 // Création d'un mesh
+            uint32_t CreateMesh(uint32_t model_id, uint32_t texture_id);                                                                                 // Création d'un mesh
             static void ThreadLoop(Vulkan* self);                                                                                   // Boucle principale d'affichage
 
         private:
@@ -161,15 +161,13 @@ namespace Engine
                 VkSemaphore swap_chain_semaphore;
                 VkSemaphore render_pass_semaphore;
                 VkFence fence;
-                VkDescriptorSet descriptor_set;
 
                 RENDERING_RESOURCE() :
                     framebuffer(VK_NULL_HANDLE),
                     command_buffer(VK_NULL_HANDLE),
                     swap_chain_semaphore(VK_NULL_HANDLE),
                     render_pass_semaphore(VK_NULL_HANDLE),
-                    fence(VK_NULL_HANDLE),
-                    descriptor_set(VK_NULL_HANDLE) {
+                    fence(VK_NULL_HANDLE) {
                 }
             };
 
@@ -185,9 +183,10 @@ namespace Engine
             struct MESH {
                 Matrix4x4 transformations;
                 uint32_t vertex_buffer_index;
+                VkDescriptorSet descriptor_set;
                 uint32_t offset;
 
-                MESH() : transformations(IDENTITY_MATRIX), vertex_buffer_index(UINT32_MAX), offset(UINT32_MAX) {}
+                MESH() : transformations(IDENTITY_MATRIX), vertex_buffer_index(UINT32_MAX), descriptor_set(VK_NULL_HANDLE), offset(UINT32_MAX) {}
             };
 
             /////////////
@@ -259,7 +258,6 @@ namespace Engine
             uint32_t last_mesh_index;                                       // Index du prochain mesh à allouer
             std::unordered_map<uint32_t, TEXTURE> textures;                 // Structure de stockage pour les textures créées
             std::unordered_map<uint32_t, VULKAN_BUFFER> vertex_buffers;     // Structure de stockage pour les vertex buffers créés
-            // Matrix4x4 projection;                                           // Matrice de projection contenue dans le Uniform Buffer
             std::unordered_map<uint32_t, MESH> meshes;                      // Ensemble de meshes manipulables
 
             ////////////////////
