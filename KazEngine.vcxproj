@@ -157,6 +157,7 @@
     <ClInclude Include="Sources\Engine\Core\Types.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="LICENSE" />
     <None Include="Sources\Engine\Graphics\Vulkan\ListOfFunctions.inl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -10,6 +10,7 @@
 #include "../../Platform/Common/Window/Window.h"
 #include "../../Tools/Tools.h"
 #include "../../Tools/Matrix/Maths.h"
+// #include "../Mesh/Mesh.h"
 
 #if defined(_DEBUG)
 #include <iostream>
@@ -17,6 +18,8 @@
 
 #define ENGINE_VERSION VK_MAKE_VERSION(0, 0, 1)
 #define ENGINE_NAME "KazEngine"
+
+#define STAGING_BUFFER_SIZE 1024 * 1024 * 20
 
 namespace Engine
 {
@@ -66,16 +69,18 @@ namespace Engine
 
             static Vulkan* GetInstance();                                                                                           // Récupération de l'instance du singleton
             static void DestroyInstance();                                                                                          // Libération des ressources allouées à Vulkan
-            ERROR_MESSAGE Initialize(Engine::Window* draw_window, uint32_t application_version, std::string aplication_name);      // Initialisation de Vulkan
+            ERROR_MESSAGE Initialize(Engine::Window* draw_window, uint32_t application_version, std::string aplication_name);       // Initialisation de Vulkan
             void Start();
             void Stop();
             uint32_t CreateTexture(std::vector<unsigned char> data, uint32_t width, uint32_t height);                               // Copie d'une texture dans la carte graphique
-            // bool Draw();                                                                                                            // Affichage
-            bool UpdateVertexBuffer(std::vector<VERTEX> data);                                                                      // Mise à jour des données du vertex buffer
-
-            static void ThreadLoop(Vulkan* self);                                                     // Boucle principale d'affichage
+            uint32_t CreateVertexBuffer(std::vector<VERTEX>& data);                                                                 // Création d'un vertex buffer
+            uint32_t CreateMesh(uint32_t model_id);                                                                                 // Création d'un mesh
+            static void ThreadLoop(Vulkan* self);                                                                                   // Boucle principale d'affichage
 
         private:
+
+            // Le mesh utilise le VULKAN_BUFFER
+            // friend class Mesh;
 
             ////////////////////
             // HERPER STRUCTS //
@@ -123,8 +128,9 @@ namespace Engine
                 VkBuffer handle;
                 VkDeviceMemory memory;
                 void* pointer;
+                VkDeviceSize size;
 
-                VULKAN_BUFFER() : handle(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), pointer(nullptr) {}
+                VULKAN_BUFFER() : handle(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), pointer(nullptr), size(0) {}
             };
 
             struct PIPELINE {
@@ -176,6 +182,14 @@ namespace Engine
                 TEXTURE() : image(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), view(VK_NULL_HANDLE), sampler(VK_NULL_HANDLE) {}
             };
 
+            struct MESH {
+                Matrix4x4 transformations;
+                uint32_t vertex_buffer_index;
+                uint32_t offset;
+
+                MESH() : transformations(IDENTITY_MATRIX), vertex_buffer_index(UINT32_MAX), offset(UINT32_MAX) {}
+            };
+
             /////////////
             // MEMBERS //
             /////////////
@@ -216,7 +230,6 @@ namespace Engine
             // Buffers
             DEPTH_BUFFER depth_buffer;
             VULKAN_BUFFER staging_buffer;
-            VULKAN_BUFFER vertex_buffer;
             VULKAN_BUFFER uniform_buffer;
 
             // Base commune pour les descriptor sets
@@ -241,10 +254,13 @@ namespace Engine
             bool keep_runing;
 
             // Data
-            uint32_t last_texture_index;                        // Index de la prochaine texture à allouer
-            uint32_t vertex_count;                              // Nombre de vecteurs contenus dans le Vertex Buffer
-            std::unordered_map<uint32_t, TEXTURE> textures;     // Structure de stockage pour les textures créées
-            Matrix4x4 projection;                               // Matrice de projection contenue dans le Uniform Buffer
+            uint32_t last_texture_index;                                    // Index de la prochaine texture à allouer
+            uint32_t last_vbo_index;                                        // Index du prochain vertex buffer à allouer
+            uint32_t last_mesh_index;                                       // Index du prochain mesh à allouer
+            std::unordered_map<uint32_t, TEXTURE> textures;                 // Structure de stockage pour les textures créées
+            std::unordered_map<uint32_t, VULKAN_BUFFER> vertex_buffers;     // Structure de stockage pour les vertex buffers créés
+            // Matrix4x4 projection;                                           // Matrice de projection contenue dans le Uniform Buffer
+            std::unordered_map<uint32_t, MESH> meshes;                      // Ensemble de meshes manipulables
 
             ////////////////////
             // CORE FUNCTIONS //
@@ -265,7 +281,6 @@ namespace Engine
             bool CreateSwapChain();                                                                             // Création de la swap chain
             bool CreateDepthBuffer();                                                                           // Création du depth buffer
             bool CreateStagingBuffer(VkDeviceSize size);                                                        // Création du staging buffer
-            bool CreateVertexBuffer(VkDeviceSize size);                                                         // Création du vertex buffer
             bool CreateUniformBuffer();                                                                         // Création du uniform buffer
             bool CreateRenderPass();                                                                            // Création de la render pass
             bool CreateDescriptorSets();                                                                        // Création des descriptor sets
@@ -273,7 +288,7 @@ namespace Engine
             bool CreateCommandBuffers();                                                                        // Création des command buffers
             bool CreateSemaphores();                                                                            // Création des sémaphores
             bool CreateFences();                                                                                // Création des fences
-            bool UpdateUniformBuffer();                                                                         // Mise à jour du contenu du uniform buffer
+            bool UpdateMeshUniformBuffers();                                                                    // Mise à jour du contenu des uniform buffers des mesh
             bool OnWindowSizeChanged();                                                                         // Reconstruction de la Swap Chain lorsque la fenêtre est redimensionnée
 
             //static void ThreadLoop(Vulkan* self);                                                     // Boucle principale d'affichage
@@ -300,6 +315,7 @@ namespace Engine
             bool CreateCommandPool(VkCommandPool& pool, uint32_t queue_family_index);
             bool AllocateCommandBuffer(VkCommandPool& pool, uint32_t count, std::vector<VkCommandBuffer>& buffer);
             bool MemoryTypeFromProperties(uint32_t type_bits, VkFlags requirements_mask, uint32_t &type_index);
+            bool UpdateVertexBuffer(std::vector<VERTEX>& data, VULKAN_BUFFER& vertex_buffer);                      // Mise à jour des données du vertex buffer
 
             #if defined(_DEBUG)
             VkDebugUtilsMessengerEXT report_callback;

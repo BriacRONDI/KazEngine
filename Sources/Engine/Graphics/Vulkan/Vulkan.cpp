@@ -36,7 +36,8 @@ namespace Engine
         this->render_pass               = VK_NULL_HANDLE;
         this->graphics_pool             = VK_NULL_HANDLE;
         this->last_texture_index        = 0;
-        this->vertex_count              = 0;
+        this->last_vbo_index            = 0;
+        this->last_mesh_index           = 0;
         this->keep_runing               = false;
         this->ubo_alignement            = 0;
 
@@ -89,9 +90,19 @@ namespace Engine
         if(this->uniform_buffer.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->uniform_buffer.memory, nullptr);
         if(this->uniform_buffer.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, this->uniform_buffer.handle, nullptr);
 
-        // Vertex Buffer
-        if(this->vertex_buffer.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->vertex_buffer.memory, nullptr);
-        if(this->vertex_buffer.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, this->vertex_buffer.handle, nullptr);
+        // Vertex Buffers
+        for(std::pair<uint32_t, VULKAN_BUFFER> element : this->vertex_buffers) {
+            if(element.second.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, element.second.memory, nullptr);
+            if(element.second.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, element.second.handle, nullptr);
+        }
+        
+        // Textures
+        for(std::pair<uint32_t, TEXTURE> element : this->textures) {
+            if(element.second.view != VK_NULL_HANDLE) vkDestroyImageView(this->device, element.second.view, nullptr);
+            if(element.second.image != VK_NULL_HANDLE) vkDestroyImage(this->device, element.second.image, nullptr);
+            if(element.second.sampler != VK_NULL_HANDLE) vkDestroySampler(this->device, element.second.sampler, nullptr);
+            if(element.second.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, element.second.memory, nullptr);
+        }
 
         // Stagin Buffer
         if(this->staging_buffer.pointer != nullptr) vkUnmapMemory(this->device, this->staging_buffer.memory);
@@ -216,7 +227,6 @@ namespace Engine
             init_status = ERROR_MESSAGE::SWAP_CHAIN_CREATION_FAILURE;
 
         // Allocation des threads utilisés pour le rendu
-        //if(Vulkan::global_instance->image_count > this->swap_chain.images.size()) this->image_count = static_cast<unsigned int>(this->swap_chain.images.size());
         Vulkan::global_instance->rendering.resize(this->swap_chain.images.size());
 
         // Création du depth buffer
@@ -224,14 +234,8 @@ namespace Engine
             init_status = ERROR_MESSAGE::DEPTH_BUFFER_CREATION_FAILURE;
 
         // Création du staging buffer
-        uint64_t staging_buffer_size = 1024 * 1024 * 20; // 20 Mo
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateStagingBuffer(staging_buffer_size))
+        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateStagingBuffer(STAGING_BUFFER_SIZE))
             init_status = ERROR_MESSAGE::STAGING_BUFFER_CREATION_FAILURE;
-
-        // Création du vertex buffer
-        uint64_t vertex_buffer_size = 1024 * 1024 * 20; // 20 Mo
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateVertexBuffer(vertex_buffer_size))
-            init_status = ERROR_MESSAGE::VERTEX_BUFFER_CREATION_FAILURE;
 
         // Création du uniform buffer
         uint64_t uniform_buffer_size = 1024 * 1024 * 20; // 20 Mo
@@ -263,8 +267,8 @@ namespace Engine
             init_status = ERROR_MESSAGE::FENCES_CREATION_FAILURE;
 
         // Mise à jour du uniform buffer
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->UpdateUniformBuffer())
-            init_status = ERROR_MESSAGE::UNIFORM_BUFFER_UPDATE_FAILURE;
+        /*if(init_status == ERROR_MESSAGE::SUCCESS && !this->UpdateMeshUniformBuffers())
+            init_status = ERROR_MESSAGE::UNIFORM_BUFFER_UPDATE_FAILURE;*/
 
         // En cas d'échecx d'initialisation, on libère les ressources alouées
         if(init_status != ERROR_MESSAGE::SUCCESS) Vulkan::DestroyInstance();
@@ -704,7 +708,7 @@ namespace Engine
         // On calcule l'alignement des offets des UBO
         size_t min_ubo_alignement = this->physical_device.properties.limits.minUniformBufferOffsetAlignment;
         this->ubo_alignement = sizeof(Matrix4x4);
-        if(min_ubo_alignement > 0) this->ubo_alignement = (this->ubo_alignement + min_ubo_alignement - 1) & ~(min_ubo_alignement - 1);
+        if(min_ubo_alignement > 0) this->ubo_alignement = static_cast<uint32_t>((this->ubo_alignement + min_ubo_alignement - 1) & ~(min_ubo_alignement - 1));
 
         // Succès
         #if defined(_DEBUG)
@@ -1303,23 +1307,28 @@ namespace Engine
     /**
      * Création du vertex buffer
      */
-    bool Vulkan::CreateVertexBuffer(VkDeviceSize size)
+    uint32_t Vulkan::CreateVertexBuffer(std::vector<VERTEX>& data)
     {
+        // Valeur de retour
+        VULKAN_BUFFER vertex_buffer;
+
         ////////////////////////////////
         //     Création du buffer     //
         ////////////////////////////////
+
+        vertex_buffer.size = sizeof(VERTEX) * data.size();
 
         VkBufferCreateInfo buffer_create_info = {};
         buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         buffer_create_info.pNext = nullptr;
         buffer_create_info.flags = 0;
-        buffer_create_info.size = size;
+        buffer_create_info.size = vertex_buffer.size;
         buffer_create_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
         buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         buffer_create_info.queueFamilyIndexCount = 0;
         buffer_create_info.pQueueFamilyIndices = nullptr;
 
-        VkResult result = vkCreateBuffer(this->device, &buffer_create_info, nullptr, &this->vertex_buffer.handle);
+        VkResult result = vkCreateBuffer(this->device, &buffer_create_info, nullptr, &vertex_buffer.handle);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
             std::cout << "CreateVertexBuffer => vkCreateBuffer : Failed" << std::endl;
@@ -1328,7 +1337,7 @@ namespace Engine
         }
 
         VkMemoryRequirements mem_reqs;
-        vkGetBufferMemoryRequirements(this->device, this->vertex_buffer.handle, &mem_reqs);
+        vkGetBufferMemoryRequirements(this->device, vertex_buffer.handle, &mem_reqs);
 
         VkMemoryAllocateInfo mem_alloc = {};
         mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -1345,7 +1354,7 @@ namespace Engine
         }
 
         // Allocation de la mémoire pour le vertex buffer
-        result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &this->vertex_buffer.memory);
+        result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &vertex_buffer.memory);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
             std::cout << "CreateVertexBuffer => vkAllocateMemory : Failed" << std::endl;
@@ -1353,7 +1362,7 @@ namespace Engine
             return false;
         }
 
-        result = vkBindBufferMemory(this->device, this->vertex_buffer.handle, this->vertex_buffer.memory, 0);
+        result = vkBindBufferMemory(this->device, vertex_buffer.handle, vertex_buffer.memory, 0);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
             std::cout << "CreateVertexBuffer => vkBindBufferMemory : Failed" << std::endl;
@@ -1365,7 +1374,37 @@ namespace Engine
         std::cout << "CreateVertexBuffer : Success" << std::endl;
         #endif
 
-        return true;
+        if(this->UpdateVertexBuffer(data, vertex_buffer)) {
+
+            // Ajout du buffer dans la mémoire
+            uint32_t buffer_index = this->last_vbo_index;
+            this->vertex_buffers[buffer_index] = vertex_buffer;
+            this->last_vbo_index++;
+
+            return buffer_index;
+        
+        }else{
+
+            // En cas d'échec, on renvoie UINT32_MAX
+            return UINT32_MAX;
+        }
+    }
+
+    /**
+     * Création d'un Mesh
+     */
+    uint32_t Vulkan::CreateMesh(uint32_t model_id)
+    {
+        uint32_t mesh_index = this->last_mesh_index;
+
+        MESH new_mesh;
+        new_mesh.offset = this->ubo_alignement * mesh_index;
+        new_mesh.vertex_buffer_index = model_id;
+
+        this->meshes[mesh_index] = new_mesh;
+        this->last_mesh_index++;
+
+        return mesh_index;
     }
 
     /**
@@ -1378,13 +1417,14 @@ namespace Engine
         ////////////////////////////////
 
         // Matrice 4*4 float
-        VkDeviceSize buffer_size = static_cast<VkDeviceSize>(4 * 4 * sizeof(float));
+        uint32_t mesh_count = 2;
+        this->uniform_buffer.size = this->ubo_alignement * (mesh_count - 1) + sizeof(Matrix4x4);
 
         VkBufferCreateInfo buffer_create_info = {};
         buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         buffer_create_info.pNext = nullptr;
         buffer_create_info.flags = 0;
-        buffer_create_info.size = buffer_size;
+        buffer_create_info.size = this->uniform_buffer.size;
         buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
         buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         buffer_create_info.queueFamilyIndexCount = 0;
@@ -1803,7 +1843,7 @@ namespace Engine
         layout_bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
         layout_bindings[0].pImmutableSamplers = nullptr;
         layout_bindings[1].binding = 1;
-        layout_bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        layout_bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
         layout_bindings[1].descriptorCount = 1;
         layout_bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         layout_bindings[1].pImmutableSamplers = nullptr;
@@ -1998,7 +2038,7 @@ namespace Engine
     /**
      * Mise à jour des données du uniform buffer
      */
-    bool Vulkan::UpdateUniformBuffer()
+    bool Vulkan::UpdateMeshUniformBuffers()
     {
         //////////////////////////////////////
         //   Transformations géométriques   //
@@ -2019,9 +2059,13 @@ namespace Engine
 
         Matrix4x4 rotationX = RotationMatrix(angle_x, {1.0f, 0.0f, 0.0f});
         Matrix4x4 rotationY = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
-        Matrix4x4 translation = TranslationMatrix(0.0f, 0.0f, -5.0f);
+        Matrix4x4 translation = TranslationMatrix(1.8f, 0.0f, -7.0f);
+        this->meshes[0].transformations = projection * translation * rotationX * rotationY;
 
-        this->projection = projection * translation * rotationX * rotationY;
+        //rotationX = RotationMatrix(angle_x, {-1.0f, 0.0f, 0.0f});
+        rotationY = RotationMatrix(angle_y, {0.0f, -1.0f, 0.0f});
+        translation = TranslationMatrix(-1.8f, 0.0f, -7.0f);
+        this->meshes[1].transformations = projection * translation * rotationX * rotationY;
 
         // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
         VkResult result = vkWaitForFences(this->device, 1, &this->transfer.fence, VK_FALSE, 1000000000);
@@ -2038,10 +2082,12 @@ namespace Engine
         //      le staging buffer     //
         ////////////////////////////////
 
-        VkDeviceSize buffer_size = static_cast<VkDeviceSize>(sizeof(Matrix4x4));
-        std::memcpy(this->staging_buffer.pointer, &this->projection[0], buffer_size);
+        for(std::pair<uint32_t, MESH> mesh : this->meshes) {
+            void* staging_buffer_position = reinterpret_cast<char*>(this->staging_buffer.pointer) + mesh.second.offset;
+            std::memcpy(staging_buffer_position, &mesh.second.transformations, sizeof(Matrix4x4));
+        }
 
-        size_t flush_size = static_cast<size_t>(buffer_size);
+        size_t flush_size = static_cast<size_t>(this->uniform_buffer.size);
         unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
         flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * ((uint64_t)multiple + 1);
 
@@ -2070,7 +2116,7 @@ namespace Engine
         VkBufferCopy buffer_copy_info = {};
         buffer_copy_info.srcOffset = 0;
         buffer_copy_info.srcOffset = 0;
-        buffer_copy_info.size = buffer_size;
+        buffer_copy_info.size = this->uniform_buffer.size;
 
         vkCmdCopyBuffer(this->transfer.command_buffer, this->staging_buffer.handle, this->uniform_buffer.handle, 1, &buffer_copy_info);
         
@@ -2431,7 +2477,7 @@ namespace Engine
             writes[1].dstBinding = 1;
             writes[1].dstArrayElement = 0;
             writes[1].descriptorCount = 1;
-            writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
             writes[1].pImageInfo = nullptr;
             writes[1].pBufferInfo = &buffer_info;
             writes[1].pTexelBufferView = nullptr;
@@ -2456,17 +2502,16 @@ namespace Engine
     /**
      * Mise à jour des données du vertex buffer
      */
-    bool Vulkan::UpdateVertexBuffer(std::vector<VERTEX> data)
+    bool Vulkan::UpdateVertexBuffer(std::vector<VERTEX>& data, VULKAN_BUFFER& vertex_buffer)
     {
         ////////////////////////////////
         //   Copie des données vers   //
         //      le staging buffer     //
         ////////////////////////////////
 
-        size_t buffer_size = data.size() * sizeof(struct VERTEX);
-        std::memcpy(this->staging_buffer.pointer, &data[0], buffer_size);
+        std::memcpy(this->staging_buffer.pointer, &data[0], vertex_buffer.size);
 
-        size_t flush_size = static_cast<size_t>(buffer_size);
+        size_t flush_size = static_cast<size_t>(vertex_buffer.size);
         unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
         flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * ((uint64_t)multiple + 1);
 
@@ -2506,9 +2551,9 @@ namespace Engine
         VkBufferCopy buffer_copy_info = {};
         buffer_copy_info.srcOffset = 0;
         buffer_copy_info.srcOffset = 0;
-        buffer_copy_info.size = buffer_size;
+        buffer_copy_info.size = vertex_buffer.size;
 
-        vkCmdCopyBuffer(this->transfer.command_buffer, this->staging_buffer.handle, this->vertex_buffer.handle, 1, &buffer_copy_info);
+        vkCmdCopyBuffer(this->transfer.command_buffer, this->staging_buffer.handle, vertex_buffer.handle, 1, &buffer_copy_info);
 
         VkBufferMemoryBarrier buffer_memory_barrier = {};
         buffer_memory_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -2517,7 +2562,7 @@ namespace Engine
         buffer_memory_barrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
         buffer_memory_barrier.srcQueueFamilyIndex = this->queue_stack[this->transfer_stack_index].index;
         buffer_memory_barrier.dstQueueFamilyIndex = this->queue_stack[this->graphics_stack_index].index;
-        buffer_memory_barrier.buffer = this->vertex_buffer.handle;
+        buffer_memory_barrier.buffer = vertex_buffer.handle;
         buffer_memory_barrier.offset = 0;
         buffer_memory_barrier.size = VK_WHOLE_SIZE;
 
@@ -2544,8 +2589,6 @@ namespace Engine
             #endif
             return false;
         }
-
-        this->vertex_count = static_cast<uint32_t>(data.size());
 
         #if defined(_DEBUG)
         std::cout << "UpdateVertexBuffer : Success" << std::endl;
@@ -2589,14 +2632,8 @@ namespace Engine
             // Pause de 10 ms
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-            // Si le Vertex Buffer est vide, on ne fait rien
-            if(!self->vertex_count) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                continue;
-            };
-
             // Transformations géométriques
-            self->UpdateUniformBuffer();
+            self->UpdateMeshUniformBuffers();
 
             //////////////////////////////
             //     Rotation du pool     //
@@ -2760,12 +2797,16 @@ namespace Engine
 
             vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.handle);
 
-            VkDeviceSize offset = 0;
-            vkCmdBindVertexBuffers(command_buffer, 0, 1, &self->vertex_buffer.handle, &offset);
+            for(std::pair<uint32_t, MESH> mesh : self->meshes) {
+                VkDeviceSize offset = 0;
+                VULKAN_BUFFER vertex_buffer = self->vertex_buffers[mesh.second.vertex_buffer_index];
+                vkCmdBindVertexBuffers(command_buffer, 0, 1, &vertex_buffer.handle, &offset);
+                vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.layout, 0, 1, &current_rendering_resource.descriptor_set, 0, &mesh.second.offset);
 
-            vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.layout, 0, 1, &current_rendering_resource.descriptor_set, 0, nullptr);
-
-            vkCmdDraw(command_buffer, self->vertex_count, 1, 0, 0);
+                uint32_t vertex_count = static_cast<uint32_t>(vertex_buffer.size / sizeof(VERTEX));
+                vkCmdDraw(command_buffer, vertex_count, 1, 0, 0);
+            }
+            
 
             vkCmdEndRenderPass(command_buffer);
 

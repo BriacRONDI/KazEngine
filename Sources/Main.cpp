@@ -95,7 +95,10 @@ int main(int argc, char** argv)
             {VERT_COORD(-1, 1, 1), TEXT_COORD(0, 1)}
     };
 
-    engine->UpdateVertexBuffer(vertex_data);
+    //engine->UpdateVertexBuffer(vertex_data);
+    uint32_t cube_model = engine->CreateVertexBuffer(vertex_data);
+    uint32_t cube1 = engine->CreateMesh(cube_model);
+    uint32_t cube2 = engine->CreateMesh(cube_model);
     engine->Start();
 
     // Boucle principale

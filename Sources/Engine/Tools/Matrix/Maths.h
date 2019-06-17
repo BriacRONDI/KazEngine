@@ -2,6 +2,8 @@
 
 #include <array>
 
+#define IDENTITY_MATRIX {1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}
+
 namespace Engine
 {
     using Matrix4x4 = std::array<float, 16>;
