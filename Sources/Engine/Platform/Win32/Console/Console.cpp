@@ -8,27 +8,27 @@ namespace Engine
     Console::~Console()
     {
         // reset the standard streams
-        std::cin.rdbuf(m_old_cin);
-        std::cerr.rdbuf(m_old_cerr);
-        std::cout.rdbuf(m_old_cout);
+        std::cin.rdbuf(this->m_old_cin);
+        std::cerr.rdbuf(this->m_old_cerr);
+        std::cout.rdbuf(this->m_old_cout);
 
         // remove the console window
         FreeConsole();
     }
 
-    void Console::Start()
+    void Console::Open()
     {
         // create a console window
         AllocConsole();
+        SetConsoleTitle("KazEngine");
 
         // create instance
         if(Console::instance == nullptr) Console::instance = new Console;
 
         HWND hwnd = ::GetConsoleWindow();
-        if (hwnd != NULL)
-        {
+        if (hwnd != NULL) {
             HMENU hMenu = ::GetSystemMenu(hwnd, FALSE);
-            if (hMenu != NULL) DeleteMenu(hMenu, SC_CLOSE, MF_BYCOMMAND);
+            if(hMenu != NULL) DeleteMenu(hMenu, SC_CLOSE, MF_BYCOMMAND);
         }
 
         // redirect std::cout to our console window
@@ -47,11 +47,27 @@ namespace Engine
         std::cin.rdbuf(Console::instance->m_in.rdbuf());
     }
 
-    void Console::Release()
+    void Console::Close()
     {
         if(Console::instance != nullptr) {
             delete Console::instance;
-                Console::instance = nullptr;
+            Console::instance = nullptr;
         }
+    }
+
+    void Console::Pause()
+    {
+        std::cout << "Press any key to continue..." << std::endl;
+
+        HANDLE h = GetStdHandle(STD_INPUT_HANDLE);
+
+        DWORD mode;
+        GetConsoleMode(h, &mode);
+        SetConsoleMode(h, mode & ~(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT));
+
+        TCHAR output = 0;
+        DWORD length;
+        ReadConsole(h, &output, 10, &length, NULL);
+        SetConsoleMode(h, mode);
     }
 }

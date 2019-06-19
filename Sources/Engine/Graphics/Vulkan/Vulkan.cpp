@@ -72,8 +72,10 @@ namespace Engine
         if(this->graphics_pool != VK_NULL_HANDLE) vkDestroyCommandPool(this->device, this->graphics_pool, nullptr);
 
         // Transfer Command Buffers
-        if(this->transfer.command_buffer != VK_NULL_HANDLE) vkFreeCommandBuffers(this->device, this->transfer.command_pool, 1, &this->transfer.command_buffer);
-        if(this->transfer.command_pool != VK_NULL_HANDLE && this->transfer.command_pool != this->graphics_pool) vkDestroyCommandPool(this->device, this->transfer.command_pool, nullptr);
+        if(this->graphics_stack_index != this->transfer_stack_index) {
+            if(this->transfer.command_buffer != VK_NULL_HANDLE) vkFreeCommandBuffers(this->device, this->transfer.command_pool, 1, &this->transfer.command_buffer);
+            if(this->transfer.command_pool != VK_NULL_HANDLE && this->transfer.command_pool != this->graphics_pool) vkDestroyCommandPool(this->device, this->transfer.command_pool, nullptr);
+        }
 
         // Pipeline
         if(this->graphics_pipeline.handle != VK_NULL_HANDLE) vkDestroyPipeline(this->device, this->graphics_pipeline.handle, nullptr);
@@ -151,7 +153,6 @@ namespace Engine
     void Vulkan::DestroyInstance()
     {
         if(Vulkan::global_instance == nullptr) return;
-        Vulkan::global_instance->Stop();
         delete Vulkan::global_instance;
         Vulkan::global_instance = nullptr;
     }
@@ -265,10 +266,6 @@ namespace Engine
         // Création des fences
         if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateFences())
             init_status = ERROR_MESSAGE::FENCES_CREATION_FAILURE;
-
-        // Mise à jour du uniform buffer
-        /*if(init_status == ERROR_MESSAGE::SUCCESS && !this->UpdateMeshUniformBuffers())
-            init_status = ERROR_MESSAGE::UNIFORM_BUFFER_UPDATE_FAILURE;*/
 
         // En cas d'échecx d'initialisation, on libère les ressources alouées
         if(init_status != ERROR_MESSAGE::SUCCESS) Vulkan::DestroyInstance();
@@ -1232,6 +1229,8 @@ namespace Engine
      */
     bool Vulkan::CreateStagingBuffer(VkDeviceSize size)
     {
+        this->staging_buffer.size = size;
+
         std::vector<uint32_t> shared_queue_families = {
             this->queue_stack[this->transfer_stack_index].index,
             this->queue_stack[this->graphics_stack_index].index
@@ -2080,6 +2079,16 @@ namespace Engine
      */
     bool Vulkan::UpdateMeshUniformBuffers()
     {
+        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
+        VkResult result = vkWaitForFences(this->device, 1, &this->transfer.fence, VK_FALSE, 1000000000);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "UpdateUniforBuffer => vkWaitForFences : Timeout" << std::endl;
+            #endif
+            return false;
+        }
+        vkResetFences(this->device, 1, &this->transfer.fence);
+
         //////////////////////////////////////
         //   Transformations géométriques   //
         //////////////////////////////////////
@@ -2107,36 +2116,29 @@ namespace Engine
         translation = TranslationMatrix(-1.8f, 0.0f, -7.0f);
         this->meshes[1].transformations = projection * translation * rotationX * rotationY;
 
-        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
-        VkResult result = vkWaitForFences(this->device, 1, &this->transfer.fence, VK_FALSE, 1000000000);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "UpdateUniforBuffer => vkWaitForFences : Timeout" << std::endl;
-            #endif
-            return false;
-        }
-        vkResetFences(this->device, 1, &this->transfer.fence);
-
         ////////////////////////////////
         //   Copie des données vers   //
         //      le staging buffer     //
         ////////////////////////////////
 
-        for(std::pair<uint32_t, MESH> mesh : this->meshes) {
-            void* staging_buffer_position = reinterpret_cast<char*>(this->staging_buffer.pointer) + mesh.second.offset;
-            std::memcpy(staging_buffer_position, &mesh.second.transformations, sizeof(Matrix4x4));
-        }
-
-        size_t flush_size = static_cast<size_t>(this->uniform_buffer.size);
+        size_t flush_size = static_cast<size_t>(this->ubo_alignement * (this->meshes.size() - 1) + this->meshes.size());
         unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
-        flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * ((uint64_t)multiple + 1);
+        flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * (static_cast<uint64_t>(multiple) + 1);
+
+        if(this->staging_buffer.size - this->staging_buffer.offset < flush_size)  this->staging_buffer.offset = 0;
+        char* write_address = reinterpret_cast<char*>(this->staging_buffer.pointer) + this->staging_buffer.offset;
+
+        for(std::pair<uint32_t, MESH> mesh : this->meshes) {
+            std::memcpy(write_address, &mesh.second.transformations, sizeof(Matrix4x4));
+            write_address += this->ubo_alignement;
+        }
 
         // Flush staging buffer
         VkMappedMemoryRange flush_range = {};
         flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
         flush_range.pNext = nullptr;
         flush_range.memory = this->staging_buffer.memory;
-        flush_range.offset = 0;
+        flush_range.offset = this->staging_buffer.offset;
         flush_range.size = flush_size;
         vkFlushMappedMemoryRanges(this->device, 1, &flush_range);
 
@@ -2154,8 +2156,8 @@ namespace Engine
         vkBeginCommandBuffer(this->transfer.command_buffer, &command_buffer_begin_info);
 
         VkBufferCopy buffer_copy_info = {};
-        buffer_copy_info.srcOffset = 0;
-        buffer_copy_info.srcOffset = 0;
+        buffer_copy_info.srcOffset = this->staging_buffer.offset;
+        buffer_copy_info.dstOffset = 0;
         buffer_copy_info.size = this->uniform_buffer.size;
 
         vkCmdCopyBuffer(this->transfer.command_buffer, this->staging_buffer.handle, this->uniform_buffer.handle, 1, &buffer_copy_info);
@@ -2181,6 +2183,9 @@ namespace Engine
             #endif
             return false;
         }
+
+        // On avance l'offset du staging buffer afin de ne pas réécrire sur le segment que l'ont est en train d'envoyer
+        this->staging_buffer.offset += flush_size;
 
         return true;
     }
@@ -2501,28 +2506,8 @@ namespace Engine
      */
     bool Vulkan::UpdateVertexBuffer(std::vector<VERTEX>& data, VULKAN_BUFFER& vertex_buffer)
     {
-        ////////////////////////////////
-        //   Copie des données vers   //
-        //      le staging buffer     //
-        ////////////////////////////////
-
-        std::memcpy(this->staging_buffer.pointer, &data[0], vertex_buffer.size);
-
-        size_t flush_size = static_cast<size_t>(vertex_buffer.size);
-        unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
-        flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * ((uint64_t)multiple + 1);
-
-        // Flush staging buffer
-        VkMappedMemoryRange flush_range = {};
-        flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        flush_range.pNext = nullptr;
-        flush_range.memory = this->staging_buffer.memory;
-        flush_range.offset = 0;
-        flush_range.size = flush_size;
-        vkFlushMappedMemoryRanges(this->device, 1, &flush_range);
-
         ///////////////////////////////////////////
-        //  Envoi des données vectorielles vers  //
+        //        Envoi des données vers         //
         //   la mémoire de la carte graphique    //
         ///////////////////////////////////////////
 
@@ -2536,6 +2521,33 @@ namespace Engine
         }
         vkResetFences(this->device, 1, &this->transfer.fence);
 
+        ////////////////////////////////
+        //   Copie des données vers   //
+        //      le staging buffer     //
+        ////////////////////////////////
+
+        size_t flush_size = static_cast<size_t>(vertex_buffer.size);
+        unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
+        flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * (static_cast<uint64_t>(multiple) + 1);
+
+        if(this->staging_buffer.size - this->staging_buffer.offset < flush_size)  this->staging_buffer.offset = 0;
+        void* write_address = reinterpret_cast<char*>(this->staging_buffer.pointer) + this->staging_buffer.offset;
+        std::memcpy(write_address, &data[0], vertex_buffer.size);
+
+        // Flush staging buffer
+        VkMappedMemoryRange flush_range = {};
+        flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        flush_range.pNext = nullptr;
+        flush_range.memory = this->staging_buffer.memory;
+        flush_range.offset = this->staging_buffer.offset;
+        flush_range.size = flush_size;
+        vkFlushMappedMemoryRanges(this->device, 1, &flush_range);
+
+        ///////////////////////////////////////////
+        //       Envoi des données vers          //
+        //   la mémoire de la carte graphique    //
+        ///////////////////////////////////////////
+
         // Préparation de la copie de l'image depuis le staging buffer vers un vertex buffer
         VkCommandBufferBeginInfo command_buffer_begin_info = {};
         command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -2546,8 +2558,8 @@ namespace Engine
         vkBeginCommandBuffer(this->transfer.command_buffer, &command_buffer_begin_info);
 
         VkBufferCopy buffer_copy_info = {};
-        buffer_copy_info.srcOffset = 0;
-        buffer_copy_info.srcOffset = 0;
+        buffer_copy_info.srcOffset = this->staging_buffer.offset;
+        buffer_copy_info.dstOffset = 0;
         buffer_copy_info.size = vertex_buffer.size;
 
         vkCmdCopyBuffer(this->transfer.command_buffer, this->staging_buffer.handle, vertex_buffer.handle, 1, &buffer_copy_info);
@@ -2587,6 +2599,9 @@ namespace Engine
             return false;
         }
 
+        // On avance l'offset du staging buffer afin de ne pas réécrire sur le segment que l'ont est en train d'envoyer
+        this->staging_buffer.offset += flush_size;
+
         #if defined(_DEBUG)
         std::cout << "UpdateVertexBuffer : Success" << std::endl;
         #endif
@@ -2594,286 +2609,259 @@ namespace Engine
     }
 
     /**
-     * Démarrage des threads d'affichage
-     */
-    void Vulkan::Start()
-    {
-        if(this->keep_runing) return;
-
-        this->Stop();
-        this->keep_runing = true;
-        this->draw_thread = std::thread(ThreadLoop, this);
-    }
-
-    /**
-     * Arrêt des threads d'affichage
-     */
-    void Vulkan::Stop()
-    {
-        this->keep_runing = false;
-        if(this->draw_thread.joinable()) this->draw_thread.join();
-    }
-
-    /**
      * Affichage
      */
-    void Vulkan::ThreadLoop(Vulkan* self)
+    void Vulkan::Draw()
     {
-        uint8_t resource_count = static_cast<uint8_t>(self->swap_chain.images.size());
+        uint8_t resource_count = static_cast<uint8_t>(this->swap_chain.images.size());
         uint8_t resource_index = resource_count - 1;
-        VkQueue graphics_queue = self->queue_stack[self->graphics_stack_index].handle;
-        VkQueue present_queue = self->queue_stack[self->present_stack_index].handle;
+        VkQueue graphics_queue = this->queue_stack[this->graphics_stack_index].handle;
+        VkQueue present_queue = this->queue_stack[this->present_stack_index].handle;
 
-        while(self->keep_runing)
+        //////////////////////////////
+        //     Rotation du pool     //
+        //  de ressources de rendu  //
+        //////////////////////////////
+
+        resource_index = (resource_index + 1) % resource_count;
+        auto current_rendering_resource = this->rendering[resource_index];
+
+        ////////////////////////////////
+        //    Attente de libération   //
+        //   des resources de rendu   //
+        ////////////////////////////////
+
+        VkResult result = vkWaitForFences(this->device, 1, &current_rendering_resource.fence, VK_FALSE, 1000000000);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "Draw => vkWaitForFences : Timeout" << std::endl;
+            #endif
+            return;
+        }
+        vkResetFences(this->device, 1, &current_rendering_resource.fence);
+
+        ////////////////////////////////////
+        //    Récupération d'une image    //
+        //       de la Swap Chain         //
+        ////////////////////////////////////
+
+        uint32_t swap_chain_image_index;
+        result = vkAcquireNextImageKHR(this->device, this->swap_chain.handle, UINT64_MAX, current_rendering_resource.swap_chain_semaphore, VK_NULL_HANDLE, &swap_chain_image_index);
+        switch(result) {
+            #if defined(_DEBUG)
+            case VK_ERROR_OUT_OF_HOST_MEMORY:
+                std::cout << "vkAcquireNextImageKHR : VK_ERROR_OUT_OF_HOST_MEMORY" << std::endl;
+                return;
+            case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+                std::cout << "vkAcquireNextImageKHR : VK_ERROR_OUT_OF_DEVICE_MEMORY" << std::endl;
+                return;
+            case VK_ERROR_DEVICE_LOST:
+                std::cout << "vkAcquireNextImageKHR : VK_ERROR_DEVICE_LOST" << std::endl;
+                return;
+            case VK_ERROR_SURFACE_LOST_KHR:
+                std::cout << "vkAcquireNextImageKHR : VK_ERROR_SURFACE_LOST_KHR" << std::endl;
+                return;
+            case VK_TIMEOUT:
+                std::cout << "vkAcquireNextImageKHR : VK_TIMEOUT" << std::endl;
+                return;
+            case VK_NOT_READY:
+                std::cout << "vkAcquireNextImageKHR : VK_NOT_READY" << std::endl;
+                return;
+            case VK_ERROR_VALIDATION_FAILED_EXT:
+                std::cout << "vkAcquireNextImageKHR : VK_ERROR_VALIDATION_FAILED_EXT" << std::endl;
+                return;
+            #endif
+
+            case VK_SUCCESS:
+            case VK_SUBOPTIMAL_KHR:
+                break;
+            case VK_ERROR_OUT_OF_DATE_KHR:
+                this->OnWindowSizeChanged();
+            default:
+                #if defined(_DEBUG)
+                std::cout << "Draw => vkAcquireNextImageKHR : Failed" << std::endl;
+                #endif
+                return;
+        }
+
+        ////////////////////////////////////
+        //    Création du Frame Buffer    //   
+        ////////////////////////////////////
+        
+        if(current_rendering_resource.framebuffer != VK_NULL_HANDLE) {
+            vkDestroyFramebuffer(this->device, current_rendering_resource.framebuffer, nullptr);
+            this->rendering[resource_index].framebuffer = VK_NULL_HANDLE;
+        }
+
+        VkImageView pAttachments[2];
+        pAttachments[0] = this->swap_chain.images[swap_chain_image_index].view;
+        pAttachments[1] = this->depth_buffer.view;
+
+        VkFramebufferCreateInfo framebuffer_create_info = {};
+        framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebuffer_create_info.pNext = nullptr;
+        framebuffer_create_info.flags = 0;
+        framebuffer_create_info.renderPass = this->render_pass;
+        framebuffer_create_info.attachmentCount = 2;
+        framebuffer_create_info.pAttachments = pAttachments;
+        framebuffer_create_info.width = this->draw_surface.width;
+        framebuffer_create_info.height = this->draw_surface.height;
+        framebuffer_create_info.layers = 1;
+
+        result = vkCreateFramebuffer(this->device, &framebuffer_create_info, nullptr, &this->rendering[resource_index].framebuffer);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "Draw => vkCreateFramebuffer : Failed" << std::endl;
+            #endif
+            return;
+        }
+
+        /////////////////////////////////
+        //    Génération de l'image    //   
+        /////////////////////////////////
+            
+        VkCommandBufferBeginInfo command_buffer_begin_info = {};
+        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        command_buffer_begin_info.pNext = nullptr;
+        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        command_buffer_begin_info.pInheritanceInfo = nullptr;
+
+        VkCommandBuffer command_buffer = current_rendering_resource.command_buffer;
+        vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
+
+        VkImageSubresourceRange image_subresource_range = {};
+        image_subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        image_subresource_range.baseMipLevel = 0;
+        image_subresource_range.levelCount = 1;
+        image_subresource_range.baseArrayLayer = 0;
+        image_subresource_range.layerCount = 1;
+
+        uint32_t present_queue_family_index;
+        uint32_t graphics_queue_family_index;
+        if(this->graphics_stack_index == this->present_stack_index) {
+            present_queue_family_index = VK_QUEUE_FAMILY_IGNORED;
+            graphics_queue_family_index = VK_QUEUE_FAMILY_IGNORED;
+        }else{
+            present_queue_family_index = this->queue_stack[this->present_stack_index].index;
+            graphics_queue_family_index = this->queue_stack[this->graphics_stack_index].index;
+        }
+        
+        VkImageMemoryBarrier barrier_from_present_to_draw = {};
+        barrier_from_present_to_draw.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier_from_present_to_draw.pNext = nullptr;
+        barrier_from_present_to_draw.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        barrier_from_present_to_draw.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        barrier_from_present_to_draw.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier_from_present_to_draw.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        barrier_from_present_to_draw.srcQueueFamilyIndex = present_queue_family_index;
+        barrier_from_present_to_draw.dstQueueFamilyIndex = graphics_queue_family_index;
+        barrier_from_present_to_draw.image = this->swap_chain.images[swap_chain_image_index].handle;
+        barrier_from_present_to_draw.subresourceRange = image_subresource_range;
+
+        vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier_from_present_to_draw);
+
+        VkClearValue clear_value[2];
+        clear_value[0].color = { 0.1f, 0.2f, 0.3f, 0.0f };
+        clear_value[1].color = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+        VkRenderPassBeginInfo render_pass_begin_info = {};
+        render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        render_pass_begin_info.pNext = nullptr;
+        render_pass_begin_info.renderPass = this->render_pass;
+        render_pass_begin_info.framebuffer = this->rendering[resource_index].framebuffer;
+        render_pass_begin_info.renderArea.offset.x = 0;
+        render_pass_begin_info.renderArea.offset.y = 0;
+        render_pass_begin_info.renderArea.extent.width = this->draw_surface.width;
+        render_pass_begin_info.renderArea.extent.height = this->draw_surface.height;
+        render_pass_begin_info.clearValueCount = 2;
+        render_pass_begin_info.pClearValues = clear_value;
+
+        vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphics_pipeline.handle);
+
+        // Transformations géométriques
+        this->UpdateMeshUniformBuffers();
+
+        for(std::pair<uint32_t, MESH> mesh : this->meshes) {
+            VkDeviceSize offset = 0;
+            VULKAN_BUFFER vertex_buffer = this->vertex_buffers[mesh.second.vertex_buffer_index];
+            vkCmdBindVertexBuffers(command_buffer, 0, 1, &vertex_buffer.handle, &offset);
+            vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphics_pipeline.layout, 0, 1, &mesh.second.descriptor_set, 0, &mesh.second.offset);
+
+            uint32_t vertex_count = static_cast<uint32_t>(vertex_buffer.size / sizeof(VERTEX));
+            vkCmdDraw(command_buffer, vertex_count, 1, 0, 0);
+        }
+            
+
+        vkCmdEndRenderPass(command_buffer);
+
+        VkImageMemoryBarrier barrier_from_draw_to_present = {};
+        barrier_from_draw_to_present.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier_from_draw_to_present.pNext = nullptr;
+        barrier_from_draw_to_present.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        barrier_from_draw_to_present.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        barrier_from_draw_to_present.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        barrier_from_draw_to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        barrier_from_draw_to_present.srcQueueFamilyIndex = graphics_queue_family_index;
+        barrier_from_draw_to_present.dstQueueFamilyIndex = present_queue_family_index;
+        barrier_from_draw_to_present.image = this->swap_chain.images[swap_chain_image_index].handle;
+        barrier_from_draw_to_present.subresourceRange = image_subresource_range;
+
+        vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier_from_draw_to_present);
+
+        result = vkEndCommandBuffer(command_buffer);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "Draw => vkEndCommandBuffer : Failed" << std::endl;
+            #endif
+            return;
+        }
+
+        VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.pNext = nullptr;
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = &current_rendering_resource.swap_chain_semaphore;
+        submit_info.pWaitDstStageMask = &wait_dst_stage_mask;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &current_rendering_resource.command_buffer;
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = &current_rendering_resource.render_pass_semaphore;
+
+        result = vkQueueSubmit(graphics_queue, 1, &submit_info, current_rendering_resource.fence);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "Draw => vkQueueSubmit : Failed" << std::endl;
+            #endif
+            return;
+        }
+
+        VkPresentInfoKHR present_info = {};
+        present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        present_info.pNext = nullptr;
+        present_info.waitSemaphoreCount = 1;
+        present_info.pWaitSemaphores = &current_rendering_resource.swap_chain_semaphore;
+        present_info.swapchainCount = 1;
+        present_info.pSwapchains = &this->swap_chain.handle;
+        present_info.pImageIndices = &swap_chain_image_index;
+        present_info.pResults = nullptr;
+
+        result = vkQueuePresentKHR(present_queue, &present_info);
+
+        switch(result)
         {
-            // Pause de 10 ms
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-            // Transformations géométriques
-            self->UpdateMeshUniformBuffers();
-
-            //////////////////////////////
-            //     Rotation du pool     //
-            //  de ressources de rendu  //
-            //////////////////////////////
-
-            resource_index = (resource_index + 1) % resource_count;
-            auto current_rendering_resource = self->rendering[resource_index];
-
-            ////////////////////////////////
-            //    Attente de libération   //
-            //   des resources de rendu   //
-            ////////////////////////////////
-
-            VkResult result = vkWaitForFences(self->device, 1, &current_rendering_resource.fence, VK_FALSE, 1000000000);
-            if(result != VK_SUCCESS) {
+            case VK_SUCCESS:
+                break;
+            case VK_ERROR_OUT_OF_DATE_KHR:
+            case VK_SUBOPTIMAL_KHR:
+                this->OnWindowSizeChanged();
+            default:
                 #if defined(_DEBUG)
-                std::cout << "Draw => vkWaitForFences : Timeout" << std::endl;
+                std::cout << "Draw => vkQueuePresentKHR : Failed" << std::endl;
                 #endif
                 return;
-            }
-            vkResetFences(self->device, 1, &current_rendering_resource.fence);
-
-            ////////////////////////////////////
-            //    Récupération d'une image    //
-            //       de la Swap Chain         //
-            ////////////////////////////////////
-
-            uint32_t swap_chain_image_index;
-            result = vkAcquireNextImageKHR(self->device, self->swap_chain.handle, UINT64_MAX, current_rendering_resource.swap_chain_semaphore, VK_NULL_HANDLE, &swap_chain_image_index);
-            switch(result) {
-                #if defined(_DEBUG)
-                case VK_ERROR_OUT_OF_HOST_MEMORY:
-                    std::cout << "vkAcquireNextImageKHR : VK_ERROR_OUT_OF_HOST_MEMORY" << std::endl;
-                    return;
-                case VK_ERROR_OUT_OF_DEVICE_MEMORY:
-                    std::cout << "vkAcquireNextImageKHR : VK_ERROR_OUT_OF_DEVICE_MEMORY" << std::endl;
-                    return;
-                case VK_ERROR_DEVICE_LOST:
-                    std::cout << "vkAcquireNextImageKHR : VK_ERROR_DEVICE_LOST" << std::endl;
-                    return;
-                case VK_ERROR_SURFACE_LOST_KHR:
-                    std::cout << "vkAcquireNextImageKHR : VK_ERROR_SURFACE_LOST_KHR" << std::endl;
-                    return;
-                case VK_TIMEOUT:
-                    std::cout << "vkAcquireNextImageKHR : VK_TIMEOUT" << std::endl;
-                    return;
-                case VK_NOT_READY:
-                    std::cout << "vkAcquireNextImageKHR : VK_NOT_READY" << std::endl;
-                    return;
-                case VK_ERROR_VALIDATION_FAILED_EXT:
-                    std::cout << "vkAcquireNextImageKHR : VK_ERROR_VALIDATION_FAILED_EXT" << std::endl;
-                    return;
-                #endif
-
-                case VK_SUCCESS:
-                case VK_SUBOPTIMAL_KHR:
-                    break;
-                case VK_ERROR_OUT_OF_DATE_KHR:
-                    self->OnWindowSizeChanged();
-                default:
-                    #if defined(_DEBUG)
-                    std::cout << "Draw => vkAcquireNextImageKHR : Failed" << std::endl;
-                    #endif
-                    return;
-            }
-
-            ////////////////////////////////////
-            //    Création du Frame Buffer    //   
-            ////////////////////////////////////
-        
-            if(current_rendering_resource.framebuffer != VK_NULL_HANDLE) {
-                vkDestroyFramebuffer(self->device, current_rendering_resource.framebuffer, nullptr);
-                self->rendering[resource_index].framebuffer = VK_NULL_HANDLE;
-            }
-
-            VkImageView pAttachments[2];
-            pAttachments[0] = self->swap_chain.images[swap_chain_image_index].view;
-            pAttachments[1] = self->depth_buffer.view;
-
-            VkFramebufferCreateInfo framebuffer_create_info = {};
-            framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            framebuffer_create_info.pNext = nullptr;
-            framebuffer_create_info.flags = 0;
-            framebuffer_create_info.renderPass = self->render_pass;
-            framebuffer_create_info.attachmentCount = 2;
-            framebuffer_create_info.pAttachments = pAttachments;
-            framebuffer_create_info.width = self->draw_surface.width;
-            framebuffer_create_info.height = self->draw_surface.height;
-            framebuffer_create_info.layers = 1;
-            
-            result = vkCreateFramebuffer(self->device, &framebuffer_create_info, nullptr, &self->rendering[resource_index].framebuffer);
-            if(result != VK_SUCCESS) {
-                #if defined(_DEBUG)
-                std::cout << "Draw => vkCreateFramebuffer : Failed" << std::endl;
-                #endif
-                return;
-            }
-
-            /////////////////////////////////
-            //    Génération de l'image    //   
-            /////////////////////////////////
-            
-            VkCommandBufferBeginInfo command_buffer_begin_info = {};
-            command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            command_buffer_begin_info.pNext = nullptr;
-            command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            command_buffer_begin_info.pInheritanceInfo = nullptr;
-
-            VkCommandBuffer command_buffer = current_rendering_resource.command_buffer;
-            vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
-
-            VkImageSubresourceRange image_subresource_range = {};
-            image_subresource_range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            image_subresource_range.baseMipLevel = 0;
-            image_subresource_range.levelCount = 1;
-            image_subresource_range.baseArrayLayer = 0;
-            image_subresource_range.layerCount = 1;
-
-            uint32_t present_queue_family_index;
-            uint32_t graphics_queue_family_index;
-            if(self->graphics_stack_index == self->present_stack_index) {
-                present_queue_family_index = VK_QUEUE_FAMILY_IGNORED;
-                graphics_queue_family_index = VK_QUEUE_FAMILY_IGNORED;
-            }else{
-                present_queue_family_index = self->queue_stack[self->present_stack_index].index;
-                graphics_queue_family_index = self->queue_stack[self->graphics_stack_index].index;
-            }
-        
-            VkImageMemoryBarrier barrier_from_present_to_draw = {};
-            barrier_from_present_to_draw.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            barrier_from_present_to_draw.pNext = nullptr;
-            barrier_from_present_to_draw.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-            barrier_from_present_to_draw.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            barrier_from_present_to_draw.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            barrier_from_present_to_draw.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            barrier_from_present_to_draw.srcQueueFamilyIndex = present_queue_family_index;
-            barrier_from_present_to_draw.dstQueueFamilyIndex = graphics_queue_family_index;
-            barrier_from_present_to_draw.image = self->swap_chain.images[swap_chain_image_index].handle;
-            barrier_from_present_to_draw.subresourceRange = image_subresource_range;
-
-            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier_from_present_to_draw);
-
-            VkClearValue clear_value[2];
-            clear_value[0].color = { 0.1f, 0.2f, 0.3f, 0.0f };
-            clear_value[1].color = { 0.0f, 0.0f, 0.0f, 0.0f };
-
-            VkRenderPassBeginInfo render_pass_begin_info = {};
-            render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            render_pass_begin_info.pNext = nullptr;
-            render_pass_begin_info.renderPass = self->render_pass;
-            render_pass_begin_info.framebuffer = self->rendering[resource_index].framebuffer;
-            render_pass_begin_info.renderArea.offset.x = 0;
-            render_pass_begin_info.renderArea.offset.y = 0;
-            render_pass_begin_info.renderArea.extent.width = self->draw_surface.width;
-            render_pass_begin_info.renderArea.extent.height = self->draw_surface.height;
-            render_pass_begin_info.clearValueCount = 2;
-            render_pass_begin_info.pClearValues = clear_value;
-
-            vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
-            vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.handle);
-
-            for(std::pair<uint32_t, MESH> mesh : self->meshes) {
-                VkDeviceSize offset = 0;
-                VULKAN_BUFFER vertex_buffer = self->vertex_buffers[mesh.second.vertex_buffer_index];
-                vkCmdBindVertexBuffers(command_buffer, 0, 1, &vertex_buffer.handle, &offset);
-                vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.layout, 0, 1, &mesh.second.descriptor_set, 0, &mesh.second.offset);
-
-                uint32_t vertex_count = static_cast<uint32_t>(vertex_buffer.size / sizeof(VERTEX));
-                vkCmdDraw(command_buffer, vertex_count, 1, 0, 0);
-            }
-            
-
-            vkCmdEndRenderPass(command_buffer);
-
-            VkImageMemoryBarrier barrier_from_draw_to_present = {};
-            barrier_from_draw_to_present.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            barrier_from_draw_to_present.pNext = nullptr;
-            barrier_from_draw_to_present.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            barrier_from_draw_to_present.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-            barrier_from_draw_to_present.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            barrier_from_draw_to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            barrier_from_draw_to_present.srcQueueFamilyIndex = graphics_queue_family_index;
-            barrier_from_draw_to_present.dstQueueFamilyIndex = present_queue_family_index;
-            barrier_from_draw_to_present.image = self->swap_chain.images[swap_chain_image_index].handle;
-            barrier_from_draw_to_present.subresourceRange = image_subresource_range;
-
-            vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier_from_draw_to_present);
-
-            result = vkEndCommandBuffer(command_buffer);
-            if(result != VK_SUCCESS) {
-                #if defined(_DEBUG)
-                std::cout << "Draw => vkEndCommandBuffer : Failed" << std::endl;
-                #endif
-                return;
-            }
-
-            VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            VkSubmitInfo submit_info = {};
-            submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submit_info.pNext = nullptr;
-            submit_info.waitSemaphoreCount = 1;
-            submit_info.pWaitSemaphores = &current_rendering_resource.swap_chain_semaphore;
-            submit_info.pWaitDstStageMask = &wait_dst_stage_mask;
-            submit_info.commandBufferCount = 1;
-            submit_info.pCommandBuffers = &current_rendering_resource.command_buffer;
-            submit_info.signalSemaphoreCount = 1;
-            submit_info.pSignalSemaphores = &current_rendering_resource.render_pass_semaphore;
-
-            result = vkQueueSubmit(graphics_queue, 1, &submit_info, current_rendering_resource.fence);
-            if(result != VK_SUCCESS) {
-                #if defined(_DEBUG)
-                std::cout << "Draw => vkQueueSubmit : Failed" << std::endl;
-                #endif
-                return;
-            }
-
-            VkPresentInfoKHR present_info = {};
-            present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-            present_info.pNext = nullptr;
-            present_info.waitSemaphoreCount = 1;
-            present_info.pWaitSemaphores = &current_rendering_resource.swap_chain_semaphore;
-            present_info.swapchainCount = 1;
-            present_info.pSwapchains = &self->swap_chain.handle;
-            present_info.pImageIndices = &swap_chain_image_index;
-            present_info.pResults = nullptr;
-
-            result = vkQueuePresentKHR(present_queue, &present_info);
-
-            switch(result)
-            {
-                case VK_SUCCESS:
-                    break;
-                case VK_ERROR_OUT_OF_DATE_KHR:
-                case VK_SUBOPTIMAL_KHR:
-                    self->OnWindowSizeChanged();
-                default:
-                    #if defined(_DEBUG)
-                    std::cout << "Draw => vkQueuePresentKHR : Failed" << std::endl;
-                    #endif
-                    return;
-            }
         }
     }
 

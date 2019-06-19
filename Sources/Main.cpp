@@ -26,13 +26,28 @@ int main(int argc, char** argv)
     Engine::Window* main_window = new Engine::Window({1024, 768}, "Cube", Engine::Window::FULLSCREEN_MODE_DISABLED);
     
     #if defined(_DEBUG)
-    Engine::Console::Start();
+    Engine::Console::Open();
     #endif
 
     // Initialisation de Vulkan
     Engine::Surface draw_surface =  main_window->GetSurface();
     Engine::Vulkan* engine = Engine::Vulkan::GetInstance();
-    engine->Initialize(main_window, VK_MAKE_VERSION(0, 0, 1), "Cube");
+    Engine::Vulkan::ERROR_MESSAGE init = engine->Initialize(main_window, VK_MAKE_VERSION(0, 0, 1), "Cube");
+
+    // Erreur à l'initialisation de vulkan
+    if(init != Engine::Vulkan::ERROR_MESSAGE::SUCCESS) {
+
+        // On ferme la fenêtre
+        delete main_window;
+
+        #if defined(_DEBUG)
+        system("PAUSE");
+        Engine::Console::Close();
+        #endif
+
+        // On renvoie le code d'erreur
+        return static_cast<int>(init);
+    }
 
     // Chargement de la première texture
     int width, height, format;
@@ -45,6 +60,10 @@ int main(int argc, char** argv)
         texture1_id = engine->CreateTexture(image_data, width, height);
     }
 
+    #if defined(_DEBUG)
+    if(stbi_data == nullptr) std::cout << "Impossible de charger la texture : texture.png !" << std::endl;
+    #endif
+
     // Chargement de la seconde texture
     uint32_t texture2_id;
     stbi_data = stbi_load("./Assets/leaf.jpg", &width, &height, &format, STBI_rgb_alpha);
@@ -56,7 +75,7 @@ int main(int argc, char** argv)
     }
 
     #if defined(_DEBUG)
-    if(stbi_data == nullptr) std::cout << "Impossible de charger la texture !" << std::endl;
+    if(stbi_data == nullptr) std::cout << "Impossible de charger la texture : leaf.jpg !" << std::endl;
     #endif
 
     #define VERT_COORD(x,y,z) {x,y,z,1.0f}
@@ -137,21 +156,24 @@ int main(int argc, char** argv)
     uint32_t prisme_model = engine->CreateVertexBuffer(prisme_data);
     uint32_t prisme = engine->CreateMesh(prisme_model, texture2_id);
 
-    engine->Start();
-
     // Boucle principale
     while(Engine::Window::Loop())
     {
+        // Affichage
+        engine->Draw();
+
+        // Attente de 10 ms
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     // Libération des resources
+    // TODO : Free VertexBuffer, Mesh, Texture
     engine->DestroyInstance();
     delete main_window;
 
     #if defined(_DEBUG)
-    system("pause");
-    Engine::Console::Release();
+    system("PAUSE");
+    Engine::Console::Close();
     #endif
 
     return 0;

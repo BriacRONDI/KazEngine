@@ -70,12 +70,10 @@ namespace Engine
             static Vulkan* GetInstance();                                                                                           // Récupération de l'instance du singleton
             static void DestroyInstance();                                                                                          // Libération des ressources allouées à Vulkan
             ERROR_MESSAGE Initialize(Engine::Window* draw_window, uint32_t application_version, std::string aplication_name);       // Initialisation de Vulkan
-            void Start();
-            void Stop();
             uint32_t CreateTexture(std::vector<unsigned char> data, uint32_t width, uint32_t height);                               // Copie d'une texture dans la carte graphique
             uint32_t CreateVertexBuffer(std::vector<VERTEX>& data);                                                                 // Création d'un vertex buffer
-            uint32_t CreateMesh(uint32_t model_id, uint32_t texture_id);                                                                                 // Création d'un mesh
-            static void ThreadLoop(Vulkan* self);                                                                                   // Boucle principale d'affichage
+            uint32_t CreateMesh(uint32_t model_id, uint32_t texture_id);                                                            // Création d'un mesh
+            void Draw();                                                                                                            // Boucle principale d'affichage
 
         private:
 
@@ -129,8 +127,9 @@ namespace Engine
                 VkDeviceMemory memory;
                 void* pointer;
                 VkDeviceSize size;
+                VkDeviceSize offset;
 
-                VULKAN_BUFFER() : handle(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), pointer(nullptr), size(0) {}
+                VULKAN_BUFFER() : handle(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), pointer(nullptr), size(0), offset(0) {}
             };
 
             struct PIPELINE {

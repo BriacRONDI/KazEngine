@@ -4,14 +4,16 @@
 #include <cstdio>
 #include <iostream>
 #include <windows.h>
+#include <cctype>
 
 namespace Engine
 {
     class Console
     {
         public:
-            static void Start();
-            static void Release();
+            static void Open();
+            static void Close();
+            static void Pause();
 
         private:
             std::ofstream m_out;
