@@ -55,7 +55,8 @@ namespace Engine
                 COMMAND_BUFFERS_CREATION_FAILURE        = 18,
                 SEMAPHORES_CREATION_FAILURE             = 19,
                 FENCES_CREATION_FAILURE                 = 20,
-                UNIFORM_BUFFER_UPDATE_FAILURE           = 21
+                UNIFORM_BUFFER_UPDATE_FAILURE           = 21,
+                THREAD_INITIALIZATION_FAILURE           = 22
             };
 
             // Structure utilisée pour le contenu du vertex buffer
@@ -156,14 +157,14 @@ namespace Engine
 
             struct RENDERING_RESOURCE {
                 VkFramebuffer framebuffer;
-                VkCommandBuffer command_buffer;
+                VkCommandBuffer main_command_buffer;
                 VkSemaphore swap_chain_semaphore;
                 VkSemaphore render_pass_semaphore;
                 VkFence fence;
 
                 RENDERING_RESOURCE() :
                     framebuffer(VK_NULL_HANDLE),
-                    command_buffer(VK_NULL_HANDLE),
+                    main_command_buffer(VK_NULL_HANDLE),
                     swap_chain_semaphore(VK_NULL_HANDLE),
                     render_pass_semaphore(VK_NULL_HANDLE),
                     fence(VK_NULL_HANDLE) {
@@ -186,6 +187,14 @@ namespace Engine
                 uint32_t offset;
 
                 MESH() : transformations(IDENTITY_MATRIX), vertex_buffer_index(UINT32_MAX), descriptor_set(VK_NULL_HANDLE), offset(UINT32_MAX) {}
+            };
+
+            struct THREAD_RESOURCE {
+                std::thread handle;
+                VkCommandBuffer command_buffer;
+                bool buffer_opened;
+
+                THREAD_RESOURCE() : command_buffer(VK_NULL_HANDLE) {}
             };
 
             /////////////
@@ -245,11 +254,22 @@ namespace Engine
             // Transfer
             TRANSFER_RESOURCE transfer;
 
-            // Threads
-            //unsigned int image_count;
+            // Rendu
             std::vector<RENDERING_RESOURCE> rendering;
-            std::thread draw_thread;
-            bool keep_runing;
+
+            // Threads
+            uint32_t thread_count;
+            uint32_t mesh_processed;
+            std::vector<THREAD_RESOURCE> threads;
+            std::mutex start_mutex;
+            std::mutex run_mutex;
+            std::mutex finish_mutex;
+            bool thread_go;
+            volatile bool keep_thread_alive;
+            std::condition_variable start_condition;
+            std::condition_variable finish_condition;
+            volatile uint8_t rendering_index;
+            std::unordered_map<uint32_t, MESH>::iterator mesh_iterator;
 
             // Data
             uint32_t last_texture_index;                                    // Index de la prochaine texture à allouer
@@ -287,8 +307,8 @@ namespace Engine
             bool CreateFences();                                                                                // Création des fences
             bool UpdateMeshUniformBuffers();                                                                    // Mise à jour du contenu des uniform buffers des mesh
             bool OnWindowSizeChanged();                                                                         // Reconstruction de la Swap Chain lorsque la fenêtre est redimensionnée
-
-            //static void ThreadLoop(Vulkan* self);                                                     // Boucle principale d'affichage
+            bool InitThreads();                                                                                 // Initlisation des threads
+            static void ThreadJob(Vulkan* self, uint32_t thread_id);                                            // Fonction de traitement exécutée par les threads
 
             /////////////
             // HELPERS //
@@ -315,7 +335,8 @@ namespace Engine
             bool UpdateVertexBuffer(std::vector<VERTEX>& data, VULKAN_BUFFER& vertex_buffer);                      // Mise à jour des données du vertex buffer
 
             #if defined(_DEBUG)
-            VkDebugUtilsMessengerEXT report_callback;
+            //VkDebugUtilsMessengerEXT report_callback;
+            VkDebugReportCallbackEXT report_callback;
             void CreateDebugReportCallback();
             #endif
     };

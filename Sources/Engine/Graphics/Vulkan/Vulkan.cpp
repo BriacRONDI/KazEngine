@@ -38,11 +38,16 @@ namespace Engine
         this->last_texture_index        = 0;
         this->last_vbo_index            = 0;
         this->last_mesh_index           = 0;
-        this->keep_runing               = false;
         this->ubo_alignement            = 0;
+        this->thread_count              = std::thread::hardware_concurrency();
+        this->rendering_index           = 0;
+        this->thread_go                 = false;
+        this->mesh_processed            = 0;
+
+        // this->thread_count = 2;
 
         #if defined(_DEBUG)
-        std::cout << "Nombre de threads disponibles : " << std::thread::hardware_concurrency() << std::endl;
+        std::cout << "Nombre de threads disponibles : " << this->thread_count << std::endl;
         #endif
     }
 
@@ -51,6 +56,16 @@ namespace Engine
      */
     Vulkan::~Vulkan()
     {
+        // On termine l'exécution des threads
+        std::unique_lock<std::mutex> start_lock(this->start_mutex);
+        this->thread_go = true;
+        this->keep_thread_alive = false;
+        this->start_condition.notify_all();
+        start_lock.unlock();
+
+        // Attente de la fin des threads
+        for(uint8_t i=0; i<this->thread_count; i++) this->threads[i].handle.join();
+
         // Fences
         for(auto resource : this->rendering)
             if(resource.fence != VK_NULL_HANDLE)
@@ -67,8 +82,11 @@ namespace Engine
 
         // Graphics Command Buffers
         for(auto resource : this->rendering)
-            if(resource.command_buffer != VK_NULL_HANDLE)
-                vkFreeCommandBuffers(this->device, this->graphics_pool, 1, &resource.command_buffer);
+            if(resource.main_command_buffer != VK_NULL_HANDLE)
+                vkFreeCommandBuffers(this->device, this->graphics_pool, 1, &resource.main_command_buffer);
+        for(uint8_t i=0; i<this->thread_count; i++)
+            if(this->threads[i].command_buffer != VK_NULL_HANDLE)
+                vkFreeCommandBuffers(this->device, this->graphics_pool, 1, &this->threads[i].command_buffer);
         if(this->graphics_pool != VK_NULL_HANDLE) vkDestroyCommandPool(this->device, this->graphics_pool, nullptr);
 
         // Transfer Command Buffers
@@ -133,7 +151,8 @@ namespace Engine
 
         // Validation Layers
         #if defined(_DEBUG)
-        if(this->report_callback != VK_NULL_HANDLE) vkDestroyDebugUtilsMessengerEXT(this->instance, this->report_callback, nullptr);
+        //if(this->report_callback != VK_NULL_HANDLE) vkDestroyDebugUtilsMessengerEXT(this->instance, this->report_callback, nullptr);
+        if(this->report_callback != VK_NULL_HANDLE) vkDestroyDebugReportCallbackEXT(this->instance, this->report_callback, nullptr);
         #endif
 
         // Instance
@@ -267,11 +286,39 @@ namespace Engine
         if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateFences())
             init_status = ERROR_MESSAGE::FENCES_CREATION_FAILURE;
 
+        // Initialisation des threads
+        if(init_status == ERROR_MESSAGE::SUCCESS && !this->InitThreads())
+            init_status = ERROR_MESSAGE::THREAD_INITIALIZATION_FAILURE;
+
         // En cas d'échecx d'initialisation, on libère les ressources alouées
         if(init_status != ERROR_MESSAGE::SUCCESS) Vulkan::DestroyInstance();
 
         // Renvoi du résultat
         return init_status;
+    }
+
+    /**
+     * Initilisation des threads
+     */
+    bool Vulkan::InitThreads()
+    {
+        this->threads.resize(this->thread_count);
+        this->keep_thread_alive = true;
+
+        // Allocation des command buffers secondaires pour les threads
+        std::vector<VkCommandBuffer> thread_buffers(this->thread_count);
+        if(!this->AllocateCommandBuffer(this->graphics_pool, static_cast<uint32_t>(this->thread_count), thread_buffers)) {
+            #if defined(_DEBUG)
+            std::cout << "AllocateCommandBuffer [threads] : Failed" << std::endl;
+            #endif
+            return false;
+        }
+        for(uint8_t i=0; i<this->thread_count; i++) this->threads[i].command_buffer = thread_buffers[i];
+
+        // Démarrage des threads
+        for(uint8_t i=0; i<this->thread_count; i++) this->threads[i].handle = std::thread{ThreadJob, this, i};
+
+        return true;
     }
 
     /**
@@ -363,14 +410,22 @@ namespace Engine
      */
     void Vulkan::CreateDebugReportCallback()
     {
-        VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
+        /* VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        createInfo.pfnUserCallback = debugCallback;
+        createInfo.pfnUserCallback = debugCallback;*/
+
+        VkDebugReportCallbackCreateInfoEXT createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+        createInfo.pfnCallback = VulkanDebugReportCallback;
+        //createInfo.flags = VK_DEBUG_REPORT_INFORMATION_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT | VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_DEBUG_BIT_EXT;
+        createInfo.flags = VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT | VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_DEBUG_BIT_EXT;
+        createInfo.pNext = nullptr;
         createInfo.pUserData = nullptr;
 
-        VkResult result = vkCreateDebugUtilsMessengerEXT(this->instance, &createInfo, nullptr, &this->report_callback);
+        // VkResult result = vkCreateDebugUtilsMessengerEXT(this->instance, &createInfo, nullptr, &this->report_callback);
+        VkResult result = vkCreateDebugReportCallbackEXT(this->instance, &createInfo, nullptr, &this->report_callback);
         createInfo = {};
     }
     #endif
@@ -405,6 +460,7 @@ namespace Engine
         #if defined(_DEBUG)
         std::vector<const char*> instance_layer_names = {"VK_LAYER_LUNARG_standard_validation"};
         instance_extension_names.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        instance_extension_names.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
         #endif
 
         // Initialisation de la structure VkInstanceCreateInfo
@@ -1949,7 +2005,7 @@ namespace Engine
             #endif
             return false;
         }
-        for(uint8_t i=0; i<this->rendering.size(); i++) this->rendering[i].command_buffer = graphics_buffers[i];
+        for(uint8_t i=0; i<this->rendering.size(); i++) this->rendering[i].main_command_buffer = graphics_buffers[i];
 
         // Allocation du command buffer pour la transfer queue
         std::vector<VkCommandBuffer> transfer_buffers(1);
@@ -2083,7 +2139,7 @@ namespace Engine
         VkResult result = vkWaitForFences(this->device, 1, &this->transfer.fence, VK_FALSE, 1000000000);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
-            std::cout << "UpdateUniforBuffer => vkWaitForFences : Timeout" << std::endl;
+            std::cout << "UpdateMeshUniformBuffers => vkWaitForFences : Timeout" << std::endl;
             #endif
             return false;
         }
@@ -2179,7 +2235,7 @@ namespace Engine
         result = vkQueueSubmit(this->queue_stack[this->transfer_stack_index].handle, 1, &submit_info, this->transfer.fence);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
-            std::cout << "UpdateUniforBuffer => vkQueueSubmit : Failed" << std::endl;
+            std::cout << "UpdateMeshUniformBuffers => vkQueueSubmit : Failed" << std::endl;
             #endif
             return false;
         }
@@ -2329,11 +2385,21 @@ namespace Engine
         //    le staging buffer     //
         //////////////////////////////
 
+        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
+        result = vkWaitForFences(this->device, 1, &this->transfer.fence, VK_FALSE, 1000000000);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateTexture => vkWaitForFences : Timeout" << std::endl;
+            #endif
+            return false;
+        }
+        vkResetFences(this->device, 1, &this->transfer.fence);
+
         size_t flush_size = static_cast<size_t>(data.size() * sizeof(data[0]));
         std::memcpy(this->staging_buffer.pointer, &data[0], flush_size);
 
         unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
-        flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * ((uint64_t)multiple + 1);
+        flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * (static_cast<uint64_t>(multiple) + 1);
 
         // Flush staging buffer
         VkMappedMemoryRange flush_range = {};
@@ -2348,16 +2414,6 @@ namespace Engine
         //     Envoi de la texture vers     //
         // la mémoire de la carte graphique //
         //////////////////////////////////////
-
-        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
-        result = vkWaitForFences(this->device, 1, &this->transfer.fence, VK_FALSE, 1000000000);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateTexture => vkWaitForFences : Timeout" << std::endl;
-            #endif
-            return false;
-        }
-        vkResetFences(this->device, 1, &this->transfer.fence);
 
         // Préparation de la copie de l'image depuis le staging buffer vers un vertex buffer
         VkCommandBufferBeginInfo command_buffer_begin_info = {};
@@ -2456,7 +2512,7 @@ namespace Engine
             }
             vkResetFences(this->device, 1, &this->transfer.fence);
 
-            vkBeginCommandBuffer(this->rendering[0].command_buffer, &command_buffer_begin_info);
+            vkBeginCommandBuffer(this->rendering[0].main_command_buffer, &command_buffer_begin_info);
 
             VkImageMemoryBarrier image_memory_barrier_from_transfer_to_shader_read = {};
             image_memory_barrier_from_transfer_to_shader_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2474,11 +2530,11 @@ namespace Engine
             image_memory_barrier_from_transfer_to_shader_read.subresourceRange.baseArrayLayer = 0;
             image_memory_barrier_from_transfer_to_shader_read.subresourceRange.layerCount = 1;
 
-            vkCmdPipelineBarrier(this->rendering[0].command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier_from_transfer_to_shader_read);
+            vkCmdPipelineBarrier(this->rendering[0].main_command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier_from_transfer_to_shader_read);
 
-            vkEndCommandBuffer(this->rendering[0].command_buffer);
+            vkEndCommandBuffer(this->rendering[0].main_command_buffer);
 
-            submit_info.pCommandBuffers = &this->rendering[0].command_buffer;
+            submit_info.pCommandBuffers = &this->rendering[0].main_command_buffer;
             result = vkQueueSubmit(this->queue_stack[this->graphics_stack_index].handle, 1, &submit_info, this->transfer.fence);
             if(result != VK_SUCCESS) {
                 #if defined(_DEBUG)
@@ -2613,8 +2669,6 @@ namespace Engine
      */
     void Vulkan::Draw()
     {
-        uint8_t resource_count = static_cast<uint8_t>(this->swap_chain.images.size());
-        uint8_t resource_index = resource_count - 1;
         VkQueue graphics_queue = this->queue_stack[this->graphics_stack_index].handle;
         VkQueue present_queue = this->queue_stack[this->present_stack_index].handle;
 
@@ -2623,8 +2677,8 @@ namespace Engine
         //  de ressources de rendu  //
         //////////////////////////////
 
-        resource_index = (resource_index + 1) % resource_count;
-        auto current_rendering_resource = this->rendering[resource_index];
+        this->rendering_index = (this->rendering_index + 1) % static_cast<uint8_t>(this->swap_chain.images.size());
+        auto current_rendering_resource = this->rendering[this->rendering_index];
 
         ////////////////////////////////
         //    Attente de libération   //
@@ -2690,7 +2744,7 @@ namespace Engine
         
         if(current_rendering_resource.framebuffer != VK_NULL_HANDLE) {
             vkDestroyFramebuffer(this->device, current_rendering_resource.framebuffer, nullptr);
-            this->rendering[resource_index].framebuffer = VK_NULL_HANDLE;
+            this->rendering[this->rendering_index].framebuffer = VK_NULL_HANDLE;
         }
 
         VkImageView pAttachments[2];
@@ -2708,7 +2762,7 @@ namespace Engine
         framebuffer_create_info.height = this->draw_surface.height;
         framebuffer_create_info.layers = 1;
 
-        result = vkCreateFramebuffer(this->device, &framebuffer_create_info, nullptr, &this->rendering[resource_index].framebuffer);
+        result = vkCreateFramebuffer(this->device, &framebuffer_create_info, nullptr, &this->rendering[this->rendering_index].framebuffer);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
             std::cout << "Draw => vkCreateFramebuffer : Failed" << std::endl;
@@ -2726,7 +2780,7 @@ namespace Engine
         command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         command_buffer_begin_info.pInheritanceInfo = nullptr;
 
-        VkCommandBuffer command_buffer = current_rendering_resource.command_buffer;
+        VkCommandBuffer command_buffer = current_rendering_resource.main_command_buffer;
         vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
 
         VkImageSubresourceRange image_subresource_range = {};
@@ -2768,7 +2822,7 @@ namespace Engine
         render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         render_pass_begin_info.pNext = nullptr;
         render_pass_begin_info.renderPass = this->render_pass;
-        render_pass_begin_info.framebuffer = this->rendering[resource_index].framebuffer;
+        render_pass_begin_info.framebuffer = this->rendering[this->rendering_index].framebuffer;
         render_pass_begin_info.renderArea.offset.x = 0;
         render_pass_begin_info.renderArea.offset.y = 0;
         render_pass_begin_info.renderArea.extent.width = this->draw_surface.width;
@@ -2776,23 +2830,45 @@ namespace Engine
         render_pass_begin_info.clearValueCount = 2;
         render_pass_begin_info.pClearValues = clear_value;
 
-        vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
-        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphics_pipeline.handle);
+        ////////////////////////////////////////////////
+        // Appel des threads pour traitement des mesh //
+        ////////////////////////////////////////////////
 
-        // Transformations géométriques
         this->UpdateMeshUniformBuffers();
+        
+        // On initilise les éléments de départ des threads
+        std::unique_lock<std::mutex> start_lock(this->start_mutex);
+        this->mesh_iterator = this->meshes.begin();
+        this->mesh_processed = 0;
+        this->thread_go = true;
 
-        for(std::pair<uint32_t, MESH> mesh : this->meshes) {
-            VkDeviceSize offset = 0;
-            VULKAN_BUFFER vertex_buffer = this->vertex_buffers[mesh.second.vertex_buffer_index];
-            vkCmdBindVertexBuffers(command_buffer, 0, 1, &vertex_buffer.handle, &offset);
-            vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->graphics_pipeline.layout, 0, 1, &mesh.second.descriptor_set, 0, &mesh.second.offset);
+        // On donne le GO pour afficher
+        this->start_condition.notify_all();
+        start_lock.unlock();
 
-            uint32_t vertex_count = static_cast<uint32_t>(vertex_buffer.size / sizeof(VERTEX));
-            vkCmdDraw(command_buffer, vertex_count, 1, 0, 0);
+        // On attend la fin du travail des threads
+        std::unique_lock<std::mutex> finish_lock(this->finish_mutex);
+        while(this->mesh_processed < this->meshes.size()) this->finish_condition.wait(finish_lock);
+        finish_lock.unlock();
+
+        // On ferme les command buffers secondaires, et on exécute les commandes
+        for(uint32_t i=0; i<this->thread_count; i++) {
+            THREAD_RESOURCE* thread = (THREAD_RESOURCE*)&this->threads[i];
+            if(thread->buffer_opened) {
+                result = vkEndCommandBuffer(thread->command_buffer);
+                if(result != VK_SUCCESS) {
+                    #if defined(_DEBUG)
+                    std::cout << "Draw => Thread[" << i << "]->vkEndCommandBuffer : Failed" << std::endl;
+                    #endif
+                    return;
+                }
+
+                vkCmdExecuteCommands(command_buffer, 1, &thread->command_buffer);
+                thread->buffer_opened = false;
+            }
         }
-            
 
         vkCmdEndRenderPass(command_buffer);
 
@@ -2826,7 +2902,7 @@ namespace Engine
         submit_info.pWaitSemaphores = &current_rendering_resource.swap_chain_semaphore;
         submit_info.pWaitDstStageMask = &wait_dst_stage_mask;
         submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &current_rendering_resource.command_buffer;
+        submit_info.pCommandBuffers = &current_rendering_resource.main_command_buffer;
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = &current_rendering_resource.render_pass_semaphore;
 
@@ -2873,5 +2949,105 @@ namespace Engine
         if(this->creating_swap_chain) return true;
         this->draw_surface = this->draw_window->GetSurface();
         return this->CreateDepthBuffer() && this->CreateSwapChain();
+    }
+
+    /**
+     * Traitements exécutés par les threads
+     */
+    void Vulkan::ThreadJob(Vulkan* self, uint32_t thread_id)
+    {
+        THREAD_RESOURCE* thread = (THREAD_RESOURCE*)&self->threads[thread_id];
+        thread->buffer_opened = false;
+
+        while(self->keep_thread_alive) {
+
+            // Le thread attend qu'on lui donne du travail
+            std::unique_lock<std::mutex> start_lock(self->start_mutex);
+            while(!self->thread_go) self->start_condition.wait(start_lock);
+            start_lock.unlock();
+
+            // Condition de sortie
+            if(!self->keep_thread_alive) return;
+
+            while(true) {
+
+                // Le mesh à calculer
+                MESH mesh;
+
+                // Le thread récupère le mesh à traiter
+                std::unique_lock<std::mutex> run_lock(self->run_mutex);
+                {
+                    if(self->mesh_iterator == self->meshes.end()) {
+                        self->thread_go = false;
+                        break;
+                    }
+                    mesh = self->mesh_iterator->second;
+                    self->mesh_iterator++;
+                }
+                run_lock.unlock();
+
+                /*#if defined(_DEBUG)
+                run_lock.lock();
+                uint32_t mesh_id = mesh.offset / self->ubo_alignement;
+                uint32_t frame_id = self->rendering_index;
+                std::cout << "Thread[" << thread_id << "] : process mesh[" << mesh_id << "] on frame " << frame_id << std::endl;
+                run_lock.unlock();
+                #endif*/
+
+                ////////////////////////
+                // Traitement du mesh //
+                ////////////////////////
+
+                if(!thread->buffer_opened) {
+                    
+                    VkCommandBufferInheritanceInfo inheritance_info = {};
+                    inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+                    inheritance_info.pNext = nullptr;
+                    inheritance_info.framebuffer = self->rendering[self->rendering_index].framebuffer;
+                    inheritance_info.renderPass = self->render_pass;
+
+                    VkCommandBufferBeginInfo command_buffer_begin_info = {};
+                    command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                    command_buffer_begin_info.pNext = nullptr; 
+                    command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+                    command_buffer_begin_info.pInheritanceInfo = &inheritance_info;
+
+                    run_lock.lock();
+                    {
+                        VkResult result = vkBeginCommandBuffer(thread->command_buffer, &command_buffer_begin_info);
+                        if(result != VK_SUCCESS) {
+                            #if defined(_DEBUG)
+                            std::cout << "Thread[" << thread_id << "] : vkBeginCommandBuffer => Failed" << std::endl;
+                            #endif
+                            std::unique_lock<std::mutex> finish_lock(self->finish_mutex);
+                            self->mesh_processed++;
+                            self->finish_condition.notify_one();
+                            finish_lock.unlock();
+                            run_lock.unlock();
+                            continue;
+                        }
+
+                        vkCmdBindPipeline(thread->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.handle);
+                    }
+                    run_lock.unlock();
+                    thread->buffer_opened = true;
+                }
+
+                VkDeviceSize offset = 0;
+                VkCommandBuffer command_buffer = thread->command_buffer;
+                VULKAN_BUFFER vertex_buffer = self->vertex_buffers[mesh.vertex_buffer_index];
+                vkCmdBindVertexBuffers(command_buffer, 0, 1, &vertex_buffer.handle, &offset);
+                vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.layout, 0, 1, &mesh.descriptor_set, 0, &mesh.offset);
+
+                uint32_t vertex_count = static_cast<uint32_t>(vertex_buffer.size / sizeof(VERTEX));
+                vkCmdDraw(command_buffer, vertex_count, 1, 0, 0);
+
+                // On signale la fin du traitement
+                std::unique_lock<std::mutex> finish_lock(self->finish_mutex);
+                self->mesh_processed++;
+                self->finish_condition.notify_one();
+                finish_lock.unlock();
+            }
+        }
     }
 }
