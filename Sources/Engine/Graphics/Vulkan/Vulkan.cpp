@@ -9,373 +9,7 @@ namespace Engine
     #include "ListOfFunctions.inl"
 
     // Initialisation du singleton
-    Vulkan* Vulkan::global_instance = nullptr;
-
-    /**
-     * Permet d'accéder à l'instance du singleton
-     */
-    Vulkan* Vulkan::GetInstance()
-    {
-        if(Vulkan::global_instance == nullptr) Vulkan::global_instance = new Vulkan();
-        return Vulkan::global_instance;
-    }
-
-    /**
-     * Constructeur
-     */
-    Vulkan::Vulkan()
-    {
-        this->library                   = nullptr;
-        this->instance                  = VK_NULL_HANDLE;
-        this->presentation_surface      = VK_NULL_HANDLE;
-        this->present_stack_index       = UINT32_MAX;
-        this->graphics_stack_index      = UINT32_MAX;
-        this->transfer_stack_index      = UINT32_MAX;
-        this->device                    = VK_NULL_HANDLE;
-        this->creating_swap_chain       = false;
-        this->render_pass               = VK_NULL_HANDLE;
-        this->graphics_pool             = VK_NULL_HANDLE;
-        this->last_texture_index        = 0;
-        this->last_vbo_index            = 0;
-        this->last_mesh_index           = 0;
-        this->ubo_alignement            = 0;
-        this->thread_count              = std::thread::hardware_concurrency();
-        this->rendering_index           = 0;
-        this->thread_go                 = false;
-        this->mesh_processed            = 0;
-
-        // this->thread_count = 2;
-
-        #if defined(_DEBUG)
-        std::cout << "Nombre de threads disponibles : " << this->thread_count << std::endl;
-        #endif
-    }
-
-    /**
-     * Destructeur
-     */
-    Vulkan::~Vulkan()
-    {
-        // On termine l'exécution des threads
-        std::unique_lock<std::mutex> start_lock(this->start_mutex);
-        this->thread_go = true;
-        this->keep_thread_alive = false;
-        this->start_condition.notify_all();
-        start_lock.unlock();
-
-        // Attente de la fin des threads
-        for(uint8_t i=0; i<this->thread_count; i++) this->threads[i].handle.join();
-
-        // Fences
-        for(auto resource : this->rendering)
-            if(resource.fence != VK_NULL_HANDLE)
-                vkDestroyFence(this->device, resource.fence, nullptr);
-        if(this->transfer.fence != VK_NULL_HANDLE) vkDestroyFence(this->device, this->transfer.fence, nullptr);
-
-        // Semaphores
-        for(auto resource : this->rendering) {
-            if(resource.render_pass_semaphore != VK_NULL_HANDLE)
-                vkDestroySemaphore(this->device, resource.render_pass_semaphore, nullptr);
-            if(resource.swap_chain_semaphore != VK_NULL_HANDLE)
-                vkDestroySemaphore(this->device, resource.swap_chain_semaphore, nullptr);
-        }
-
-        // Graphics Command Buffers
-        for(auto resource : this->rendering)
-            if(resource.main_command_buffer != VK_NULL_HANDLE)
-                vkFreeCommandBuffers(this->device, this->graphics_pool, 1, &resource.main_command_buffer);
-        for(uint8_t i=0; i<this->thread_count; i++)
-            if(this->threads[i].command_buffer != VK_NULL_HANDLE)
-                vkFreeCommandBuffers(this->device, this->graphics_pool, 1, &this->threads[i].command_buffer);
-        if(this->graphics_pool != VK_NULL_HANDLE) vkDestroyCommandPool(this->device, this->graphics_pool, nullptr);
-
-        // Transfer Command Buffers
-        if(this->graphics_stack_index != this->transfer_stack_index) {
-            if(this->transfer.command_buffer != VK_NULL_HANDLE) vkFreeCommandBuffers(this->device, this->transfer.command_pool, 1, &this->transfer.command_buffer);
-            if(this->transfer.command_pool != VK_NULL_HANDLE && this->transfer.command_pool != this->graphics_pool) vkDestroyCommandPool(this->device, this->transfer.command_pool, nullptr);
-        }
-
-        // Pipeline
-        if(this->graphics_pipeline.handle != VK_NULL_HANDLE) vkDestroyPipeline(this->device, this->graphics_pipeline.handle, nullptr);
-        if(this->graphics_pipeline.layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(this->device, this->graphics_pipeline.layout, nullptr);
-
-        // Descriptor Sets (Base)
-        if(this->descriptor_pool.pool != VK_NULL_HANDLE) vkDestroyDescriptorPool(this->device, this->descriptor_pool.pool, nullptr);
-        if(this->descriptor_pool.layout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(this->device, this->descriptor_pool.layout, nullptr);
-
-        // Render Pass
-        if(this->render_pass != VK_NULL_HANDLE) vkDestroyRenderPass(this->device, this->render_pass, nullptr);
-
-        // Uniform Buffer
-        if(this->uniform_buffer.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->uniform_buffer.memory, nullptr);
-        if(this->uniform_buffer.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, this->uniform_buffer.handle, nullptr);
-
-        // Vertex Buffers
-        for(std::pair<uint32_t, VULKAN_BUFFER> element : this->vertex_buffers) {
-            if(element.second.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, element.second.memory, nullptr);
-            if(element.second.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, element.second.handle, nullptr);
-        }
-        
-        // Textures
-        for(std::pair<uint32_t, TEXTURE> element : this->textures) {
-            if(element.second.view != VK_NULL_HANDLE) vkDestroyImageView(this->device, element.second.view, nullptr);
-            if(element.second.image != VK_NULL_HANDLE) vkDestroyImage(this->device, element.second.image, nullptr);
-            if(element.second.sampler != VK_NULL_HANDLE) vkDestroySampler(this->device, element.second.sampler, nullptr);
-            if(element.second.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, element.second.memory, nullptr);
-        }
-
-        // Stagin Buffer
-        if(this->staging_buffer.pointer != nullptr) vkUnmapMemory(this->device, this->staging_buffer.memory);
-        if(this->staging_buffer.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->staging_buffer.memory, nullptr);
-        if(this->staging_buffer.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, this->staging_buffer.handle, nullptr);
-
-        // Depth buffer
-        if(this->depth_buffer.view != VK_NULL_HANDLE) vkDestroyImageView(this->device, this->depth_buffer.view, nullptr);
-        if(this->depth_buffer.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->depth_buffer.memory, nullptr);
-        if(this->depth_buffer.image != VK_NULL_HANDLE) vkDestroyImage(this->device, this->depth_buffer.image, nullptr);
-
-        // Image Views de la Swap Chain
-        for(int i=0; i<this->swap_chain.images.size(); i++)
-            if(this->swap_chain.images[i].view != VK_NULL_HANDLE)
-                vkDestroyImageView(this->device, this->swap_chain.images[i].view, nullptr);
-        this->swap_chain.images.clear();
-
-        // Swap Chain
-        if(this->swap_chain.handle != VK_NULL_HANDLE) vkDestroySwapchainKHR(this->device, this->swap_chain.handle, nullptr);
-
-        // Device
-        if(this->device != VK_NULL_HANDLE && vkDestroyDevice) vkDestroyDevice(this->device, nullptr);
-
-        // Surface
-        if(this->presentation_surface != VK_NULL_HANDLE) vkDestroySurfaceKHR(this->instance, this->presentation_surface, nullptr);
-
-        // Validation Layers
-        #if defined(_DEBUG)
-        //if(this->report_callback != VK_NULL_HANDLE) vkDestroyDebugUtilsMessengerEXT(this->instance, this->report_callback, nullptr);
-        if(this->report_callback != VK_NULL_HANDLE) vkDestroyDebugReportCallbackEXT(this->instance, this->report_callback, nullptr);
-        #endif
-
-        // Instance
-        vkDestroyInstance(this->instance, nullptr);
-
-        // Librairie
-        #if defined(VK_USE_PLATFORM_WIN32_KHR)
-        if(this->library != nullptr) FreeLibrary(this->library);
-        #elif defined(VK_USE_PLATFORM_XCB_KHR) || defined(VK_USE_PLATFORM_XLIB_KHR)
-        if(this->library != nullptr) dlclose(this->library);
-        #endif
-    }
-
-    /**
-     * Libération des resources
-     */
-    void Vulkan::DestroyInstance()
-    {
-        if(Vulkan::global_instance == nullptr) return;
-        delete Vulkan::global_instance;
-        Vulkan::global_instance = nullptr;
-    }
-
-    /**
-     * Initlisation de vulkan
-     */
-    Vulkan::ERROR_MESSAGE Vulkan::Initialize(Engine::Window* draw_window, uint32_t application_version, std::string aplication_name)
-    {
-        //////////////////////
-        ///   PREPARATION  ///
-        //////////////////////
-
-        // On récupère la fenêtre et la surface d'affichage
-        this->draw_window = draw_window;
-        this->draw_surface = draw_window->GetSurface();
-
-        // Valeur de retourn de la fonction
-        ERROR_MESSAGE init_status = ERROR_MESSAGE::SUCCESS;
-
-        #if defined(_DEBUG)
-        std::string vulkan_version;
-        this->GetVersion(vulkan_version);
-        std::cout << "Version de vulkan : " << vulkan_version << std::endl;
-        #endif
-
-        // Chargement de la librairie vulkan
-        if(!this->LoadPlatformLibrary())
-            init_status = ERROR_MESSAGE::LOAD_LIBRARY_FAILURE;
-         
-        ////////////////////
-        // INITIALISATION //
-        ////////////////////
-
-        // Chargement de l'exporteur de fonctions vulkan
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->LoadExportedEntryPoints())
-            init_status = ERROR_MESSAGE::LOAD_EXPORTED_FUNCTIONS_FAILURE;
-
-        // Chargement des fonctions vulkan globales
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->LoadGlobalLevelEntryPoints())
-            init_status = ERROR_MESSAGE::LOAD_GLOBAL_FUNCTIONS_FAILURE;
-
-        // Création de l'instance vulkan
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateVulkanInstance(application_version, aplication_name))
-            init_status = ERROR_MESSAGE::VULKAN_INSTANCE_CREATION_FAILURE;
-
-        // Chargement des fonctions portant sur l'instance
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->LoadInstanceLevelEntryPoints())
-            init_status = ERROR_MESSAGE::LOAD_INSTANCE_FUNCTIONS_FAILURE;
-
-        #if defined(_DEBUG)
-        this->report_callback = VK_NULL_HANDLE;
-        this->CreateDebugReportCallback();
-        #endif
-
-        // Création de la surface de présentation
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreatePresentationSurface())
-            init_status = ERROR_MESSAGE::DEVICE_CREATION_FAILURE;
-
-        // Création du logical device
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateDevice())
-            init_status = ERROR_MESSAGE::DEVICE_CREATION_FAILURE;
-
-        // Chargement des fonctions portant sur le logical device
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->LoadDeviceLevelEntryPoints())
-            init_status = ERROR_MESSAGE::LOAD_DEVICE_FUNCTIONS_FAILURE;
-
-        // Récupère le handle des device queues
-        this->GetDeviceQueues();
-
-        // Création de la swap chain
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateSwapChain())
-            init_status = ERROR_MESSAGE::SWAP_CHAIN_CREATION_FAILURE;
-
-        // Allocation des threads utilisés pour le rendu
-        Vulkan::global_instance->rendering.resize(this->swap_chain.images.size());
-
-        // Création du depth buffer
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateDepthBuffer())
-            init_status = ERROR_MESSAGE::DEPTH_BUFFER_CREATION_FAILURE;
-
-        // Création du staging buffer
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateStagingBuffer(STAGING_BUFFER_SIZE))
-            init_status = ERROR_MESSAGE::STAGING_BUFFER_CREATION_FAILURE;
-
-        // Création du uniform buffer
-        uint64_t uniform_buffer_size = 1024 * 1024 * 20; // 20 Mo
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateUniformBuffer())
-            init_status = ERROR_MESSAGE::UNIFORM_BUFFER_CREATION_FAILURE;
-
-        // Création de la render pass
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateRenderPass())
-            init_status = ERROR_MESSAGE::RENDER_PASS_CREATION_FAILURE;
-
-        // Création des descriptor sets
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateDescriptorSets())
-            init_status = ERROR_MESSAGE::DESCRIPTOR_SETS_CREATION_FAILURE;
-
-        // Création du pipeline graphique
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreatePipeline())
-            init_status = ERROR_MESSAGE::GRAPHICS_PIPELINE_CREATION_FAILURE;
-
-        // Création des command buffers
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateCommandBuffers())
-            init_status = ERROR_MESSAGE::COMMAND_BUFFERS_CREATION_FAILURE;
-
-        // Création des sémaphores
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateSemaphores())
-            init_status = ERROR_MESSAGE::SEMAPHORES_CREATION_FAILURE;
-
-        // Création des fences
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->CreateFences())
-            init_status = ERROR_MESSAGE::FENCES_CREATION_FAILURE;
-
-        // Initialisation des threads
-        if(init_status == ERROR_MESSAGE::SUCCESS && !this->InitThreads())
-            init_status = ERROR_MESSAGE::THREAD_INITIALIZATION_FAILURE;
-
-        // En cas d'échecx d'initialisation, on libère les ressources alouées
-        if(init_status != ERROR_MESSAGE::SUCCESS) Vulkan::DestroyInstance();
-
-        // Renvoi du résultat
-        return init_status;
-    }
-
-    /**
-     * Initilisation des threads
-     */
-    bool Vulkan::InitThreads()
-    {
-        this->threads.resize(this->thread_count);
-        this->keep_thread_alive = true;
-
-        // Allocation des command buffers secondaires pour les threads
-        std::vector<VkCommandBuffer> thread_buffers(this->thread_count);
-        if(!this->AllocateCommandBuffer(this->graphics_pool, static_cast<uint32_t>(this->thread_count), thread_buffers)) {
-            #if defined(_DEBUG)
-            std::cout << "AllocateCommandBuffer [threads] : Failed" << std::endl;
-            #endif
-            return false;
-        }
-        for(uint8_t i=0; i<this->thread_count; i++) this->threads[i].command_buffer = thread_buffers[i];
-
-        // Démarrage des threads
-        for(uint8_t i=0; i<this->thread_count; i++) this->threads[i].handle = std::thread{ThreadJob, this, i};
-
-        return true;
-    }
-
-    /**
-     * Chargement de la librairie vulkan
-     */
-    bool Vulkan::LoadPlatformLibrary()
-    {
-        // Chargement de la DLL pour Windows
-        #if defined(VK_USE_PLATFORM_WIN32_KHR)
-        this->library = LoadLibrary("vulkan-1.dll");
-
-        // Chargement de la librairie partagée pour Linux / MACOS
-        #elif defined(VK_USE_PLATFORM_XCB_KHR) || defined(VK_USE_PLATFORM_XLIB_KHR)
-        this->Library = dlopen("libvulkan.so.1", RTLD_NOW);
-
-        #endif
-
-        #if defined(_DEBUG)
-        std::cout << "LoadPlatformLibrary : " << ((this->library != nullptr) ? "Success" : "Failure") << std::endl;
-        #endif
-
-        // Succès si library n'est pas nul
-        return this->library != nullptr;
-    }
-
-    bool Vulkan::GetVersion(std::string &version_string)
-    {
-        bool success = false;
-
-        #if defined(VK_USE_PLATFORM_WIN32_KHR)
-        DWORD ver_handle;
-        DWORD ver_size = GetFileVersionInfoSize("vulkan-1.dll", &ver_handle);
-        if (ver_size > 0) {
-            std::vector<char> ver_data(ver_size);
-            if (GetFileVersionInfo("vulkan-1.dll", ver_handle, ver_size, ver_data.data())) {
-                UINT size = 0;
-                LPBYTE buffer = NULL;
-                if (VerQueryValue(ver_data.data(), "\\", (VOID FAR * FAR *)&buffer, &size)) {
-                    if (size) {
-                        VS_FIXEDFILEINFO *ver_info = (VS_FIXEDFILEINFO *)buffer;
-                        if (ver_info->dwSignature == 0xfeef04bd) {
-                            version_string = std::to_string((ver_info->dwFileVersionMS >> 16) & 0xffff);
-                            version_string += ".";
-                            version_string += std::to_string((ver_info->dwFileVersionMS >> 0) & 0xffff);
-                            version_string += ".";
-                            version_string += std::to_string((ver_info->dwFileVersionLS >> 16) & 0xffff);
-                            success = true;
-                        }
-                    }
-                }
-            }
-            ver_data.clear();
-        }
-        #endif
-
-        return success;
-    }
+    Vulkan* Vulkan::vulkan = nullptr;
 
     /**
      * Affichage des erreurs lorsque les validation layers sont activées
@@ -396,7 +30,7 @@ namespace Engine
     }
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+            VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
             VkDebugUtilsMessageTypeFlagsEXT messageType,
             const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
             void* pUserData)
@@ -410,25 +44,256 @@ namespace Engine
      */
     void Vulkan::CreateDebugReportCallback()
     {
-        /* VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
+        VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
         createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-        createInfo.pfnUserCallback = debugCallback;*/
+        createInfo.pfnUserCallback = debugCallback;
 
-        VkDebugReportCallbackCreateInfoEXT createInfo = {};
-        createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-        createInfo.pfnCallback = VulkanDebugReportCallback;
-        //createInfo.flags = VK_DEBUG_REPORT_INFORMATION_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT | VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_DEBUG_BIT_EXT;
-        createInfo.flags = VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT | VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_DEBUG_BIT_EXT;
-        createInfo.pNext = nullptr;
-        createInfo.pUserData = nullptr;
-
-        // VkResult result = vkCreateDebugUtilsMessengerEXT(this->instance, &createInfo, nullptr, &this->report_callback);
-        VkResult result = vkCreateDebugReportCallbackEXT(this->instance, &createInfo, nullptr, &this->report_callback);
+        VkResult result = vkCreateDebugUtilsMessengerEXT(this->instance, &createInfo, nullptr, &this->report_callback);
         createInfo = {};
     }
     #endif
+
+    /**
+     * Permet d'accéder à l'instance du singleton
+     */
+    Vulkan* Vulkan::GetInstance()
+    {
+        if(Vulkan::vulkan == nullptr) Vulkan::vulkan = new Vulkan();
+        return Vulkan::vulkan;
+    }
+
+    /**
+     * Constructeur
+     */
+    Vulkan::Vulkan()
+    {
+        this->library                   = nullptr;
+        this->creating_swap_chain       = false;
+        this->keep_thread_alive         = false;
+        this->frame_ready.signaled      = false;
+        this->instance                  = VK_NULL_HANDLE;
+        this->presentation_surface      = VK_NULL_HANDLE;
+        this->device                    = VK_NULL_HANDLE;
+        this->descriptor_set_layout     = VK_NULL_HANDLE;
+        this->descriptor_pool           = VK_NULL_HANDLE;
+        this->graphics_command_pool     = VK_NULL_HANDLE;
+        this->transfer_command_pool     = VK_NULL_HANDLE;
+        this->render_pass               = VK_NULL_HANDLE;
+        this->ubo_alignement            = 0;
+        this->current_frame_index       = 0;
+        this->last_texture_index        = 0;
+        this->last_model_index          = 0;
+        this->last_vbo_index            = 0;
+        this->concurrent_frame_count    = 0;
+        this->thread_count              = 0;
+        this->pick_index                = 0;
+        this->job_done_count            = 0;
+    }
+
+    /**
+     * Destructeur
+     */
+    Vulkan::~Vulkan()
+    {
+        vkDeviceWaitIdle(this->device);
+
+        // Threads
+        this->ReleaseThreads();
+
+        // Vertex Buffers
+        for(std::pair<uint32_t, VERTEX_BUFFER> element : this->vertex_buffers) {
+            if(element.second.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, element.second.memory, nullptr);
+            if(element.second.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, element.second.handle, nullptr);
+        }
+
+        // Textures
+        for(auto iterator = this->textures.begin(); iterator!=this->textures.end(); iterator++) {
+            if(iterator->second.view != VK_NULL_HANDLE) vkDestroyImageView(this->device, iterator->second.view, nullptr);
+            if(iterator->second.image != VK_NULL_HANDLE) vkDestroyImage(this->device, iterator->second.image, nullptr);
+            if(iterator->second.sampler != VK_NULL_HANDLE) vkDestroySampler(this->device, iterator->second.sampler, nullptr);
+            if(iterator->second.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, iterator->second.memory, nullptr);
+        }
+
+        // Resources de la création de textures
+        this->ReleaseBackgroundResources();
+
+        // Resources partagées
+        this->ReleaseThreadSharedResources();
+
+        // Thread Principal
+        this->ReleaseMainThread();
+
+        // Pipeline
+        if(this->graphics_pipeline.handle != VK_NULL_HANDLE) vkDestroyPipeline(this->device, this->graphics_pipeline.handle, nullptr);
+        if(this->graphics_pipeline.layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(this->device, this->graphics_pipeline.layout, nullptr);
+
+        // Descriptor Set
+        if(this->descriptor_set_layout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(this->device, this->descriptor_set_layout, nullptr);
+        if(this->descriptor_pool != VK_NULL_HANDLE) vkDestroyDescriptorPool(this->device, this->descriptor_pool, nullptr);
+
+        // Render Pass
+        if(this->render_pass != VK_NULL_HANDLE) vkDestroyRenderPass(this->device, this->render_pass, nullptr);
+
+        // Image Views de la Swap Chain
+        for(int i=0; i<this->swap_chain.images.size(); i++)
+            if(this->swap_chain.images[i].view != VK_NULL_HANDLE)
+                vkDestroyImageView(this->device, this->swap_chain.images[i].view, nullptr);
+        this->swap_chain.images.clear();
+
+        // Swap Chain
+        if(this->swap_chain.handle != VK_NULL_HANDLE) vkDestroySwapchainKHR(this->device, this->swap_chain.handle, nullptr);
+
+        // Device
+        if(this->device != VK_NULL_HANDLE && vkDestroyDevice) vkDestroyDevice(this->device, nullptr);
+
+        // Surface
+        if(this->presentation_surface != VK_NULL_HANDLE) vkDestroySurfaceKHR(this->instance, this->presentation_surface, nullptr);
+
+        // Validation Layers
+        #if defined(_DEBUG)
+        if(this->report_callback != VK_NULL_HANDLE) vkDestroyDebugUtilsMessengerEXT(this->instance, this->report_callback, nullptr);
+        //if(this->report_callback != VK_NULL_HANDLE) vkDestroyDebugReportCallbackEXT(this->instance, this->report_callback, nullptr);
+        #endif
+
+        // Instance
+        vkDestroyInstance(this->instance, nullptr);
+
+        // Librairie
+        #if defined(VK_USE_PLATFORM_WIN32_KHR)
+        if(this->library != nullptr) FreeLibrary(this->library);
+        #elif defined(VK_USE_PLATFORM_XCB_KHR) || defined(VK_USE_PLATFORM_XLIB_KHR)
+        if(this->library != nullptr) dlclose(this->library);
+        #endif
+    }
+
+    /**
+     * Libération des resources
+     */
+    void Vulkan::DestroyInstance()
+    {
+        if(Vulkan::vulkan == nullptr) return;
+        delete Vulkan::vulkan;
+        Vulkan::vulkan = nullptr;
+    }
+
+    /**
+     * Initlisation de vulkan
+     */
+    Vulkan::RETURN_CODE Vulkan::Initialize(Engine::Window* draw_window, uint32_t application_version, std::string aplication_name)
+    {
+        //////////////////////
+        ///   PREPARATION  ///
+        //////////////////////
+
+        // On récupère la fenêtre et la surface d'affichage
+        this->draw_window = draw_window;
+        this->draw_surface = draw_window->GetSurface();
+
+        // Clalcul de la matrice de projection par défaut
+        this->base_projection = PerspectiveProjectionMatrix(
+            4.0f/3.0f,                                                                                      // aspect_ration
+            //static_cast<float>(this->draw_surface.width) / static_cast<float>(this->draw_surface.height),   
+            45.0f,                                                                                          // field_of_view
+            1.0f,                                                                                           // near_clip
+            20.0f                                                                                           // far_clip
+        );
+
+        // Valeur de retourn de la fonction
+        RETURN_CODE init_status = RETURN_CODE::SUCCESS;
+
+        #if defined(_DEBUG)
+        std::string vulkan_version;
+        this->GetVersion(vulkan_version);
+        std::cout << "Version de vulkan : " << vulkan_version << std::endl;
+        #endif
+
+        // Chargement de la librairie vulkan
+        if(!this->LoadPlatformLibrary())
+            init_status = RETURN_CODE::LOAD_LIBRARY_FAILURE;
+         
+        ////////////////////
+        // INITIALISATION //
+        ////////////////////
+
+        // Chargement de l'exporteur de fonctions vulkan
+        if(init_status == RETURN_CODE::SUCCESS && !this->LoadExportedEntryPoints())
+            init_status = RETURN_CODE::LOAD_EXPORTED_FUNCTIONS_FAILURE;
+
+        // Chargement des fonctions vulkan globales
+        if(init_status == RETURN_CODE::SUCCESS && !this->LoadGlobalLevelEntryPoints())
+            init_status = RETURN_CODE::LOAD_GLOBAL_FUNCTIONS_FAILURE;
+
+        // Création de l'instance vulkan
+        if(init_status == RETURN_CODE::SUCCESS && !this->CreateVulkanInstance(application_version, aplication_name))
+            init_status = RETURN_CODE::VULKAN_INSTANCE_CREATION_FAILURE;
+
+        // Chargement des fonctions portant sur l'instance
+        if(init_status == RETURN_CODE::SUCCESS && !this->LoadInstanceLevelEntryPoints())
+            init_status = RETURN_CODE::LOAD_INSTANCE_FUNCTIONS_FAILURE;
+
+        #if defined(_DEBUG)
+        this->report_callback = VK_NULL_HANDLE;
+        this->CreateDebugReportCallback();
+        #endif
+
+        // Création de la surface de présentation
+        if(init_status == RETURN_CODE::SUCCESS && !this->CreatePresentationSurface())
+            init_status = RETURN_CODE::DEVICE_CREATION_FAILURE;
+
+        // Création du logical device
+        if(init_status == RETURN_CODE::SUCCESS && !this->CreateDevice())
+            init_status = RETURN_CODE::DEVICE_CREATION_FAILURE;
+
+        // Chargement des fonctions portant sur le logical device
+        if(init_status == RETURN_CODE::SUCCESS && !this->LoadDeviceLevelEntryPoints())
+            init_status = RETURN_CODE::LOAD_DEVICE_FUNCTIONS_FAILURE;
+
+        // Récupère le handle des device queues
+        this->GetDeviceQueues();
+
+        // Création de la swap chain
+        if(init_status == RETURN_CODE::SUCCESS && !this->CreateSwapChain())
+            init_status = RETURN_CODE::SWAP_CHAIN_CREATION_FAILURE;
+
+        // Allocation des threads utilisés pour le rendu
+        // Vulkan::vulkan->rendering.resize(this->swap_chain.images.size());
+
+        // Création de la render pass
+        if(init_status == RETURN_CODE::SUCCESS && !this->CreateRenderPass())
+            init_status = RETURN_CODE::RENDER_PASS_CREATION_FAILURE;
+
+        // Préparation des descriptor sets
+        if(init_status == RETURN_CODE::SUCCESS && !this->PrepareDescriptorSets())
+            init_status = RETURN_CODE::DESCRIPTOR_SETS_PREPARATION_FAILURE;
+
+        // Création du pipeline graphique
+        if(init_status == RETURN_CODE::SUCCESS && !this->CreatePipeline())
+            init_status = RETURN_CODE::GRAPHICS_PIPELINE_CREATION_FAILURE;
+
+        // Initialisation de la boucle principale
+        if(init_status == RETURN_CODE::SUCCESS && !this->InitMainThread())
+            init_status = RETURN_CODE::MAIN_THREAD_INITIALIZATION_FAILURE;
+        
+        // Initialisation des resources partagées
+        if(init_status == RETURN_CODE::SUCCESS && !this->InitThreadSharedResources())
+            init_status = RETURN_CODE::SHARED_RESOURCES_INITIALIZATION_FAILURE;
+
+        // Initialisation des resources d'arrière plan
+        if(init_status == RETURN_CODE::SUCCESS && !this->InitBackgroundResources())
+            init_status = RETURN_CODE::BACKGROUND_INITIALIZATION_FAILURE;
+
+        // Initialisation des threads
+        if(init_status == RETURN_CODE::SUCCESS && !this->InitThreads())
+            init_status = RETURN_CODE::THREAD_INITIALIZATION_FAILURE;
+
+        // En cas d'échecx d'initialisation, on libère les ressources alouées
+        if(init_status != RETURN_CODE::SUCCESS) Vulkan::DestroyInstance();
+
+        // Renvoi du résultat
+        return init_status;
+    }
 
     /**
      * Création de l'instance Vulkan
@@ -488,6 +353,65 @@ namespace Engine
 
         // Succès
         return result == VK_SUCCESS;
+    }
+
+    /**
+     * Chargement de la librairie vulkan
+     */
+    bool Vulkan::LoadPlatformLibrary()
+    {
+        // Chargement de la DLL pour Windows
+        #if defined(VK_USE_PLATFORM_WIN32_KHR)
+        this->library = LoadLibrary("vulkan-1.dll");
+
+        // Chargement de la librairie partagée pour Linux / MACOS
+        #elif defined(VK_USE_PLATFORM_XCB_KHR) || defined(VK_USE_PLATFORM_XLIB_KHR)
+        this->Library = dlopen("libvulkan.so.1", RTLD_NOW);
+
+        #endif
+
+        #if defined(_DEBUG)
+        std::cout << "LoadPlatformLibrary : " << ((this->library != nullptr) ? "Success" : "Failure") << std::endl;
+        #endif
+
+        // Succès si library n'est pas nul
+        return this->library != nullptr;
+    }
+
+    /**
+     * Récupère la version de Vulkan
+     */
+    bool Vulkan::GetVersion(std::string &version_string)
+    {
+        bool success = false;
+
+        #if defined(VK_USE_PLATFORM_WIN32_KHR)
+        DWORD ver_handle;
+        DWORD ver_size = GetFileVersionInfoSize("vulkan-1.dll", &ver_handle);
+        if (ver_size > 0) {
+            std::vector<char> ver_data(ver_size);
+            if (GetFileVersionInfo("vulkan-1.dll", ver_handle, ver_size, ver_data.data())) {
+                UINT size = 0;
+                LPBYTE buffer = NULL;
+                if (VerQueryValue(ver_data.data(), "\\", (VOID FAR * FAR *)&buffer, &size)) {
+                    if(size) {
+                        VS_FIXEDFILEINFO *ver_info = (VS_FIXEDFILEINFO *)buffer;
+                        if (ver_info->dwSignature == 0xfeef04bd) {
+                            version_string = std::to_string((ver_info->dwFileVersionMS >> 16) & 0xffff);
+                            version_string += ".";
+                            version_string += std::to_string((ver_info->dwFileVersionMS >> 0) & 0xffff);
+                            version_string += ".";
+                            version_string += std::to_string((ver_info->dwFileVersionLS >> 16) & 0xffff);
+                            success = true;
+                        }
+                    }
+                }
+            }
+            ver_data.clear();
+        }
+        #endif
+
+        return success;
     }
 
     /**
@@ -690,47 +614,63 @@ namespace Engine
         }
 
         // Sélection de la present queue
-        uint32_t present_index = this->SelectPresentQueue(this->physical_device.handle, queue_family_properties);
+        this->present_queue.index = this->SelectPresentQueue(this->physical_device.handle, queue_family_properties);
 
         // Sélection des autres queues
-        uint32_t graphics_index = this->SelectPreferredQueue(this->physical_device.handle, queue_family_properties, VK_QUEUE_GRAPHICS_BIT, present_index);
-        uint32_t transfer_index = this->SelectPreferredQueue(this->physical_device.handle, queue_family_properties, VK_QUEUE_TRANSFER_BIT, present_index);
+        this->graphics_queue.index = this->SelectPreferredQueue(this->physical_device.handle, queue_family_properties, VK_QUEUE_GRAPHICS_BIT, this->present_queue.index);
+        this->transfer_queue.index = this->SelectPreferredQueue(this->physical_device.handle, queue_family_properties, VK_QUEUE_TRANSFER_BIT, this->present_queue.index);
+        // this->transfer_queue.index = this->graphics_queue.index;
+        this->background.transfer_queue.index = this->transfer_queue.index;
+        this->background.graphics_queue.index = this->graphics_queue.index;
        
         #if defined(_DEBUG)
-        std::cout << "CreateDevice : Graphics queue : " << graphics_index << std::endl;
-        std::cout << "CreateDevice : Transfert queue : " << transfer_index << std::endl;
-        std::cout << "CreateDevice : Present queue : " << present_index << std::endl;
+        std::cout << "CreateDevice : Graphics queue family : " << this->graphics_queue.index << ", count : " << queue_family_properties[this->graphics_queue.index].queueCount << std::endl;
+        std::cout << "CreateDevice : Transfert queue family : " << this->transfer_queue.index << ", count : " << queue_family_properties[this->transfer_queue.index].queueCount << std::endl;
+        std::cout << "CreateDevice : Present queue family : " << this->present_queue.index << ", count : " << queue_family_properties[this->present_queue.index].queueCount << std::endl;
         #endif
 
         // Préparation de la création des queues
         std::vector<VkDeviceQueueCreateInfo> queue_infos;
-        std::vector<uint32_t> queues = {present_index, graphics_index, transfer_index};
-        std::vector<float> queue_priorities = {0.0f};
-        for(int i=0; i<queues.size(); i++) {
+        std::array<uint32_t, 3> queues = {this->present_queue.index, this->graphics_queue.index, this->transfer_queue.index};
+        std::vector<float> queue_priorities;// = {0.0f};
 
-            bool found = false;
-            for(int j=0; j<this->queue_stack.size(); j++) if(queue_stack[j].index == queues[i]) {
-                found = true;
-                break;
-            }
-            if(found) continue;
+        VkDeviceQueueCreateInfo queue_info = {};
+        queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_info.pNext = nullptr;
 
-            DEVICE_QUEUE queue = {};
-            queue.index = queues[i];
-            this->queue_stack.push_back(queue);
+        // Graphics Queue
+        // Une queue principale pour l'affichage,
+        // si possible une queue secondaire pour les textures
+        if(queue_family_properties[this->graphics_queue.index].queueCount > 1) queue_priorities = {0.0f, 0.0f};
+        else queue_priorities = {0.0f};
 
-            if(present_index == queue.index) this->present_stack_index = (uint32_t)this->queue_stack.size() - 1;
-            if(graphics_index == queue.index) this->graphics_stack_index = (uint32_t)this->queue_stack.size() - 1;
-            if(transfer_index == queue.index) this->transfer_stack_index = (uint32_t)this->queue_stack.size() - 1;
+        queue_info.queueCount = static_cast<uint32_t>(queue_priorities.size());
+        queue_info.pQueuePriorities = &queue_priorities[0];
+        queue_infos.push_back(queue_info);
 
-            VkDeviceQueueCreateInfo queue_info = {};
-            queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queue_info.pNext = nullptr;
-            queue_info.queueCount = (uint32_t)queue_priorities.size();
-            queue_info.pQueuePriorities = &queue_priorities[0];
-            queue_info.queueFamilyIndex = queue.index;
+        // Present Queue
+        // Une seule queue nécessaire, si possible dédiée
+        if(this->present_queue.index != this->graphics_queue.index) {
+            queue_info.queueCount = 1;
+            queue_info.queueFamilyIndex = this->present_queue.index;
             queue_infos.push_back(queue_info);
         }
+
+        // Transfer Queue
+        // Une queue principale pour la boucle principale,
+        // si possible une queue secondaire pour les textures
+        if(this->transfer_queue.index != this->graphics_queue.index) {
+            
+            if(queue_family_properties[this->transfer_queue.index].queueCount > 1) queue_priorities = {0.0f, 0.0f};
+            else queue_priorities = {0.0f};
+
+            queue_info.queueCount = static_cast<uint32_t>(queue_priorities.size());
+            queue_info.pQueuePriorities = &queue_priorities[0];
+            queue_info.queueFamilyIndex = this->transfer_queue.index;
+            queue_infos.push_back(queue_info);
+        }
+
+        
 
         // Activation de l'extension SwapChain
         std::vector<const char*> device_extension_name = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
@@ -738,9 +678,9 @@ namespace Engine
         VkDeviceCreateInfo device_info = {};
         device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         device_info.pNext = nullptr;
-        device_info.queueCreateInfoCount = (uint32_t)queue_infos.size();
+        device_info.queueCreateInfoCount = static_cast<uint32_t>(queue_infos.size());
         device_info.pQueueCreateInfos = &queue_infos[0];
-        device_info.enabledExtensionCount = (uint32_t)device_extension_name.size();
+        device_info.enabledExtensionCount = static_cast<uint32_t>(device_extension_name.size());
         device_info.ppEnabledExtensionNames = &device_extension_name[0];
         device_info.enabledLayerCount = 0;
         device_info.ppEnabledLayerNames = nullptr;
@@ -773,11 +713,11 @@ namespace Engine
     /**
      * Renvoie la liste des queue family properties d'un périphérique donné
      */
-    std::vector<VkQueueFamilyProperties> Vulkan::QueryDeviceProperties(VkPhysicalDevice test_physical_device)
+    std::vector<VkQueueFamilyProperties> Vulkan::QueryDeviceProperties(VkPhysicalDevice physical_device)
     {
         // On récupère les propriétés des queue families de la carte
         uint32_t queue_family_count = UINT32_MAX;
-        vkGetPhysicalDeviceQueueFamilyProperties(test_physical_device, &queue_family_count, nullptr);
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, nullptr);
         if(queue_family_count == 0) {
             #if defined(_DEBUG)
             std::cout << "QueryDeviceProperties => vkGetPhysicalDeviceQueueFamilyProperties 1/2 : Failed" << std::endl;
@@ -786,7 +726,7 @@ namespace Engine
         }
 
         std::vector<VkQueueFamilyProperties> queue_family_properties(queue_family_count);
-        vkGetPhysicalDeviceQueueFamilyProperties(test_physical_device, &queue_family_count, &queue_family_properties[0]);
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, &queue_family_properties[0]);
         if(queue_family_count == 0) {
             #if defined(_DEBUG)
             std::cout << "QueryDeviceProperties => vkGetPhysicalDeviceQueueFamilyProperties 2/2 : Failed" << std::endl;
@@ -864,14 +804,19 @@ namespace Engine
      */
     void Vulkan::GetDeviceQueues()
     {
-        for(int i=0; i<this->queue_stack.size(); i++) {
-            VkQueue handle = VK_NULL_HANDLE;
-            vkGetDeviceQueue(this->device, this->queue_stack[i].index, 0, &handle);
-            this->queue_stack[i].handle = handle;
-        }
-        #if defined(_DEBUG)
-        std::cout << "GetDeviceQueues : Success" << std::endl;
-        #endif
+        vkGetDeviceQueue(this->device, this->present_queue.index, 0, &this->present_queue.handle);
+        vkGetDeviceQueue(this->device, this->graphics_queue.index, 0, &this->graphics_queue.handle);
+        vkGetDeviceQueue(this->device, this->transfer_queue.index, 0, &this->transfer_queue.handle);
+
+        this->background.graphics_queue = this->graphics_queue;
+        this->background.transfer_queue = this->transfer_queue;
+
+        std::vector<VkQueueFamilyProperties> queue_family_properties = this->QueryDeviceProperties(this->physical_device.handle);
+        if(queue_family_properties[this->graphics_queue.index].queueCount > 1)
+            vkGetDeviceQueue(this->device, this->background.graphics_queue.index, 1, &this->background.graphics_queue.handle);
+
+        if(this->graphics_queue.index != this->transfer_queue.index && queue_family_properties[this->transfer_queue.index].queueCount > 1)
+            vkGetDeviceQueue(this->device, this->background.transfer_queue.index, 1, &this->background.transfer_queue.handle);
     }
 
     /**
@@ -899,7 +844,7 @@ namespace Engine
 
         //On apelle tous nos helpers pour récupérer toutes les informations qui constitueront la SwapChain
         VkExtent2D swap_chain_extent = this->GetSwapChainExtent(surface_capabilities);
-        uint32_t swap_chain_num_images = this->GetSwapChainNumImages(surface_capabilities);
+        this->concurrent_frame_count = static_cast<uint8_t>(this->GetSwapChainNumImages(surface_capabilities));
         this->swap_chain.format = this->GetSurfaceFormat();
         VkSurfaceTransformFlagBitsKHR swap_chain_transform = this->GetSwapChainTransform(surface_capabilities);
         VkCompositeAlphaFlagBitsKHR swap_chain_composite_alpha = this->GetSwapChainCompositeAlpha(surface_capabilities);
@@ -913,7 +858,7 @@ namespace Engine
         swapchain_ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
         swapchain_ci.pNext = nullptr;
         swapchain_ci.surface = this->presentation_surface;
-        swapchain_ci.minImageCount = swap_chain_num_images;
+        swapchain_ci.minImageCount = this->concurrent_frame_count;
         swapchain_ci.imageFormat = this->swap_chain.format;
         swapchain_ci.imageExtent.width = swap_chain_extent.width;
         swapchain_ci.imageExtent.height = swap_chain_extent.height;
@@ -930,11 +875,11 @@ namespace Engine
         swapchain_ci.pQueueFamilyIndices = nullptr;
 
         std::vector<uint32_t> shared_queue_families = {
-            this->queue_stack[this->graphics_stack_index].index,
-            this->queue_stack[this->present_stack_index].index
+            this->graphics_queue.index,
+            this->present_queue.index
         };
 
-        if(this->graphics_stack_index != this->present_stack_index) {
+        if(this->graphics_queue.index != this->present_queue.index) {
             // Si les queues family graphique et présentation sont distinctes,
             // on utilise le mode VK_SHARING_MODE_CONCURRENT pour éviter d'avoir
             // à spécifier explicitement à quelle queue est attribuée quelle image
@@ -1146,455 +1091,6 @@ namespace Engine
     }
 
     /**
-     * Création du depth buffer
-     */
-    bool Vulkan::CreateDepthBuffer()
-    {
-        // En cas de redimensionnement de la fenêtre, il sera nécessaire de reconstruire le depth buffer,
-        // dans ce cas on va supprimer l'ancien depth buffer
-        vkDeviceWaitIdle(this->device);
-        if(this->depth_buffer.view != VK_NULL_HANDLE) vkDestroyImageView(this->device, this->depth_buffer.view, nullptr);
-        if(this->depth_buffer.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->depth_buffer.memory, nullptr);
-        if(this->depth_buffer.image != VK_NULL_HANDLE) vkDestroyImage(this->device, this->depth_buffer.image, nullptr);
-
-        /////////////////////////
-        // Création de l'image //
-        /////////////////////////
-
-        VkImageCreateInfo image_info = {};
-        image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        image_info.pNext = nullptr;
-        image_info.flags = 0;
-        image_info.imageType = VK_IMAGE_TYPE_2D;
-        image_info.format = VK_FORMAT_D16_UNORM;
-        image_info.extent.width = this->draw_surface.width;
-        image_info.extent.height = this->draw_surface.height;
-        image_info.extent.depth = 1;
-        image_info.mipLevels = 1;
-        image_info.arrayLayers = 1;
-        image_info.samples = VK_SAMPLE_COUNT_1_BIT;
-        image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-        image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        image_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-        image_info.queueFamilyIndexCount = 0;
-        image_info.pQueueFamilyIndices = nullptr;
-        image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        
-        VkResult result = vkCreateImage(this->device, &image_info, nullptr, &this->depth_buffer.image);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateDepthBuffer => vkCreateImage : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        ///////////////////////////////////////////////////////
-        //      Réservation d'un segment de mémoire          //
-        // dans la carte graphique pour y placer l'image     //
-        ///////////////////////////////////////////////////////
-
-        VkMemoryRequirements image_memory_requirements;
-        vkGetImageMemoryRequirements(this->device, this->depth_buffer.image, &image_memory_requirements);
-
-        VkMemoryAllocateInfo mem_alloc = {};
-        mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        mem_alloc.pNext = nullptr;
-        mem_alloc.allocationSize = image_memory_requirements.size;
-        
-        if(!this->MemoryTypeFromProperties(image_memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, mem_alloc.memoryTypeIndex)) {
-            #if defined(_DEBUG)
-            std::cout << "CreateDepthBuffer => MemoryType VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : Not found" << std::endl;
-            #endif
-            return false;
-        }
-
-        result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &this->depth_buffer.memory);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateDepthBuffer => vkAllocateMemory : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        result = vkBindImageMemory(this->device, this->depth_buffer.image, this->depth_buffer.memory, 0);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateDepthBuffer => vkBindImageMemory : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        //////////////////////////////
-        // Création de l'image view //
-        //////////////////////////////
-
-        VkImageViewCreateInfo depth_image_view = {};
-        depth_image_view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        depth_image_view.pNext = nullptr;
-        depth_image_view.flags = 0;
-        depth_image_view.image = this->depth_buffer.image;
-        depth_image_view.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        depth_image_view.format = VK_FORMAT_D16_UNORM;
-        depth_image_view.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        depth_image_view.subresourceRange.baseMipLevel = 0;
-        depth_image_view.subresourceRange.levelCount = 1;
-        depth_image_view.subresourceRange.baseArrayLayer = 0;
-        depth_image_view.subresourceRange.layerCount = 1;
-
-        result = vkCreateImageView(this->device, &depth_image_view, nullptr, &this->depth_buffer.view);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateDepthBuffer => vkCreateImageView : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        #if defined(_DEBUG)
-        std::cout << "CreateDepthBuffer : Success" << std::endl;
-        #endif
-
-        return true;
-    }
-
-    /**
-     * Récupère l'index du type de mémoire qui correspond au flag recherché
-     */
-    bool Vulkan::MemoryTypeFromProperties(uint32_t type_bits, VkFlags requirements_mask, uint32_t &type_index)
-    {
-        // Parcour de la liste de types de mémoire
-        for(uint32_t i = 0; i < this->physical_device.memory.memoryTypeCount; i++) {
-            if((type_bits & 1) == 1) {
-
-                // Pour chaque type de mémoire on vérifie la présence du flag
-                if((this->physical_device.memory.memoryTypes[i].propertyFlags & requirements_mask) == requirements_mask) {
-
-                    // Si le flag est là, on modifie la valeur de "type_index" qui est passé par référence
-                    type_index = i;
-                    return true;
-                }
-            }
-            type_bits >>= 1;
-        }
-
-        // Échec
-        return false;
-    }
-
-    /**
-     * Création du staging buffer
-     */
-    bool Vulkan::CreateStagingBuffer(VkDeviceSize size)
-    {
-        this->staging_buffer.size = size;
-
-        std::vector<uint32_t> shared_queue_families = {
-            this->queue_stack[this->transfer_stack_index].index,
-            this->queue_stack[this->graphics_stack_index].index
-        };
-
-        VkBufferCreateInfo buffer_create_info = {};
-        buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        buffer_create_info.pNext = nullptr;
-        buffer_create_info.flags = 0;
-        buffer_create_info.size = size;
-        buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-        buffer_create_info.sharingMode = VK_SHARING_MODE_CONCURRENT;
-        buffer_create_info.queueFamilyIndexCount = 2;
-        buffer_create_info.pQueueFamilyIndices = &shared_queue_families[0];
-
-        VkResult result = vkCreateBuffer(this->device, &buffer_create_info, nullptr, &this->staging_buffer.handle);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateStaginBuffer => vkCreateBuffer : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        VkMemoryRequirements mem_reqs;
-        vkGetBufferMemoryRequirements(this->device, this->staging_buffer.handle, &mem_reqs);
-
-        VkMemoryAllocateInfo mem_alloc = {};
-        mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        mem_alloc.pNext = nullptr;
-        mem_alloc.allocationSize = 0;
-        mem_alloc.memoryTypeIndex = 0;
-        mem_alloc.allocationSize = mem_reqs.size;
-        
-        if(!this->MemoryTypeFromProperties(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, mem_alloc.memoryTypeIndex)) {
-            #if defined(_DEBUG)
-            std::cout << "CreateStaginBuffer => MemoryType VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT : Not found" << std::endl;
-            #endif
-            return false;
-        }
-
-        // Allocation de la mémoire pour le staging buffer
-        result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &this->staging_buffer.memory);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateStaginBuffer => vkAllocateMemory : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        result = vkBindBufferMemory(this->device, this->staging_buffer.handle, this->staging_buffer.memory, 0);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateStaginBuffer => vkBindBufferMemory : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        constexpr auto offset = 0;
-        result = vkMapMemory(this->device, this->staging_buffer.memory, offset, size, 0, &this->staging_buffer.pointer);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateStaginBuffer => vkMapMemory : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        #if defined(_DEBUG)
-        std::cout << "CreateStaginBuffer : Success" << std::endl;
-        #endif
-        return true;
-    }
-
-    /**
-     * Création du vertex buffer
-     */
-    uint32_t Vulkan::CreateVertexBuffer(std::vector<VERTEX>& data)
-    {
-        // Valeur de retour
-        VULKAN_BUFFER vertex_buffer;
-
-        ////////////////////////////////
-        //     Création du buffer     //
-        ////////////////////////////////
-
-        vertex_buffer.size = sizeof(VERTEX) * data.size();
-
-        VkBufferCreateInfo buffer_create_info = {};
-        buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        buffer_create_info.pNext = nullptr;
-        buffer_create_info.flags = 0;
-        buffer_create_info.size = vertex_buffer.size;
-        buffer_create_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-        buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        buffer_create_info.queueFamilyIndexCount = 0;
-        buffer_create_info.pQueueFamilyIndices = nullptr;
-
-        VkResult result = vkCreateBuffer(this->device, &buffer_create_info, nullptr, &vertex_buffer.handle);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateVertexBuffer => vkCreateBuffer : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        VkMemoryRequirements mem_reqs;
-        vkGetBufferMemoryRequirements(this->device, vertex_buffer.handle, &mem_reqs);
-
-        VkMemoryAllocateInfo mem_alloc = {};
-        mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        mem_alloc.pNext = nullptr;
-        mem_alloc.allocationSize = 0;
-        mem_alloc.memoryTypeIndex = 0;
-        mem_alloc.allocationSize = mem_reqs.size;
-        
-        if(!this->MemoryTypeFromProperties(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, mem_alloc.memoryTypeIndex)) {
-            #if defined(_DEBUG)
-            std::cout << "CreateVertexBuffer => MemoryType VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : Not found" << std::endl;
-            #endif
-            return false;
-        }
-
-        // Allocation de la mémoire pour le vertex buffer
-        result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &vertex_buffer.memory);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateVertexBuffer => vkAllocateMemory : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        result = vkBindBufferMemory(this->device, vertex_buffer.handle, vertex_buffer.memory, 0);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateVertexBuffer => vkBindBufferMemory : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        #if defined(_DEBUG)
-        std::cout << "CreateVertexBuffer : Success" << std::endl;
-        #endif
-
-        if(this->UpdateVertexBuffer(data, vertex_buffer)) {
-
-            // Ajout du buffer dans la mémoire
-            uint32_t buffer_index = this->last_vbo_index;
-            this->vertex_buffers[buffer_index] = vertex_buffer;
-            this->last_vbo_index++;
-
-            return buffer_index;
-        
-        }else{
-
-            // En cas d'échec, on renvoie UINT32_MAX
-            return UINT32_MAX;
-        }
-    }
-
-    /**
-     * Création d'un Mesh
-     */
-    uint32_t Vulkan::CreateMesh(uint32_t model_id, uint32_t texture_id)
-    {
-        uint32_t mesh_index = this->last_mesh_index;
-
-        MESH new_mesh;
-        new_mesh.offset = this->ubo_alignement * mesh_index;
-        new_mesh.vertex_buffer_index = model_id;
-
-        ///////////////////////////////////
-        // Allocation des descriptor Set //
-        ///////////////////////////////////
-
-        VkDescriptorSetAllocateInfo alloc_info = {};
-        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        alloc_info.pNext = nullptr;
-        alloc_info.descriptorPool = this->descriptor_pool.pool;
-        alloc_info.descriptorSetCount = 1;
-        alloc_info.pSetLayouts = &this->descriptor_pool.layout;
-
-        VkResult result = vkAllocateDescriptorSets(this->device, &alloc_info, &new_mesh.descriptor_set);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout <<"CreateMesh => vkAllocateDescriptorSets : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        ///////////////////////////////////
-        // Mise à jour du descriptor Set //
-        ///////////////////////////////////
-
-        VkWriteDescriptorSet writes[2];
-
-        VkDescriptorImageInfo descriptor_image_info = {};
-        descriptor_image_info.sampler = this->textures[texture_id].sampler;
-        descriptor_image_info.imageView = this->textures[texture_id].view;
-        descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[0].pNext = nullptr;
-        writes[0].dstSet = new_mesh.descriptor_set;
-        writes[0].dstBinding = 0;
-        writes[0].dstArrayElement = 0;
-        writes[0].descriptorCount = 1;
-        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writes[0].pImageInfo = &descriptor_image_info;
-        writes[0].pBufferInfo = nullptr;
-        writes[0].pTexelBufferView = nullptr;
-
-        VkDescriptorBufferInfo buffer_info = {};
-        buffer_info.buffer = this->uniform_buffer.handle;
-        buffer_info.offset = 0;
-        buffer_info.range = static_cast<VkDeviceSize>(sizeof(Matrix4x4));
-
-        writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[1].pNext = nullptr;
-        writes[1].dstSet = new_mesh.descriptor_set;
-        writes[1].dstBinding = 1;
-        writes[1].dstArrayElement = 0;
-        writes[1].descriptorCount = 1;
-        writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-        writes[1].pImageInfo = nullptr;
-        writes[1].pBufferInfo = &buffer_info;
-        writes[1].pTexelBufferView = nullptr;
-        writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-
-        vkUpdateDescriptorSets(this->device, 2, writes, 0, nullptr);
-
-        this->meshes[mesh_index] = new_mesh;
-        this->last_mesh_index++;
-
-        return mesh_index;
-    }
-
-    /**
-     * Création d'un uniform buffer pour y mettre la matrice de projection
-     */
-    bool Vulkan::CreateUniformBuffer()
-    {
-        ////////////////////////////////
-        //     Création du buffer     //
-        ////////////////////////////////
-
-        // Matrice 4*4 float
-        uint32_t mesh_count = 2;
-        this->uniform_buffer.size = this->ubo_alignement * (mesh_count - 1) + sizeof(Matrix4x4);
-
-        VkBufferCreateInfo buffer_create_info = {};
-        buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        buffer_create_info.pNext = nullptr;
-        buffer_create_info.flags = 0;
-        buffer_create_info.size = this->uniform_buffer.size;
-        buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-        buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        buffer_create_info.queueFamilyIndexCount = 0;
-        buffer_create_info.pQueueFamilyIndices = nullptr;
-
-        VkResult result = vkCreateBuffer(this->device, &buffer_create_info, nullptr, &this->uniform_buffer.handle);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateUniformBuffer => vkCreateBuffer : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        VkMemoryRequirements mem_reqs;
-        vkGetBufferMemoryRequirements(this->device, this->uniform_buffer.handle, &mem_reqs);
-
-        VkMemoryAllocateInfo mem_alloc = {};
-        mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        mem_alloc.pNext = nullptr;
-        mem_alloc.allocationSize = 0;
-        mem_alloc.memoryTypeIndex = 0;
-        mem_alloc.allocationSize = mem_reqs.size;
-        
-        if(!this->MemoryTypeFromProperties(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, mem_alloc.memoryTypeIndex)) {
-            #if defined(_DEBUG)
-            std::cout << "CreateUniformBuffer => MemoryType VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : Not found" << std::endl;
-            #endif
-            return false;
-        }
-
-        // Allocation de la mémoire pour le vertex buffer
-        result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &this->uniform_buffer.memory);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateUniformBuffer => vkAllocateMemory : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        result = vkBindBufferMemory(this->device, this->uniform_buffer.handle, this->uniform_buffer.memory, 0);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout <<"CreateUniformBuffer => vkBindBufferMemory : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        #if defined(_DEBUG)
-        std::cout << "CreateUniformBuffer : Success" << std::endl;
-        #endif
-
-        return true;
-    }
-
-    /**
      * Création de la render pass
      */
     bool Vulkan::CreateRenderPass()
@@ -1642,7 +1138,7 @@ namespace Engine
         VkRenderPassCreateInfo rp_info = {};
         rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         rp_info.pNext = nullptr;
-        rp_info.attachmentCount = 2;
+        rp_info.attachmentCount = 1;
         rp_info.pAttachments = attachment;
         rp_info.subpassCount = 1;
         rp_info.pSubpasses = &subpass;
@@ -1674,7 +1170,7 @@ namespace Engine
         pPipelineLayoutCreateInfo.pushConstantRangeCount = 0;
         pPipelineLayoutCreateInfo.pPushConstantRanges = nullptr;
         pPipelineLayoutCreateInfo.setLayoutCount = 1;
-        pPipelineLayoutCreateInfo.pSetLayouts = &this->descriptor_pool.layout;
+        pPipelineLayoutCreateInfo.pSetLayouts = &this->descriptor_set_layout;
 
         VkResult result = vkCreatePipelineLayout(this->device, &pPipelineLayoutCreateInfo, nullptr, &this->graphics_pipeline.layout);
         if(result != VK_SUCCESS) {
@@ -1684,7 +1180,7 @@ namespace Engine
             return false;
         }
 
-        // Fragment Sgader
+        // Fragment Shader
         std::vector<char> code = Engine::Tools::GetBinaryFileContents("./Assets/shader.frag.spv");
         if(!code.size()) {
             #if defined(_DEBUG)
@@ -1928,99 +1424,252 @@ namespace Engine
         return true;
     }
 
-    bool Vulkan::CreateDescriptorSets()
+    /**
+     * Récupère l'index du type de mémoire qui correspond au flag recherché
+     */
+    bool Vulkan::MemoryTypeFromProperties(uint32_t type_bits, VkFlags requirements_mask, uint32_t &type_index)
     {
-        VkDescriptorPoolSize pool_sizes[2];
-        pool_sizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        pool_sizes[0].descriptorCount = 1;
-        pool_sizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        pool_sizes[1].descriptorCount = 1;
+        // Parcour de la liste de types de mémoire
+        for(uint32_t i = 0; i < this->physical_device.memory.memoryTypeCount; i++) {
+            if((type_bits & 1) == 1) {
 
-        VkDescriptorPoolCreateInfo descriptor_pool_create_info = {};
-        descriptor_pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        descriptor_pool_create_info.pNext = nullptr;
-        descriptor_pool_create_info.maxSets = static_cast<uint32_t>(this->swap_chain.images.size());
-        descriptor_pool_create_info.poolSizeCount = 2;
-        descriptor_pool_create_info.pPoolSizes = pool_sizes;
+                // Pour chaque type de mémoire on vérifie la présence du flag
+                if((this->physical_device.memory.memoryTypes[i].propertyFlags & requirements_mask) == requirements_mask) {
 
-        VkResult result = vkCreateDescriptorPool(this->device, &descriptor_pool_create_info, nullptr, &this->descriptor_pool.pool);
+                    // Si le flag est là, on modifie la valeur de "type_index" qui est passé par référence
+                    type_index = i;
+                    return true;
+                }
+            }
+            type_bits >>= 1;
+        }
+
+        // Échec
+        return false;
+    }
+
+    /**
+     * Création du staging buffer
+     */
+    bool Vulkan::CreateStagingBuffer(STAGING_BUFFER& staging_buffer, VkDeviceSize size)
+    {
+        staging_buffer.size = size;
+
+        std::vector<uint32_t> shared_queue_families = {this->graphics_queue.index};
+
+        VkBufferCreateInfo buffer_create_info = {};
+        buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buffer_create_info.pNext = nullptr;
+        buffer_create_info.flags = 0;
+        buffer_create_info.size = size;
+        buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+        if(this->transfer_queue.index == this->graphics_queue.index) {
+            buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        }else{
+            shared_queue_families.push_back(this->transfer_queue.index);
+            buffer_create_info.sharingMode = VK_SHARING_MODE_CONCURRENT;
+        }
+
+        buffer_create_info.queueFamilyIndexCount = static_cast<uint32_t>(shared_queue_families.size());
+        buffer_create_info.pQueueFamilyIndices = &shared_queue_families[0];
+
+        VkResult result = vkCreateBuffer(this->device, &buffer_create_info, nullptr, &staging_buffer.handle);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
-            std::cout << "CreateDescriptorSet => vkCreateDescriptorPool : Failed" << std::endl;
+            std::cout << "CreateStaginBuffer => vkCreateBuffer : Failed" << std::endl;
             #endif
             return false;
         }
 
-        VkDescriptorSetLayoutBinding layout_bindings[2];
-        layout_bindings[0].binding = 0;
-        layout_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        layout_bindings[0].descriptorCount = 1;
-        layout_bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        layout_bindings[0].pImmutableSamplers = nullptr;
-        layout_bindings[1].binding = 1;
-        layout_bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-        layout_bindings[1].descriptorCount = 1;
-        layout_bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        layout_bindings[1].pImmutableSamplers = nullptr;
+        VkMemoryRequirements mem_reqs;
+        vkGetBufferMemoryRequirements(this->device, staging_buffer.handle, &mem_reqs);
 
-        VkDescriptorSetLayoutCreateInfo descriptor_layout = {};
-        descriptor_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptor_layout.pNext = nullptr;
-        descriptor_layout.bindingCount = 2;
-        descriptor_layout.pBindings = layout_bindings;
-
-        result = vkCreateDescriptorSetLayout(this->device, &descriptor_layout, nullptr, &this->descriptor_pool.layout);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateDescriptorSet => vkCreateDescriptorSetLayout : Failed" << std::endl;
-            #endif
-            return false;
-        }
+        VkMemoryAllocateInfo mem_alloc = {};
+        mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        mem_alloc.pNext = nullptr;
+        mem_alloc.allocationSize = 0;
+        mem_alloc.memoryTypeIndex = 0;
+        mem_alloc.allocationSize = mem_reqs.size;
         
-        // Succès
+        if(!this->MemoryTypeFromProperties(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, mem_alloc.memoryTypeIndex)) {
+            #if defined(_DEBUG)
+            std::cout << "CreateStaginBuffer => MemoryType VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT : Not found" << std::endl;
+            #endif
+            return false;
+        }
+
+        // Allocation de la mémoire pour le staging buffer
+        result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &staging_buffer.memory);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateStaginBuffer => vkAllocateMemory : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        result = vkBindBufferMemory(this->device, staging_buffer.handle, staging_buffer.memory, 0);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateStaginBuffer => vkBindBufferMemory : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        constexpr auto offset = 0;
+        result = vkMapMemory(this->device, staging_buffer.memory, offset, size, 0, &staging_buffer.pointer);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateStaginBuffer => vkMapMemory : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
         #if defined(_DEBUG)
-        std::cout << "CreateDescriptorSet : Success" << std::endl;
+        std::cout << "CreateStaginBuffer : Success" << std::endl;
         #endif
         return true;
     }
 
     /**
-     * Création des command buffers
+     * Création d'un uniform buffer pour y mettre la matrice de projection
      */
-    bool Vulkan::CreateCommandBuffers()
+    bool Vulkan::CreateUniformBuffer(UNIFORM_BUFFER& uniform_buffer, VkDeviceSize size)
     {
-        // Création du command pool de la graphics queue
-        if(!this->CreateCommandPool(this->graphics_pool, this->queue_stack[this->graphics_stack_index].index)) return false;
+        ////////////////////////////////
+        //     Création du buffer     //
+        ////////////////////////////////
 
-        // Création du command pool de la transfer queue
-        bool same_queue = this->graphics_stack_index == this->transfer_stack_index;
-        if(!same_queue) { if(!this->CreateCommandPool(this->transfer.command_pool, this->queue_stack[this->transfer_stack_index].index)) return false; }
-        else this->transfer.command_pool = this->graphics_pool;
+        uniform_buffer.size = size;
 
-        // Allocation des command buffers pour la graphics queue
-        std::vector<VkCommandBuffer> graphics_buffers(this->rendering.size());
-        if(!this->AllocateCommandBuffer(this->graphics_pool, static_cast<uint32_t>(this->rendering.size()), graphics_buffers)) {
+        VkBufferCreateInfo buffer_create_info = {};
+        buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buffer_create_info.pNext = nullptr;
+        buffer_create_info.flags = 0;
+        buffer_create_info.size = uniform_buffer.size;
+        buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        buffer_create_info.queueFamilyIndexCount = 0;
+        buffer_create_info.pQueueFamilyIndices = nullptr;
+
+        VkResult result = vkCreateBuffer(this->device, &buffer_create_info, nullptr, &uniform_buffer.handle);
+        if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
-            std::cout << "AllocateCommandBuffer [graphics] : Failed" << std::endl;
+            std::cout << "CreateUniformBuffer => vkCreateBuffer : Failed" << std::endl;
             #endif
             return false;
         }
-        for(uint8_t i=0; i<this->rendering.size(); i++) this->rendering[i].main_command_buffer = graphics_buffers[i];
 
-        // Allocation du command buffer pour la transfer queue
-        std::vector<VkCommandBuffer> transfer_buffers(1);
-        if(!this->AllocateCommandBuffer(this->transfer.command_pool, 1, transfer_buffers)) {
-        #if defined(_DEBUG)
-            std::cout << "AllocateCommandBuffer [transfer] : Failed" << std::endl;
+        VkMemoryRequirements mem_reqs;
+        vkGetBufferMemoryRequirements(this->device, uniform_buffer.handle, &mem_reqs);
+
+        VkMemoryAllocateInfo mem_alloc = {};
+        mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        mem_alloc.pNext = nullptr;
+        mem_alloc.allocationSize = 0;
+        mem_alloc.memoryTypeIndex = 0;
+        mem_alloc.allocationSize = mem_reqs.size;
+        
+        if(!this->MemoryTypeFromProperties(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, mem_alloc.memoryTypeIndex)) {
+            #if defined(_DEBUG)
+            std::cout << "CreateUniformBuffer => MemoryType VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : Not found" << std::endl;
             #endif
             return false;
         }
-        this->transfer.command_buffer = transfer_buffers[0];
 
-        // Succès
+        // Allocation de la mémoire pour le vertex buffer
+        result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &uniform_buffer.memory);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateUniformBuffer => vkAllocateMemory : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        result = vkBindBufferMemory(this->device, uniform_buffer.handle, uniform_buffer.memory, 0);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout <<"CreateUniformBuffer => vkBindBufferMemory : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
         #if defined(_DEBUG)
-        std::cout << "CreateCommandBuffers : Success" << std::endl;
+        std::cout << "CreateUniformBuffer : Success" << std::endl;
         #endif
+
+        return true;
+    }
+
+    /**
+     * Création d'une liste de command buffers avec leur fence
+     */
+    bool Vulkan::CreateCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers, VkCommandBufferLevel level)
+    {
+        // Allocation des command buffers
+        std::vector<VkCommandBuffer> output_buffers(command_buffers.size());
+        if(!this->AllocateCommandBuffer(pool, static_cast<uint32_t>(command_buffers.size()), output_buffers, level)) {
+            #if defined(_DEBUG)
+            std::cout << "CreateCommandBuffer => AllocateCommandBuffer : Failed" << std::endl;
+            #endif
+            return false;
+        }
+        for(uint8_t i=0; i<command_buffers.size(); i++) command_buffers[i].handle = output_buffers[i];
+
+        // Création des fences
+        VkFenceCreateInfo fence_create_info = {};
+        fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fence_create_info.pNext = nullptr;
+        fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        for(size_t i=0; i<command_buffers.size(); i++) {
+
+            VkResult result = vkCreateFence(this->device, &fence_create_info, nullptr, &command_buffers[i].fence);
+            if(result != VK_SUCCESS) {
+                #if defined(_DEBUG)
+                std::cout << "CreateCommandBuffer => vkCreateFence : Failed" << std::endl;
+                #endif
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Allocation des command buffers
+     */
+    bool Vulkan::AllocateCommandBuffer(VkCommandPool& pool, uint32_t count, std::vector<VkCommandBuffer>& buffer, VkCommandBufferLevel level)
+    {
+        VkCommandBufferAllocateInfo cmd = {};
+        cmd.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmd.pNext = nullptr;
+        cmd.commandPool = pool;
+        cmd.level = level;
+        cmd.commandBufferCount = count;
+
+        VkResult result = vkAllocateCommandBuffers(this->device, &cmd, buffer.data());
+        return result == VK_SUCCESS;
+    }
+
+    /**
+     * Création d'un sémaphore
+     */
+    bool Vulkan::CreateSemaphore(VkSemaphore &semaphore)
+    {
+        VkSemaphoreCreateInfo semaphore_create_info = {};
+        semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+        semaphore_create_info.pNext = nullptr;
+        semaphore_create_info.flags = 0;
+
+        VkResult result = vkCreateSemaphore(this->device, &semaphore_create_info, nullptr, &semaphore);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateSemaphore => vkCreateSemaphore : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
         return true;
     }
 
@@ -2043,207 +1692,194 @@ namespace Engine
             return false;
         }
 
+        return true;
+    }
+    
+    /**
+     * Allocation des resources de la boucle principale
+     */
+    bool Vulkan::InitMainThread()
+    {
+        // Command Pool
+        if(!this->CreateCommandPool(this->graphics_command_pool, this->graphics_queue.index)) return false;
+
+        // On veut autant de ressources qu'il y a d'images dans la Swap Chain
+        this->main.resize(this->concurrent_frame_count);
+
+        // Semaphores
+        for(uint32_t i=0; i<this->main.size(); i++) {
+            if(!this->CreateSemaphore(this->main[i].renderpass_semaphore)) return false;
+            if(!this->CreateSemaphore(this->main[i].swap_chain_semaphore)) return false;
+        }
+
+        // Command Buffers
+        std::vector<COMMAND_BUFFER> graphics_buffer(this->concurrent_frame_count);
+        if(!this->CreateCommandBuffer(this->graphics_command_pool, graphics_buffer)) return false;
+        for(uint32_t i=0; i<this->main.size(); i++) this->main[i].graphics_command_buffer = graphics_buffer[i];
+
+        // Si on a une queue dédiée eux transferts, on alloue des ressources en conséquence
+        if(this->graphics_queue.index != this->transfer_queue.index) {
+
+            // Command Pool
+            if(!this->CreateCommandPool(this->transfer_command_pool, this->transfer_queue.index)) return false;
+
+            // Command Buffers
+            std::vector<COMMAND_BUFFER> transfer_buffer(this->concurrent_frame_count);
+            if(!this->CreateCommandBuffer(this->transfer_command_pool, transfer_buffer)) return false;
+            for(uint32_t i=0; i<this->main.size(); i++) this->main[i].transfer_command_buffer = transfer_buffer[i];
+
+            // Semaphores
+            for(uint32_t i=0; i<this->main.size(); i++) if(!this->CreateSemaphore(this->main[i].transfer_semaphore)) return false;
+        }
+
         #if defined(_DEBUG)
-        std::cout << "CreateCommandPool [" << queue_family_index << "] : Success" << std::endl;
+        std::cout << "InitMainThread : Success" << std::endl;
         #endif
+
         return true;
     }
 
     /**
-     * Allocation des command buffers
+     * Allocation des ressources partagées par tous les threads
      */
-    bool Vulkan::AllocateCommandBuffer(VkCommandPool& pool, uint32_t count, std::vector<VkCommandBuffer>& buffer)
+    bool Vulkan::InitThreadSharedResources()
     {
-        VkCommandBufferAllocateInfo cmd = {};
-        cmd.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        cmd.pNext = nullptr;
-        cmd.commandPool = pool;
-        cmd.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        cmd.commandBufferCount = count;
+        // Taille des uniform et staging buffers
+        uint32_t count = 2;
+        VkDeviceSize buffer_size = this->ubo_alignement * (count - 1) + sizeof(Matrix4x4);
 
-        VkResult result = vkAllocateCommandBuffers(this->device, &cmd, buffer.data());
-        return result == VK_SUCCESS;
-    }
+        // On veut autant de ressources qu'il y a d'images dans la Swap Chain
+        this->shared.resize(this->concurrent_frame_count);
 
-    bool Vulkan::CreateSemaphores()
-    {
-        VkSemaphoreCreateInfo semaphore_create_info = {};
-        semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        semaphore_create_info.pNext = nullptr;
-        semaphore_create_info.flags = 0;
-
-        for(size_t i=0; i<this->rendering.size(); i++) {
-
-            VkResult result = vkCreateSemaphore(this->device, &semaphore_create_info, nullptr, &this->rendering[i].swap_chain_semaphore);
-            if(result != VK_SUCCESS) {
-                #if defined(_DEBUG)
-                std::cout << "CreateSemaphores => vkCreateSemaphore [swap_cahin] : Failed" << std::endl;
-                #endif
-                return false;
-            }
-
-            result = vkCreateSemaphore(this->device, &semaphore_create_info, nullptr, &this->rendering[i].render_pass_semaphore);
-            if(result != VK_SUCCESS) {
-                #if defined(_DEBUG)
-                std::cout << "CreateSemaphores => vkCreateSemaphore [graphics_queue] : Failed" << std::endl;
-                #endif
-                return false;
-            }
+        // On alloue les ressources pour chaque image
+        for(uint32_t i=0; i<this->shared.size(); i++) {
+            if(!this->CreateStagingBuffer(this->shared[i].staging, buffer_size)) return false;
+            if(!this->CreateUniformBuffer(this->shared[i].uniform, buffer_size)) return false;
         }
 
         #if defined(_DEBUG)
-        std::cout << "CreateSemaphores : Success" << std::endl;
+        std::cout << "InitThreadSharedResources : Success" << std::endl;
         #endif
-        return true;
-    }
 
-    bool Vulkan::CreateFences()
-    {
-
-        VkFenceCreateInfo fence_create_info = {};
-        fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fence_create_info.pNext = nullptr;
-        fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-        for(size_t i=0; i<this->rendering.size(); i++) {
-
-            VkResult result = vkCreateFence(this->device, &fence_create_info, nullptr, &this->rendering[i].fence);
-            if(result != VK_SUCCESS) {
-                #if defined(_DEBUG)
-                std::cout << "CreateFences => vkCreateFence [graphics] : Failed" << std::endl;
-                #endif
-                return false;
-            }
-        }
-
-        VkResult result = vkCreateFence(this->device, &fence_create_info, nullptr, &this->transfer.fence);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateFences => vkCreateFence [transfer] : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        #if defined(_DEBUG)
-        std::cout << "CreateFences : Success" << std::endl;
-        #endif
         return true;
     }
 
     /**
-     * Mise à jour des données du uniform buffer
+     * Allocation des ressources utilisées pour les tâches d'arrière plan,
+     * telles que le chargement de textures ou de vertext buffers
      */
-    bool Vulkan::UpdateMeshUniformBuffers()
+    bool Vulkan::InitBackgroundResources()
     {
-        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
-        VkResult result = vkWaitForFences(this->device, 1, &this->transfer.fence, VK_FALSE, 1000000000);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "UpdateMeshUniformBuffers => vkWaitForFences : Timeout" << std::endl;
-            #endif
-            return false;
-        }
-        vkResetFences(this->device, 1, &this->transfer.fence);
+        // Transfer Command Pool
+        if(!this->CreateCommandPool(this->background.transfer_command_pool, this->background.transfer_queue.index)) return false;
 
-        //////////////////////////////////////
-        //   Transformations géométriques   //
-        //////////////////////////////////////
+        // Transfer Command Buffer
+        std::vector<COMMAND_BUFFER> transfer_buffers(1);
+        if(!this->CreateCommandBuffer(this->background.transfer_command_pool, transfer_buffers)) return false;
+        this->background.transfer_command_buffer = transfer_buffers[0];
+        transfer_buffers.clear();
 
-        static float angle_y = 0;
-        static float angle_x = 0;
+        // Staging buffer
+        if(!this->CreateStagingBuffer(this->background.staging, BACKGROUND_STAGING_BUFFER_SIZE)) return false;
 
-        angle_y += 1.0f;
-        angle_x += 0.3f;
+        if(this->background.transfer_queue.index != this->background.graphics_queue.index) {
+            // Graphics Command Pool
+            if(!this->CreateCommandPool(this->background.graphics_command_pool, this->background.graphics_queue.index)) return false;
 
-        Matrix4x4 projection = PerspectiveProjectionMatrix(
-            static_cast<float>(this->draw_surface.width) / static_cast<float>(this->draw_surface.height),   // aspect_ration
-            45.0f,                                                                                          // field_of_view
-            1.0f,                                                                                           // near_clip
-            20.0f                                                                                           // far_clip
-        );
+            // Graphics Command Buffer
+            std::vector<COMMAND_BUFFER> graphics_buffers(1);
+            if(!this->CreateCommandBuffer(this->background.graphics_command_pool, graphics_buffers)) return false;
+            this->background.graphics_command_buffer = graphics_buffers[0];
+            graphics_buffers.clear();
 
-        Matrix4x4 rotationX = RotationMatrix(angle_x, {1.0f, 0.0f, 0.0f});
-        Matrix4x4 rotationY = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
-        Matrix4x4 translation = TranslationMatrix(1.8f, 0.0f, -7.0f);
-        this->meshes[0].transformations = projection * translation * rotationX * rotationY;
-
-        rotationX = RotationMatrix(angle_x, {-1.0f, 0.0f, 0.0f});
-        rotationY = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
-        translation = TranslationMatrix(-1.8f, 0.0f, -7.0f);
-        this->meshes[1].transformations = projection * translation * rotationX * rotationY;
-
-        ////////////////////////////////
-        //   Copie des données vers   //
-        //      le staging buffer     //
-        ////////////////////////////////
-
-        size_t flush_size = static_cast<size_t>(this->ubo_alignement * (this->meshes.size() - 1) + this->meshes.size());
-        unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
-        flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * (static_cast<uint64_t>(multiple) + 1);
-
-        if(this->staging_buffer.size - this->staging_buffer.offset < flush_size)  this->staging_buffer.offset = 0;
-        char* write_address = reinterpret_cast<char*>(this->staging_buffer.pointer) + this->staging_buffer.offset;
-
-        for(std::pair<uint32_t, MESH> mesh : this->meshes) {
-            std::memcpy(write_address, &mesh.second.transformations, sizeof(Matrix4x4));
-            write_address += this->ubo_alignement;
+            // Semaphore
+            if(!this->CreateSemaphore(this->background.semaphore)) return false;
         }
 
-        // Flush staging buffer
-        VkMappedMemoryRange flush_range = {};
-        flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-        flush_range.pNext = nullptr;
-        flush_range.memory = this->staging_buffer.memory;
-        flush_range.offset = this->staging_buffer.offset;
-        flush_range.size = flush_size;
-        vkFlushMappedMemoryRanges(this->device, 1, &flush_range);
-
-        ///////////////////////////////////////////
-        //  Envoi de la matrice de projection    //
-        //        vers le uniform buffer         //
-        ///////////////////////////////////////////
-
-        VkCommandBufferBeginInfo command_buffer_begin_info = {};
-        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        command_buffer_begin_info.pNext = nullptr; 
-        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        command_buffer_begin_info.pInheritanceInfo = nullptr;
-
-        vkBeginCommandBuffer(this->transfer.command_buffer, &command_buffer_begin_info);
-
-        VkBufferCopy buffer_copy_info = {};
-        buffer_copy_info.srcOffset = this->staging_buffer.offset;
-        buffer_copy_info.dstOffset = 0;
-        buffer_copy_info.size = this->uniform_buffer.size;
-
-        vkCmdCopyBuffer(this->transfer.command_buffer, this->staging_buffer.handle, this->uniform_buffer.handle, 1, &buffer_copy_info);
+        #if defined(_DEBUG)
+        std::cout << "InitTextureCreationResources : Success" << std::endl;
+        #endif
         
-        vkEndCommandBuffer(this->transfer.command_buffer);
+        return true;
+    }
 
-        // Exécution de la commande de copie
-        VkSubmitInfo submit_info = {};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.pNext = nullptr;
-        submit_info.waitSemaphoreCount = 0;
-        submit_info.pWaitSemaphores = nullptr;
-        submit_info.pWaitDstStageMask = nullptr;
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &this->transfer.command_buffer;
-        submit_info.signalSemaphoreCount = 0;
-        submit_info.pSignalSemaphores = nullptr;
+    /**
+     * Libère les ressources utilisées lors de la création des textures
+     */
+    void Vulkan::ReleaseBackgroundResources()
+    {
+        // Semaphore
+        if(this->background.semaphore != VK_NULL_HANDLE) vkDestroySemaphore(this->device, this->background.semaphore, nullptr);
 
-        result = vkQueueSubmit(this->queue_stack[this->transfer_stack_index].handle, 1, &submit_info, this->transfer.fence);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "UpdateMeshUniformBuffers => vkQueueSubmit : Failed" << std::endl;
-            #endif
-            return false;
+        // Fences
+        if(this->background.graphics_command_buffer.fence != VK_NULL_HANDLE) vkDestroyFence(this->device, this->background.graphics_command_buffer.fence, nullptr);
+        if(this->background.transfer_command_buffer.fence != VK_NULL_HANDLE) vkDestroyFence(this->device, this->background.transfer_command_buffer.fence, nullptr);
+
+        // Command Pool
+        if(this->background.graphics_command_pool != VK_NULL_HANDLE) vkDestroyCommandPool(this->device, this->background.graphics_command_pool, nullptr);
+        if(this->background.transfer_command_pool != VK_NULL_HANDLE) vkDestroyCommandPool(this->device, this->background.transfer_command_pool, nullptr);
+
+        // Staging Buffer
+        if(this->background.staging.pointer != nullptr) vkUnmapMemory(this->device, this->background.staging.memory);
+        if(this->background.staging.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->background.staging.memory, nullptr);
+        if(this->background.staging.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, this->background.staging.handle, nullptr);
+    }
+
+    /**
+     * Libère les ressources de la boucle principale
+     */
+    void Vulkan::ReleaseMainThread()
+    {
+        for(uint32_t i=0; i<this->main.size(); i++) {
+
+            // Frame Buffer
+            if(this->main[i].framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(this->device, this->main[i].framebuffer, nullptr);
+
+            // Semaphores
+            if(this->main[i].renderpass_semaphore != VK_NULL_HANDLE) vkDestroySemaphore(this->device, this->main[i].renderpass_semaphore, nullptr);
+            if(this->main[i].swap_chain_semaphore != VK_NULL_HANDLE) vkDestroySemaphore(this->device, this->main[i].swap_chain_semaphore, nullptr);
+            if(this->main[i].transfer_semaphore != VK_NULL_HANDLE) vkDestroySemaphore(this->device, this->main[i].transfer_semaphore, nullptr);
+
+            // Fences
+            if(this->main[i].graphics_command_buffer.fence != VK_NULL_HANDLE) vkDestroyFence(this->device, this->main[i].graphics_command_buffer.fence, nullptr);
+            if(this->main[i].transfer_command_buffer.fence != VK_NULL_HANDLE) vkDestroyFence(this->device, this->main[i].transfer_command_buffer.fence, nullptr);
         }
 
-        // On avance l'offset du staging buffer afin de ne pas réécrire sur le segment que l'ont est en train d'envoyer
-        this->staging_buffer.offset += flush_size;
+        // Command Pool
+        if(this->graphics_command_pool != VK_NULL_HANDLE) vkDestroyCommandPool(this->device, this->graphics_command_pool, nullptr);
+        if(this->transfer_command_pool != VK_NULL_HANDLE) vkDestroyCommandPool(this->device, this->transfer_command_pool, nullptr);
 
-        return true;
+        this->main.clear();
+    }
+
+    /**
+     * Libère les ressources partagées
+     */
+    void Vulkan::ReleaseThreadSharedResources()
+    {
+        for(uint32_t i=0; i<this->shared.size(); i++) {
+
+            // Uniform Buffer
+            if(this->shared[i].uniform.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->shared[i].uniform.memory, nullptr);
+            if(this->shared[i].uniform.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, this->shared[i].uniform.handle, nullptr);
+
+            // Staging Buffer
+            if(this->shared[i].staging.pointer != nullptr) vkUnmapMemory(this->device, this->shared[i].staging.memory);
+            if(this->shared[i].staging.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->shared[i].staging.memory, nullptr);
+            if(this->shared[i].staging.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, this->shared[i].staging.handle, nullptr);
+        }
+
+        this->shared.clear();
+    }
+
+    /**
+    * Lorsque la fenêtre est redimensionnée la swap chain doit être reconstruite
+    */
+    bool Vulkan::OnWindowSizeChanged()
+    {
+        if(this->creating_swap_chain) return true;
+        this->draw_surface = this->draw_window->GetSurface();
+        return this->CreateSwapChain();
     }
 
     uint32_t Vulkan::CreateTexture(std::vector<unsigned char> data, uint32_t width, uint32_t height)
@@ -2278,7 +1914,7 @@ namespace Engine
             #if defined(_DEBUG)
             std::cout << "CreateTexture => vkCreateImage : Failed" << std::endl;
             #endif
-            return false;
+            return UINT32_MAX;
         }
 
         ///////////////////////////////////////////////////////
@@ -2298,7 +1934,7 @@ namespace Engine
             #if defined(_DEBUG)
             std::cout << "CreateTexture => MemoryType VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : Not found" << std::endl;
             #endif
-            return false;
+            return UINT32_MAX;
         }
 
         result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &texture.memory);
@@ -2306,7 +1942,7 @@ namespace Engine
             #if defined(_DEBUG)
             std::cout << "CreateTexture => vkAllocateMemory : Failed" << std::endl;
             #endif
-            return false;
+            return UINT32_MAX;
         }
 
         result = vkBindImageMemory(this->device, texture.image, texture.memory, 0);
@@ -2314,7 +1950,7 @@ namespace Engine
             #if defined(_DEBUG)
             std::cout << "CreateTexture => vkBindImageMemory : Failed" << std::endl;
             #endif
-            return false;
+            return UINT32_MAX;
         }
 
         //////////////////////////////
@@ -2345,7 +1981,7 @@ namespace Engine
             std::cout << "CreateTexture => vkCreateImageView : Failed" << std::endl;
             #endif
 
-            return false;
+            return UINT32_MAX;
         }
 
         /////////////////////////
@@ -2377,26 +2013,26 @@ namespace Engine
             #if defined(_DEBUG)
             std::cout << "CreateTexture => vkCreateSampler : Failed" << std::endl;
             #endif
-            return false;
+            return UINT32_MAX;
         }
+
+        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
+        result = vkWaitForFences(this->device, 1, &this->background.transfer_command_buffer.fence, VK_FALSE, 1000000000);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateTexture => vkWaitForFences : Timeout" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+        vkResetFences(this->device, 1, &this->background.transfer_command_buffer.fence);
 
         //////////////////////////////
         // Copie de la texture vers //
         //    le staging buffer     //
         //////////////////////////////
 
-        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
-        result = vkWaitForFences(this->device, 1, &this->transfer.fence, VK_FALSE, 1000000000);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "CreateTexture => vkWaitForFences : Timeout" << std::endl;
-            #endif
-            return false;
-        }
-        vkResetFences(this->device, 1, &this->transfer.fence);
-
         size_t flush_size = static_cast<size_t>(data.size() * sizeof(data[0]));
-        std::memcpy(this->staging_buffer.pointer, &data[0], flush_size);
+        std::memcpy(this->background.staging.pointer, &data[0], flush_size);
 
         unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
         flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * (static_cast<uint64_t>(multiple) + 1);
@@ -2405,7 +2041,7 @@ namespace Engine
         VkMappedMemoryRange flush_range = {};
         flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
         flush_range.pNext = nullptr;
-        flush_range.memory = this->staging_buffer.memory;
+        flush_range.memory = this->background.staging.memory;
         flush_range.offset = 0;
         flush_range.size = flush_size;
         vkFlushMappedMemoryRanges(this->device, 1, &flush_range);
@@ -2422,7 +2058,7 @@ namespace Engine
         command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         command_buffer_begin_info.pInheritanceInfo = nullptr;
 
-        vkBeginCommandBuffer(this->transfer.command_buffer, &command_buffer_begin_info);
+        vkBeginCommandBuffer(this->background.transfer_command_buffer.handle, &command_buffer_begin_info);
 
         VkImageMemoryBarrier image_memory_barrier_from_undefined_to_transfer_dst = {};
         image_memory_barrier_from_undefined_to_transfer_dst.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2440,7 +2076,7 @@ namespace Engine
         image_memory_barrier_from_undefined_to_transfer_dst.subresourceRange.baseArrayLayer = 0;
         image_memory_barrier_from_undefined_to_transfer_dst.subresourceRange.layerCount = 1;
 
-        vkCmdPipelineBarrier(this->transfer.command_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier_from_undefined_to_transfer_dst);
+        vkCmdPipelineBarrier(this->background.transfer_command_buffer.handle, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier_from_undefined_to_transfer_dst);
 
         VkBufferImageCopy buffer_image_copy_info = {};
         buffer_image_copy_info.bufferOffset = 0;
@@ -2457,9 +2093,9 @@ namespace Engine
         buffer_image_copy_info.imageExtent.height = height;
         buffer_image_copy_info.imageExtent.depth = 1;
 
-        vkCmdCopyBufferToImage(this->transfer.command_buffer, this->staging_buffer.handle, texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_image_copy_info);
+        vkCmdCopyBufferToImage(this->background.transfer_command_buffer.handle, this->background.staging.handle, texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_image_copy_info);
 
-        if(this->transfer_stack_index == this->graphics_stack_index) {
+        if(this->background.transfer_queue.index == this->background.graphics_queue.index) {
             VkImageMemoryBarrier image_memory_barrier_from_transfer_to_shader_read = {};
             image_memory_barrier_from_transfer_to_shader_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             image_memory_barrier_from_transfer_to_shader_read.pNext = nullptr;
@@ -2467,8 +2103,8 @@ namespace Engine
             image_memory_barrier_from_transfer_to_shader_read.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
             image_memory_barrier_from_transfer_to_shader_read.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             image_memory_barrier_from_transfer_to_shader_read.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            image_memory_barrier_from_transfer_to_shader_read.srcQueueFamilyIndex = this->queue_stack[this->transfer_stack_index].index;
-            image_memory_barrier_from_transfer_to_shader_read.dstQueueFamilyIndex = this->queue_stack[this->graphics_stack_index].index;
+            image_memory_barrier_from_transfer_to_shader_read.srcQueueFamilyIndex = this->background.transfer_queue.index;
+            image_memory_barrier_from_transfer_to_shader_read.dstQueueFamilyIndex = this->graphics_queue.index;
             image_memory_barrier_from_transfer_to_shader_read.image = texture.image;
             image_memory_barrier_from_transfer_to_shader_read.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             image_memory_barrier_from_transfer_to_shader_read.subresourceRange.baseMipLevel = 0;
@@ -2476,10 +2112,10 @@ namespace Engine
             image_memory_barrier_from_transfer_to_shader_read.subresourceRange.baseArrayLayer = 0;
             image_memory_barrier_from_transfer_to_shader_read.subresourceRange.layerCount = 1;
 
-            vkCmdPipelineBarrier(this->transfer.command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier_from_transfer_to_shader_read);
+            vkCmdPipelineBarrier(this->background.transfer_command_buffer.handle, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier_from_transfer_to_shader_read);
         }
 
-        vkEndCommandBuffer(this->transfer.command_buffer);
+        vkEndCommandBuffer(this->background.transfer_command_buffer.handle);
 
         // Exécution de la commande de copie
         VkSubmitInfo submit_info = {};
@@ -2489,30 +2125,36 @@ namespace Engine
         submit_info.pWaitSemaphores = nullptr;
         submit_info.pWaitDstStageMask = nullptr;
         submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &this->transfer.command_buffer;
-        submit_info.signalSemaphoreCount = 0;
-        submit_info.pSignalSemaphores = nullptr;
+        submit_info.pCommandBuffers = &this->background.transfer_command_buffer.handle;
 
-        result = vkQueueSubmit(this->queue_stack[this->transfer_stack_index].handle, 1, &submit_info, this->transfer.fence);
+        if(this->background.transfer_queue.index != this->background.graphics_queue.index) {
+            submit_info.signalSemaphoreCount = 1;
+            submit_info.pSignalSemaphores = &this->background.semaphore;
+        }else{
+            submit_info.signalSemaphoreCount = 0;
+            submit_info.pSignalSemaphores = nullptr;
+        }
+
+        result = vkQueueSubmit(this->background.transfer_queue.handle, 1, &submit_info, this->background.transfer_command_buffer.fence);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
             std::cout << "CreateTexture => vkQueueSubmit : Failed" << std::endl;
             #endif
-            return false;
+            return UINT32_MAX;
         }
 
-        if(this->transfer_stack_index != this->graphics_stack_index) {
+        if(this->background.transfer_queue.index != this->background.graphics_queue.index) {
 
-            VkResult result = vkWaitForFences(this->device, 1, &this->transfer.fence, VK_FALSE, 1000000000);
+            VkResult result = vkWaitForFences(this->device, 1, &this->background.graphics_command_buffer.fence, VK_FALSE, 1000000000);
             if(result != VK_SUCCESS) {
                 #if defined(_DEBUG)
                 std::cout << "CreateTexture => vkWaitForFences : Timeout" << std::endl;
                 #endif
-                return false;
+                return UINT32_MAX;
             }
-            vkResetFences(this->device, 1, &this->transfer.fence);
+            vkResetFences(this->device, 1, &this->background.graphics_command_buffer.fence);
 
-            vkBeginCommandBuffer(this->rendering[0].main_command_buffer, &command_buffer_begin_info);
+            vkBeginCommandBuffer(this->background.graphics_command_buffer.handle, &command_buffer_begin_info);
 
             VkImageMemoryBarrier image_memory_barrier_from_transfer_to_shader_read = {};
             image_memory_barrier_from_transfer_to_shader_read.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2530,52 +2172,184 @@ namespace Engine
             image_memory_barrier_from_transfer_to_shader_read.subresourceRange.baseArrayLayer = 0;
             image_memory_barrier_from_transfer_to_shader_read.subresourceRange.layerCount = 1;
 
-            vkCmdPipelineBarrier(this->rendering[0].main_command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier_from_transfer_to_shader_read);
+            vkCmdPipelineBarrier(this->background.graphics_command_buffer.handle, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier_from_transfer_to_shader_read);
 
-            vkEndCommandBuffer(this->rendering[0].main_command_buffer);
+            vkEndCommandBuffer(this->background.graphics_command_buffer.handle);
 
-            submit_info.pCommandBuffers = &this->rendering[0].main_command_buffer;
-            result = vkQueueSubmit(this->queue_stack[this->graphics_stack_index].handle, 1, &submit_info, this->transfer.fence);
+            VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            submit_info.signalSemaphoreCount = 0;
+            submit_info.pSignalSemaphores = nullptr;
+            submit_info.pCommandBuffers = &this->background.graphics_command_buffer.handle;
+            submit_info.waitSemaphoreCount = 1;
+            submit_info.pWaitSemaphores = &this->background.semaphore;
+            submit_info.pWaitDstStageMask = &wait_dst_stage_mask;
+
+            result = vkQueueSubmit(this->background.graphics_queue.handle, 1, &submit_info, this->background.graphics_command_buffer.fence);
             if(result != VK_SUCCESS) {
                 #if defined(_DEBUG)
                 std::cout << "CreateTexture => vkQueueSubmit(2) : Failed" << std::endl;
                 #endif
-                return false;
+                return UINT32_MAX;
             }
         }
+        
+        ////////////////////////////////////
+        // Allocation des descriptor Sets //
+        ////////////////////////////////////
+
+        std::vector<VkDescriptorSetLayout> layouts(this->concurrent_frame_count, this->descriptor_set_layout);
+        VkDescriptorSetAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.pNext = nullptr;
+        alloc_info.descriptorPool = this->descriptor_pool;
+        alloc_info.descriptorSetCount = this->concurrent_frame_count;
+        alloc_info.pSetLayouts = &layouts[0];
+        
+        texture.descriptors.resize(this->concurrent_frame_count);
+        result = vkAllocateDescriptorSets(this->device, &alloc_info, &texture.descriptors[0]);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout <<"CreateModel => vkAllocateDescriptorSets : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        /////////////////////////////////////
+        // Mise à jour des descriptor Sets //
+        /////////////////////////////////////
+
+        for(uint32_t i=0; i<texture.descriptors.size(); i++) {
+
+            VkWriteDescriptorSet writes[2];
+
+            VkDescriptorImageInfo descriptor_image_info = {};
+            descriptor_image_info.sampler = texture.sampler;
+            descriptor_image_info.imageView = texture.view;
+            descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+            writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[0].pNext = nullptr;
+            writes[0].dstSet = texture.descriptors[i];
+            writes[0].dstBinding = 0;
+            writes[0].dstArrayElement = 0;
+            writes[0].descriptorCount = 1;
+            writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[0].pImageInfo = &descriptor_image_info;
+            writes[0].pBufferInfo = nullptr;
+            writes[0].pTexelBufferView = nullptr;
+
+            VkDescriptorBufferInfo buffer_info = {};
+            buffer_info.buffer = this->shared[i].uniform.handle;
+            buffer_info.offset = 0;
+            buffer_info.range = static_cast<VkDeviceSize>(sizeof(Matrix4x4));
+
+            writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[1].pNext = nullptr;
+            writes[1].dstSet = texture.descriptors[i];
+            writes[1].dstBinding = 1;
+            writes[1].dstArrayElement = 0;
+            writes[1].descriptorCount = 1;
+            writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+            writes[1].pImageInfo = nullptr;
+            writes[1].pBufferInfo = &buffer_info;
+            writes[1].pTexelBufferView = nullptr;
+            writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+
+            vkUpdateDescriptorSets(this->device, 2, writes, 0, nullptr);
+        }
+
+        #if defined(_DEBUG)
+        std::cout << "CreateTexture : Success" << std::endl;
+        #endif
 
         // Ajout de la texture dans la mémoire
         uint32_t texture_index = this->last_texture_index;
         this->textures[texture_index] = texture;
         this->last_texture_index++;
 
-        #if defined(_DEBUG)
-        std::cout << "CreateTexture : Success" << std::endl;
-        #endif
-
         // On renvoie l'indice de la texture dans le 
         return texture_index;
     }
 
     /**
-     * Mise à jour des données du vertex buffer
+     * Création du vertex buffer
      */
-    bool Vulkan::UpdateVertexBuffer(std::vector<VERTEX>& data, VULKAN_BUFFER& vertex_buffer)
+    uint32_t Vulkan::CreateVertexBuffer(std::vector<VERTEX>& data)
     {
-        ///////////////////////////////////////////
-        //        Envoi des données vers         //
-        //   la mémoire de la carte graphique    //
-        ///////////////////////////////////////////
+        // Valeur de retour
+        VERTEX_BUFFER vertex_buffer;
+        vertex_buffer.size = sizeof(VERTEX) * data.size();
+        vertex_buffer.vertex_count = static_cast<uint32_t>(data.size());
 
-        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
-        VkResult result = vkWaitForFences(this->device, 1, &this->transfer.fence, VK_FALSE, 1000000000);
+        ////////////////////////////////
+        //     Création du buffer     //
+        ////////////////////////////////
+
+        VkBufferCreateInfo buffer_create_info = {};
+        buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buffer_create_info.pNext = nullptr;
+        buffer_create_info.flags = 0;
+        buffer_create_info.size = vertex_buffer.size;
+        buffer_create_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        buffer_create_info.queueFamilyIndexCount = 0;
+        buffer_create_info.pQueueFamilyIndices = nullptr;
+
+        VkResult result = vkCreateBuffer(this->device, &buffer_create_info, nullptr, &vertex_buffer.handle);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
-            std::cout << "UpdateVertexBuffer => vkWaitForFences : Timeout" << std::endl;
+            std::cout << "CreateVertexBuffer => vkCreateBuffer : Failed" << std::endl;
             #endif
-            return false;
+            return UINT32_MAX;
         }
-        vkResetFences(this->device, 1, &this->transfer.fence);
+
+        VkMemoryRequirements mem_reqs;
+        vkGetBufferMemoryRequirements(this->device, vertex_buffer.handle, &mem_reqs);
+
+        VkMemoryAllocateInfo mem_alloc = {};
+        mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        mem_alloc.pNext = nullptr;
+        mem_alloc.allocationSize = 0;
+        mem_alloc.memoryTypeIndex = 0;
+        mem_alloc.allocationSize = mem_reqs.size;
+        
+        if(!this->MemoryTypeFromProperties(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, mem_alloc.memoryTypeIndex)) {
+            #if defined(_DEBUG)
+            std::cout << "CreateVertexBuffer => MemoryType VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : Not found" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+
+        // Allocation de la mémoire pour le vertex buffer
+        result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &vertex_buffer.memory);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateVertexBuffer => vkAllocateMemory : Failed" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+
+        result = vkBindBufferMemory(this->device, vertex_buffer.handle, vertex_buffer.memory, 0);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateVertexBuffer => vkBindBufferMemory : Failed" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+
+        #if defined(_DEBUG)
+        std::cout << "CreateVertexBuffer : Success" << std::endl;
+        #endif
+
+        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
+        result = vkWaitForFences(this->device, 1, &this->background.transfer_command_buffer.fence, VK_FALSE, 1000000000);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateVertexBuffer => vkWaitForFences : Timeout" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+        vkResetFences(this->device, 1, &this->background.transfer_command_buffer.fence);
 
         ////////////////////////////////
         //   Copie des données vers   //
@@ -2586,16 +2360,14 @@ namespace Engine
         unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
         flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * (static_cast<uint64_t>(multiple) + 1);
 
-        if(this->staging_buffer.size - this->staging_buffer.offset < flush_size)  this->staging_buffer.offset = 0;
-        void* write_address = reinterpret_cast<char*>(this->staging_buffer.pointer) + this->staging_buffer.offset;
-        std::memcpy(write_address, &data[0], vertex_buffer.size);
+        std::memcpy(this->background.staging.pointer, &data[0], vertex_buffer.size);
 
         // Flush staging buffer
         VkMappedMemoryRange flush_range = {};
         flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
         flush_range.pNext = nullptr;
-        flush_range.memory = this->staging_buffer.memory;
-        flush_range.offset = this->staging_buffer.offset;
+        flush_range.memory = this->background.staging.memory;
+        flush_range.offset = 0;
         flush_range.size = flush_size;
         vkFlushMappedMemoryRanges(this->device, 1, &flush_range);
 
@@ -2611,29 +2383,29 @@ namespace Engine
         command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         command_buffer_begin_info.pInheritanceInfo = nullptr;
 
-        vkBeginCommandBuffer(this->transfer.command_buffer, &command_buffer_begin_info);
+        vkBeginCommandBuffer(this->background.transfer_command_buffer.handle, &command_buffer_begin_info);
 
         VkBufferCopy buffer_copy_info = {};
-        buffer_copy_info.srcOffset = this->staging_buffer.offset;
+        buffer_copy_info.srcOffset = 0;
         buffer_copy_info.dstOffset = 0;
         buffer_copy_info.size = vertex_buffer.size;
 
-        vkCmdCopyBuffer(this->transfer.command_buffer, this->staging_buffer.handle, vertex_buffer.handle, 1, &buffer_copy_info);
+        vkCmdCopyBuffer(this->background.transfer_command_buffer.handle, this->background.staging.handle, vertex_buffer.handle, 1, &buffer_copy_info);
 
         VkBufferMemoryBarrier buffer_memory_barrier = {};
         buffer_memory_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
         buffer_memory_barrier.pNext = nullptr;
         buffer_memory_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
         buffer_memory_barrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-        buffer_memory_barrier.srcQueueFamilyIndex = this->queue_stack[this->transfer_stack_index].index;
-        buffer_memory_barrier.dstQueueFamilyIndex = this->queue_stack[this->graphics_stack_index].index;
+        buffer_memory_barrier.srcQueueFamilyIndex = this->background.transfer_queue.index;
+        buffer_memory_barrier.dstQueueFamilyIndex = this->background.graphics_queue.index;
         buffer_memory_barrier.buffer = vertex_buffer.handle;
         buffer_memory_barrier.offset = 0;
         buffer_memory_barrier.size = VK_WHOLE_SIZE;
 
-        vkCmdPipelineBarrier(this->transfer.command_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 0, nullptr, 1, &buffer_memory_barrier, 0, nullptr);
+        vkCmdPipelineBarrier(this->background.transfer_command_buffer.handle, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 0, nullptr, 1, &buffer_memory_barrier, 0, nullptr);
         
-        vkEndCommandBuffer(this->transfer.command_buffer);
+        vkEndCommandBuffer(this->background.transfer_command_buffer.handle);
 
         // Exécution de la commande de copie
         VkSubmitInfo submit_info = {};
@@ -2643,25 +2415,298 @@ namespace Engine
         submit_info.pWaitSemaphores = nullptr;
         submit_info.pWaitDstStageMask = nullptr;
         submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &this->transfer.command_buffer;
+        submit_info.pCommandBuffers = &this->background.transfer_command_buffer.handle;
         submit_info.signalSemaphoreCount = 0;
         submit_info.pSignalSemaphores = nullptr;
 
-        result = vkQueueSubmit(this->queue_stack[this->transfer_stack_index].handle, 1, &submit_info, this->transfer.fence);
+        result = vkQueueSubmit(this->background.transfer_queue.handle, 1, &submit_info, this->background.transfer_command_buffer.fence);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
-            std::cout << "UpdateVertexBuffer => vkQueueSubmit : Failed" << std::endl;
+            std::cout << "CreateVertexBuffer => vkQueueSubmit : Failed" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+
+        #if defined(_DEBUG)
+        std::cout << "CreateVertexBuffer : Success" << std::endl;
+        #endif
+        
+        uint32_t buffer_index = this->last_vbo_index;
+        this->vertex_buffers[buffer_index] = vertex_buffer;
+        this->last_vbo_index++;
+
+        return buffer_index;
+    }
+
+    /**
+     * Création d'un descriptor pool
+     */
+    bool Vulkan::PrepareDescriptorSets()
+    {
+        uint32_t pool_limit = MAX_CONCURRENT_TEXTURES * this->concurrent_frame_count;
+
+        VkDescriptorPoolSize pool_sizes[2];
+        pool_sizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        pool_sizes[0].descriptorCount = pool_limit;
+        pool_sizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        pool_sizes[1].descriptorCount = pool_limit;
+
+        VkDescriptorPoolCreateInfo descriptor_pool_create_info = {};
+        descriptor_pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        descriptor_pool_create_info.pNext = nullptr;
+        descriptor_pool_create_info.maxSets = pool_limit;
+        descriptor_pool_create_info.poolSizeCount = 2;
+        descriptor_pool_create_info.pPoolSizes = pool_sizes;
+
+        VkResult result = vkCreateDescriptorPool(this->device, &descriptor_pool_create_info, nullptr, &this->descriptor_pool);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateDescriptorSet => vkCreateDescriptorPool : Failed" << std::endl;
             #endif
             return false;
         }
 
-        // On avance l'offset du staging buffer afin de ne pas réécrire sur le segment que l'ont est en train d'envoyer
-        this->staging_buffer.offset += flush_size;
+        VkDescriptorSetLayoutBinding layout_bindings[2];
+        layout_bindings[0].binding = 0;
+        layout_bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        layout_bindings[0].descriptorCount = 1;
+        layout_bindings[0].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        layout_bindings[0].pImmutableSamplers = nullptr;
+        layout_bindings[1].binding = 1;
+        layout_bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        layout_bindings[1].descriptorCount = 1;
+        layout_bindings[1].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        layout_bindings[1].pImmutableSamplers = nullptr;
 
+        VkDescriptorSetLayoutCreateInfo descriptor_layout = {};
+        descriptor_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptor_layout.pNext = nullptr;
+        descriptor_layout.bindingCount = 2;
+        descriptor_layout.pBindings = layout_bindings;
+
+        result = vkCreateDescriptorSetLayout(this->device, &descriptor_layout, nullptr, &this->descriptor_set_layout);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateDescriptorSet => vkCreateDescriptorSetLayout : Failed" << std::endl;
+            #endif
+            return false;
+        }
+        
+        // Succès
         #if defined(_DEBUG)
-        std::cout << "UpdateVertexBuffer : Success" << std::endl;
+        std::cout << "CreateDescriptorSet : Success" << std::endl;
         #endif
         return true;
+    }
+
+    /**
+     * Création d'un Mesh
+     */
+    uint32_t Vulkan::CreateModel(uint32_t vertex_buffer_id, uint32_t texture_id)
+    {
+        uint32_t model_index = this->last_model_index;
+
+        MODEL model = {};
+        model.vertex_buffer_id = vertex_buffer_id;
+        model.texture_id = texture_id;
+
+        this->models[model_index] = model;
+        this->last_model_index++;
+
+        // Création d'une entité à afficher
+        for(uint32_t i=0; i<this->concurrent_frame_count; i++) {
+            ENTITY entity;
+            entity.vertex_buffer = this->vertex_buffers[vertex_buffer_id].handle;
+            entity.vertex_count = this->vertex_buffers[vertex_buffer_id].vertex_count;
+            entity.descriptor_set = this->textures[texture_id].descriptors[i];
+            entity.ubo_offset = model_index * this->ubo_alignement;
+            this->shared[i].entities.push_back(entity);
+        }
+
+        return model_index;
+    }
+
+    /**
+     * Mise à jour des données du uniform buffer
+     */
+    bool Vulkan::UpdateEntities(uint32_t frame_index)
+    {
+        //////////////////////////////////////
+        //   Transformations géométriques   //
+        //////////////////////////////////////
+
+        /*static float angle_y = 0;
+        static float angle_x = 0;
+
+        angle_y += 1.0f;
+        angle_x += 0.3f;
+
+        this->shared[frame_index].entities[0].transformation.rotation_x = RotationMatrix(angle_x, {1.0f, 0.0f, 0.0f});
+        this->shared[frame_index].entities[0].transformation.rotation_y = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
+        this->shared[frame_index].entities[0].transformation.translation = TranslationMatrix(1.8f, 0.0f, -7.0f);
+
+        this->shared[frame_index].entities[1].transformation.rotation_x = RotationMatrix(angle_x, {-1.0f, 0.0f, 0.0f});
+        this->shared[frame_index].entities[1].transformation.rotation_y = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
+        this->shared[frame_index].entities[1].transformation.translation = TranslationMatrix(-1.8f, 0.0f, -7.0f);
+        
+        for(auto entity : this->shared[frame_index].entities) {
+            Matrix4x4 transformation = this->base_projection * entity.transformation.translation * entity.transformation.rotation_x * entity.transformation.rotation_y * entity.transformation.rotation_z;
+            std::memcpy(reinterpret_cast<char*>(this->shared[frame_index].staging.pointer) + entity.ubo_offset, &transformation, sizeof(Matrix4x4));
+        }*/
+
+
+        // On récupère le commande buffer à utiliser pour les opérations de transfert
+        COMMAND_BUFFER& transfer = (this->transfer_queue.index == this->graphics_queue.index) ? this->main[frame_index].graphics_command_buffer : this->main[frame_index].transfer_command_buffer;
+
+        if(this->transfer_queue.index != this->graphics_queue.index) {
+
+            // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
+            VkResult result = vkWaitForFences(this->device, 1, &transfer.fence, VK_FALSE, 1000000000);
+            if(result != VK_SUCCESS) {
+                #if defined(_DEBUG)
+                std::cout << "UpdateEntities => vkWaitForFences : Timeout" << std::endl;
+                #endif
+                return false;
+            }
+            vkResetFences(this->device, 1, &transfer.fence);
+        }
+
+        ////////////////////////////////
+        //   Copie des données vers   //
+        //      le staging buffer     //
+        ////////////////////////////////
+
+        uint32_t entity_count = static_cast<uint32_t>(this->shared[frame_index].entities.size());
+        size_t flush_size = static_cast<size_t>(this->ubo_alignement * (entity_count - 1) + entity_count);
+        unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
+        flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * (static_cast<uint64_t>(multiple) + 1);
+
+        // Écriture des données dans le staging buffer
+        /*for(uint32_t i=0; i<this->shared[frame_index].entities.size(); i++)
+            std::memcpy(reinterpret_cast<char*>(this->shared[frame_index].staging.pointer) + this->shared[frame_index].entities[i].ubo_offset, &this->shared[frame_index].entities[i].transformations, sizeof(Matrix4x4));*/
+
+        // Flush staging buffer
+        VkMappedMemoryRange flush_range = {};
+        flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        flush_range.pNext = nullptr;
+        flush_range.memory = this->shared[frame_index].staging.memory;
+        flush_range.offset = 0;
+        flush_range.size = flush_size;
+        vkFlushMappedMemoryRanges(this->device, 1, &flush_range);
+
+        ///////////////////////////////////////////
+        //  Envoi de la matrice de projection    //
+        //        vers le uniform buffer         //
+        ///////////////////////////////////////////
+
+        if(this->transfer_queue.index != this->graphics_queue.index) {
+            VkCommandBufferBeginInfo command_buffer_begin_info = {};
+            command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            command_buffer_begin_info.pNext = nullptr; 
+            command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            command_buffer_begin_info.pInheritanceInfo = nullptr;
+
+            vkBeginCommandBuffer(transfer.handle, &command_buffer_begin_info);
+        }
+
+        VkBufferCopy buffer_copy_info = {};
+        buffer_copy_info.srcOffset = 0;
+        buffer_copy_info.dstOffset = 0;
+        buffer_copy_info.size = flush_size;
+
+        vkCmdCopyBuffer(transfer.handle, this->shared[frame_index].staging.handle, this->shared[frame_index].uniform.handle, 1, &buffer_copy_info);
+
+        if(this->transfer_queue.index != this->graphics_queue.index) {
+
+            vkEndCommandBuffer(transfer.handle);
+
+            // Exécution de la commande de copie
+            VkSubmitInfo submit_info = {};
+            submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submit_info.pNext = nullptr;
+            submit_info.waitSemaphoreCount = 0;
+            submit_info.pWaitSemaphores = nullptr;
+            submit_info.pWaitDstStageMask = nullptr;
+            submit_info.commandBufferCount = 1;
+            submit_info.pCommandBuffers = &transfer.handle;
+            submit_info.signalSemaphoreCount = 1;
+            submit_info.pSignalSemaphores = &this->main[frame_index].transfer_semaphore;
+
+            VkResult result = vkQueueSubmit(this->transfer_queue.handle, 1, &submit_info, transfer.fence);
+            if(result != VK_SUCCESS) {
+                #if defined(_DEBUG)
+                std::cout << "UpdateEntities => vkQueueSubmit : Failed" << std::endl;
+                #endif
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Initilisation des threads
+     */
+    bool Vulkan::InitThreads()
+    {
+        this->thread_count = std::thread::hardware_concurrency();
+        // this->thread_count = 1;
+
+        #if defined(_DEBUG)
+        std::cout << "Nombre de threads disponibles : " << this->thread_count << std::endl;
+        #endif
+
+        this->threads.resize(this->thread_count);
+        this->keep_thread_alive = true;
+
+        for(uint8_t i=0; i<this->thread_count; i++) {
+            
+            // Création du command pool pour le thread
+            if(!this->CreateCommandPool(this->threads[i].command_pool, this->graphics_queue.index)) {
+                #if defined(_DEBUG)
+                std::cout << "InitThreads => CreateCommandPool[" << i << "] : Failed" << std::endl;
+                #endif
+                return false;
+            }
+
+            // Allocation des command buffers secondaires pour le thread
+            this->threads[i].graphics_command_buffer.resize(this->concurrent_frame_count);
+            if(!this->CreateCommandBuffer(this->threads[i].command_pool, this->threads[i].graphics_command_buffer, VK_COMMAND_BUFFER_LEVEL_SECONDARY)) {
+                #if defined(_DEBUG)
+                std::cout << "InitThreads => CreateCommandBuffers[" << i << "] : Failed" << std::endl;
+                #endif
+                return false;
+            }
+
+            // Démarrage du thread
+            this->threads[i].handle = std::thread{ThreadJob, i};
+        }
+
+        return true;
+    }
+
+    /**
+     * Arrête les threads et libère les ressources associées
+     */
+    void Vulkan::ReleaseThreads()
+    {
+        this->keep_thread_alive = false;
+        this->thread_sleep.signaled = true;
+        this->thread_sleep.condition.notify_all();
+
+        for(uint8_t i=0; i<this->thread_count; i++) {
+            
+            // Fin du thread
+            this->threads[i].handle.join();
+
+            // Command Pool
+            if(this->threads[i].command_pool != VK_NULL_HANDLE) vkDestroyCommandPool(this->device, this->threads[i].command_pool, nullptr);
+
+            // Fences
+            for(uint32_t j=0; j<this->threads[i].graphics_command_buffer.size(); j++)
+                if(this->threads[i].graphics_command_buffer[j].fence != VK_NULL_HANDLE)
+                    vkDestroyFence(this->device, this->threads[i].graphics_command_buffer[j].fence, nullptr);
+        }
     }
 
     /**
@@ -2669,30 +2714,27 @@ namespace Engine
      */
     void Vulkan::Draw()
     {
-        VkQueue graphics_queue = this->queue_stack[this->graphics_stack_index].handle;
-        VkQueue present_queue = this->queue_stack[this->present_stack_index].handle;
-
         //////////////////////////////
         //     Rotation du pool     //
         //  de ressources de rendu  //
         //////////////////////////////
 
-        this->rendering_index = (this->rendering_index + 1) % static_cast<uint8_t>(this->swap_chain.images.size());
-        auto current_rendering_resource = this->rendering[this->rendering_index];
+        this->current_frame_index = (this->current_frame_index + 1) % static_cast<uint8_t>(this->concurrent_frame_count);
+        auto current_rendering_resource = this->main[this->current_frame_index];
 
         ////////////////////////////////
         //    Attente de libération   //
         //   des resources de rendu   //
         ////////////////////////////////
 
-        VkResult result = vkWaitForFences(this->device, 1, &current_rendering_resource.fence, VK_FALSE, 1000000000);
+        VkResult result = vkWaitForFences(this->device, 1, &current_rendering_resource.graphics_command_buffer.fence, VK_FALSE, 1000000000);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
             std::cout << "Draw => vkWaitForFences : Timeout" << std::endl;
             #endif
             return;
         }
-        vkResetFences(this->device, 1, &current_rendering_resource.fence);
+        vkResetFences(this->device, 1, &current_rendering_resource.graphics_command_buffer.fence);
 
         ////////////////////////////////////
         //    Récupération d'une image    //
@@ -2744,25 +2786,25 @@ namespace Engine
         
         if(current_rendering_resource.framebuffer != VK_NULL_HANDLE) {
             vkDestroyFramebuffer(this->device, current_rendering_resource.framebuffer, nullptr);
-            this->rendering[this->rendering_index].framebuffer = VK_NULL_HANDLE;
+            this->main[this->current_frame_index].framebuffer = VK_NULL_HANDLE;
         }
 
         VkImageView pAttachments[2];
         pAttachments[0] = this->swap_chain.images[swap_chain_image_index].view;
-        pAttachments[1] = this->depth_buffer.view;
+        //pAttachments[1] = this->depth_buffer.view;
 
         VkFramebufferCreateInfo framebuffer_create_info = {};
         framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         framebuffer_create_info.pNext = nullptr;
         framebuffer_create_info.flags = 0;
         framebuffer_create_info.renderPass = this->render_pass;
-        framebuffer_create_info.attachmentCount = 2;
+        framebuffer_create_info.attachmentCount = 1;
         framebuffer_create_info.pAttachments = pAttachments;
         framebuffer_create_info.width = this->draw_surface.width;
         framebuffer_create_info.height = this->draw_surface.height;
         framebuffer_create_info.layers = 1;
 
-        result = vkCreateFramebuffer(this->device, &framebuffer_create_info, nullptr, &this->rendering[this->rendering_index].framebuffer);
+        result = vkCreateFramebuffer(this->device, &framebuffer_create_info, nullptr, &this->main[this->current_frame_index].framebuffer);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
             std::cout << "Draw => vkCreateFramebuffer : Failed" << std::endl;
@@ -2780,7 +2822,7 @@ namespace Engine
         command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         command_buffer_begin_info.pInheritanceInfo = nullptr;
 
-        VkCommandBuffer command_buffer = current_rendering_resource.main_command_buffer;
+        VkCommandBuffer command_buffer = current_rendering_resource.graphics_command_buffer.handle;
         vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
 
         VkImageSubresourceRange image_subresource_range = {};
@@ -2792,12 +2834,12 @@ namespace Engine
 
         uint32_t present_queue_family_index;
         uint32_t graphics_queue_family_index;
-        if(this->graphics_stack_index == this->present_stack_index) {
+        if(this->graphics_queue.index == this->present_queue.index) {
             present_queue_family_index = VK_QUEUE_FAMILY_IGNORED;
             graphics_queue_family_index = VK_QUEUE_FAMILY_IGNORED;
         }else{
-            present_queue_family_index = this->queue_stack[this->present_stack_index].index;
-            graphics_queue_family_index = this->queue_stack[this->graphics_stack_index].index;
+            present_queue_family_index = this->present_queue.index;
+            graphics_queue_family_index = this->graphics_queue.index;
         }
         
         VkImageMemoryBarrier barrier_from_present_to_draw = {};
@@ -2822,7 +2864,7 @@ namespace Engine
         render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         render_pass_begin_info.pNext = nullptr;
         render_pass_begin_info.renderPass = this->render_pass;
-        render_pass_begin_info.framebuffer = this->rendering[this->rendering_index].framebuffer;
+        render_pass_begin_info.framebuffer = this->main[this->current_frame_index].framebuffer;
         render_pass_begin_info.renderArea.offset.x = 0;
         render_pass_begin_info.renderArea.offset.y = 0;
         render_pass_begin_info.renderArea.extent.width = this->draw_surface.width;
@@ -2830,34 +2872,48 @@ namespace Engine
         render_pass_begin_info.clearValueCount = 2;
         render_pass_begin_info.pClearValues = clear_value;
 
+        // On prépare les threads pour le travail
+        std::unique_lock<std::mutex> sleep_lock(this->thread_sleep.mutex);
+
+        this->pick_index = 0;
+        this->thread_sleep.signaled = true;
+        this->job_done_count = 0;
+
+        static float angle_y = 0;
+        static float angle_x = 0;
+
+        angle_y += 1.0f;
+        angle_x += 0.3f;
+
+        this->shared[this->current_frame_index].entities[0].transformation.rotation_x = RotationMatrix(angle_x, {1.0f, 0.0f, 0.0f});
+        this->shared[this->current_frame_index].entities[0].transformation.rotation_y = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
+        this->shared[this->current_frame_index].entities[0].transformation.translation = TranslationMatrix(1.8f, 0.0f, -7.0f);
+
+        this->shared[this->current_frame_index].entities[1].transformation.rotation_x = RotationMatrix(angle_x, {-1.0f, 0.0f, 0.0f});
+        this->shared[this->current_frame_index].entities[1].transformation.rotation_y = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
+        this->shared[this->current_frame_index].entities[1].transformation.translation = TranslationMatrix(-1.8f, 0.0f, -7.0f);
+
+        // On déclenche le travail des threads
+        std::unique_lock<std::mutex> frame_ready_lock(this->frame_ready.mutex);
+        this->thread_sleep.condition.notify_all();
+
+        sleep_lock.unlock();
+
+        // On attend la fin du travail
+        while(!this->frame_ready.signaled) this->frame_ready.condition.wait(frame_ready_lock);
+        this->frame_ready.signaled = false;
+
+        // On envoie le uniform buffer dans la carte graphique
+        this->UpdateEntities(this->current_frame_index);
+
+        // Début de la render pass
         vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
-        ////////////////////////////////////////////////
-        // Appel des threads pour traitement des mesh //
-        ////////////////////////////////////////////////
-
-        this->UpdateMeshUniformBuffers();
-        
-        // On initilise les éléments de départ des threads
-        std::unique_lock<std::mutex> start_lock(this->start_mutex);
-        this->mesh_iterator = this->meshes.begin();
-        this->mesh_processed = 0;
-        this->thread_go = true;
-
-        // On donne le GO pour afficher
-        this->start_condition.notify_all();
-        start_lock.unlock();
-
-        // On attend la fin du travail des threads
-        std::unique_lock<std::mutex> finish_lock(this->finish_mutex);
-        while(this->mesh_processed < this->meshes.size()) this->finish_condition.wait(finish_lock);
-        finish_lock.unlock();
-
-        // On ferme les command buffers secondaires, et on exécute les commandes
+        // On ferme les command buffers secondaires, et on exécute les commandes de rendu générées par les threads
         for(uint32_t i=0; i<this->thread_count; i++) {
-            THREAD_RESOURCE* thread = (THREAD_RESOURCE*)&this->threads[i];
-            if(thread->buffer_opened) {
-                result = vkEndCommandBuffer(thread->command_buffer);
+            THREAD_HANDLER* thread = reinterpret_cast<THREAD_HANDLER*>(&this->threads[i]);
+            if(thread->graphics_command_buffer[this->current_frame_index].opened) {
+                result = vkEndCommandBuffer(thread->graphics_command_buffer[this->current_frame_index].handle);
                 if(result != VK_SUCCESS) {
                     #if defined(_DEBUG)
                     std::cout << "Draw => Thread[" << i << "]->vkEndCommandBuffer : Failed" << std::endl;
@@ -2865,11 +2921,12 @@ namespace Engine
                     return;
                 }
 
-                vkCmdExecuteCommands(command_buffer, 1, &thread->command_buffer);
-                thread->buffer_opened = false;
+                vkCmdExecuteCommands(command_buffer, 1, &thread->graphics_command_buffer[this->current_frame_index].handle);
+                thread->graphics_command_buffer[this->current_frame_index].opened = false;
             }
         }
 
+        // Fin de la render pass
         vkCmdEndRenderPass(command_buffer);
 
         VkImageMemoryBarrier barrier_from_draw_to_present = {};
@@ -2894,19 +2951,30 @@ namespace Engine
             return;
         }
 
-        VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        VkSemaphore semaphores[2];
+        semaphores[0] = current_rendering_resource.swap_chain_semaphore;
+
+        VkPipelineStageFlags wait_dst_stage_mask[2];
+        wait_dst_stage_mask[0] = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
         VkSubmitInfo submit_info = {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit_info.pNext = nullptr;
-        submit_info.waitSemaphoreCount = 1;
-        submit_info.pWaitSemaphores = &current_rendering_resource.swap_chain_semaphore;
-        submit_info.pWaitDstStageMask = &wait_dst_stage_mask;
         submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &current_rendering_resource.main_command_buffer;
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pCommandBuffers = &current_rendering_resource.graphics_command_buffer.handle;
         submit_info.signalSemaphoreCount = 1;
-        submit_info.pSignalSemaphores = &current_rendering_resource.render_pass_semaphore;
+        submit_info.pSignalSemaphores = &current_rendering_resource.renderpass_semaphore;
+        submit_info.pWaitSemaphores = semaphores;
+        submit_info.pWaitDstStageMask = wait_dst_stage_mask;
 
-        result = vkQueueSubmit(graphics_queue, 1, &submit_info, current_rendering_resource.fence);
+        if(this->transfer_queue.index != this->present_queue.index) {
+            submit_info.waitSemaphoreCount = 2;
+            semaphores[1] = current_rendering_resource.transfer_semaphore;
+            wait_dst_stage_mask[1] = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        }
+
+        result = vkQueueSubmit(this->graphics_queue.handle, 1, &submit_info, current_rendering_resource.graphics_command_buffer.fence);
         if(result != VK_SUCCESS) {
             #if defined(_DEBUG)
             std::cout << "Draw => vkQueueSubmit : Failed" << std::endl;
@@ -2918,13 +2986,13 @@ namespace Engine
         present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         present_info.pNext = nullptr;
         present_info.waitSemaphoreCount = 1;
-        present_info.pWaitSemaphores = &current_rendering_resource.swap_chain_semaphore;
+        present_info.pWaitSemaphores = &current_rendering_resource.renderpass_semaphore;
         present_info.swapchainCount = 1;
         present_info.pSwapchains = &this->swap_chain.handle;
         present_info.pImageIndices = &swap_chain_image_index;
         present_info.pResults = nullptr;
 
-        result = vkQueuePresentKHR(present_queue, &present_info);
+        result = vkQueuePresentKHR(this->present_queue.handle, &present_info);
 
         switch(result)
         {
@@ -2933,6 +3001,7 @@ namespace Engine
             case VK_ERROR_OUT_OF_DATE_KHR:
             case VK_SUBOPTIMAL_KHR:
                 this->OnWindowSizeChanged();
+                break;
             default:
                 #if defined(_DEBUG)
                 std::cout << "Draw => vkQueuePresentKHR : Failed" << std::endl;
@@ -2942,68 +3011,59 @@ namespace Engine
     }
 
     /**
-    * Lorsque la fenêtre est redimensionnée la swap chain doit être reconstruite
-    */
-    bool Vulkan::OnWindowSizeChanged()
-    {
-        if(this->creating_swap_chain) return true;
-        this->draw_surface = this->draw_window->GetSurface();
-        return this->CreateDepthBuffer() && this->CreateSwapChain();
-    }
-
-    /**
      * Traitements exécutés par les threads
      */
-    void Vulkan::ThreadJob(Vulkan* self, uint32_t thread_id)
+    void Vulkan::ThreadJob(uint32_t thread_id)
     {
-        THREAD_RESOURCE* thread = (THREAD_RESOURCE*)&self->threads[thread_id];
-        thread->buffer_opened = false;
+        Vulkan* self = Vulkan::vulkan;
+        THREAD_HANDLER* thread = reinterpret_cast<THREAD_HANDLER*>(&self->threads[thread_id]);
 
         while(self->keep_thread_alive) {
 
             // Le thread attend qu'on lui donne du travail
-            std::unique_lock<std::mutex> start_lock(self->start_mutex);
-            while(!self->thread_go) self->start_condition.wait(start_lock);
-            start_lock.unlock();
+            std::unique_lock<std::mutex> sleep_lock(self->thread_sleep.mutex);
+            while(!self->thread_sleep.signaled) self->thread_sleep.condition.wait(sleep_lock);
+            sleep_lock.unlock();
 
             // Condition de sortie
             if(!self->keep_thread_alive) return;
 
             while(true) {
 
-                // Le mesh à calculer
-                MESH mesh;
+                // On bloque l'accès à la file de travail
+                std::unique_lock<std::mutex> pick_lock(self->pick_work);
 
-                // Le thread récupère le mesh à traiter
-                std::unique_lock<std::mutex> run_lock(self->run_mutex);
-                {
-                    if(self->mesh_iterator == self->meshes.end()) {
-                        self->thread_go = false;
-                        break;
-                    }
-                    mesh = self->mesh_iterator->second;
-                    self->mesh_iterator++;
+                // Frame en course de traitement et nombre d'intités à afficher
+                uint32_t frameid = self->current_frame_index;
+                uint32_t entity_count = static_cast<uint32_t>(self->shared[frameid].entities.size());
+
+                // Il n'y a pas de travail, on repart en sommeil
+                if(self->pick_index >= entity_count) {
+                    self->thread_sleep.signaled = false;
+                    pick_lock.unlock();
+                    break;
                 }
-                run_lock.unlock();
+                
+                // On récupère une entité à traiter et on incrémente le compteur de la file de travail
+                uint32_t entity_index = self->pick_index;
+                ENTITY& entity = self->shared[frameid].entities[entity_index];
+                self->pick_index++;
 
-                /*#if defined(_DEBUG)
-                run_lock.lock();
-                uint32_t mesh_id = mesh.offset / self->ubo_alignement;
-                uint32_t frame_id = self->rendering_index;
-                std::cout << "Thread[" << thread_id << "] : process mesh[" << mesh_id << "] on frame " << frame_id << std::endl;
-                run_lock.unlock();
-                #endif*/
+                COMMAND_BUFFER& command_buffer = thread->graphics_command_buffer[frameid];
+
+                // On retire le lock pour que les autres threads récupèrent du travail
+                pick_lock.unlock();
 
                 ////////////////////////
                 // Traitement du mesh //
                 ////////////////////////
 
-                if(!thread->buffer_opened) {
-                    
+                if(!command_buffer.opened) {
+
                     VkCommandBufferInheritanceInfo inheritance_info = {};
                     inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
                     inheritance_info.pNext = nullptr;
-                    inheritance_info.framebuffer = self->rendering[self->rendering_index].framebuffer;
+                    inheritance_info.framebuffer = self->main[frameid].framebuffer;
                     inheritance_info.renderPass = self->render_pass;
 
                     VkCommandBufferBeginInfo command_buffer_begin_info = {};
@@ -3012,41 +3072,46 @@ namespace Engine
                     command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT | VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
                     command_buffer_begin_info.pInheritanceInfo = &inheritance_info;
 
-                    run_lock.lock();
+                    std::unique_lock<std::mutex> open_buffer_lock(self->open_buffer);
                     {
-                        VkResult result = vkBeginCommandBuffer(thread->command_buffer, &command_buffer_begin_info);
+                        VkResult result = vkBeginCommandBuffer(command_buffer.handle, &command_buffer_begin_info);
                         if(result != VK_SUCCESS) {
                             #if defined(_DEBUG)
                             std::cout << "Thread[" << thread_id << "] : vkBeginCommandBuffer => Failed" << std::endl;
                             #endif
-                            std::unique_lock<std::mutex> finish_lock(self->finish_mutex);
-                            self->mesh_processed++;
-                            self->finish_condition.notify_one();
-                            finish_lock.unlock();
-                            run_lock.unlock();
-                            continue;
+                            if(entity_index >= entity_count) {
+                                std::unique_lock<std::mutex> frame_ready_lock(self->frame_ready.mutex);
+                                self->frame_ready.condition.notify_one();
+                                frame_ready_lock.unlock();
+                            }
+                            break;
                         }
 
-                        vkCmdBindPipeline(thread->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.handle);
+                        vkCmdBindPipeline(command_buffer.handle, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.handle);
                     }
-                    run_lock.unlock();
-                    thread->buffer_opened = true;
+                    open_buffer_lock.unlock();
+                    thread->graphics_command_buffer[frameid].opened = true;
                 }
 
+                // Transformations
+                Matrix4x4 transformation = self->base_projection * entity.transformation.translation * entity.transformation.rotation_x * entity.transformation.rotation_y * entity.transformation.rotation_z;
+                std::memcpy(reinterpret_cast<char*>(self->shared[frameid].staging.pointer) + entity.ubo_offset, &transformation, sizeof(Matrix4x4));
+
+                // Affichage
                 VkDeviceSize offset = 0;
-                VkCommandBuffer command_buffer = thread->command_buffer;
-                VULKAN_BUFFER vertex_buffer = self->vertex_buffers[mesh.vertex_buffer_index];
-                vkCmdBindVertexBuffers(command_buffer, 0, 1, &vertex_buffer.handle, &offset);
-                vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.layout, 0, 1, &mesh.descriptor_set, 0, &mesh.offset);
+                vkCmdBindVertexBuffers(command_buffer.handle, 0, 1, &entity.vertex_buffer, &offset);
+                vkCmdBindDescriptorSets(command_buffer.handle, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.layout, 0, 1, &entity.descriptor_set, 1, &entity.ubo_offset);
+                vkCmdDraw(command_buffer.handle, entity.vertex_count, 1, 0, 0);
 
-                uint32_t vertex_count = static_cast<uint32_t>(vertex_buffer.size / sizeof(VERTEX));
-                vkCmdDraw(command_buffer, vertex_count, 1, 0, 0);
-
-                // On signale la fin du traitement
-                std::unique_lock<std::mutex> finish_lock(self->finish_mutex);
-                self->mesh_processed++;
-                self->finish_condition.notify_one();
-                finish_lock.unlock();
+                // Le travail est terminé, on notifie la boucle principale
+                std::unique_lock<std::mutex> frame_ready_lock(self->frame_ready.mutex);
+                self->job_done_count++;
+                if(self->job_done_count >= entity_count) {
+                    self->frame_ready.signaled = true;
+                    self->thread_sleep.signaled = false;
+                    self->frame_ready.condition.notify_one();
+                }
+                frame_ready_lock.unlock();
             }
         }
     }

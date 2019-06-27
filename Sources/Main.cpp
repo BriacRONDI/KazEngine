@@ -32,10 +32,10 @@ int main(int argc, char** argv)
     // Initialisation de Vulkan
     Engine::Surface draw_surface =  main_window->GetSurface();
     Engine::Vulkan* engine = Engine::Vulkan::GetInstance();
-    Engine::Vulkan::ERROR_MESSAGE init = engine->Initialize(main_window, VK_MAKE_VERSION(0, 0, 1), "Cube");
+    Engine::Vulkan::RETURN_CODE init = engine->Initialize(main_window, VK_MAKE_VERSION(0, 0, 1), "Cube");
 
     // Erreur à l'initialisation de vulkan
-    if(init != Engine::Vulkan::ERROR_MESSAGE::SUCCESS) {
+    if(init != Engine::Vulkan::RETURN_CODE::SUCCESS) {
 
         // On ferme la fenêtre
         delete main_window;
@@ -151,10 +151,10 @@ int main(int argc, char** argv)
     };
 
     uint32_t cube_model = engine->CreateVertexBuffer(cube_data);
-    uint32_t cube = engine->CreateMesh(cube_model, texture1_id);
+    uint32_t cube = engine->CreateModel(cube_model, texture1_id);
 
     uint32_t prisme_model = engine->CreateVertexBuffer(prisme_data);
-    uint32_t prisme = engine->CreateMesh(prisme_model, texture2_id);
+    uint32_t prisme = engine->CreateModel(prisme_model, texture2_id);
 
     // Boucle principale
     while(Engine::Window::Loop())
