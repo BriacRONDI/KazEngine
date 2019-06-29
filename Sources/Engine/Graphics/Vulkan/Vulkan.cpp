@@ -257,9 +257,6 @@ namespace Engine
         if(init_status == RETURN_CODE::SUCCESS && !this->CreateSwapChain())
             init_status = RETURN_CODE::SWAP_CHAIN_CREATION_FAILURE;
 
-        // Allocation des threads utilisés pour le rendu
-        // Vulkan::vulkan->rendering.resize(this->swap_chain.images.size());
-
         // Création de la render pass
         if(init_status == RETURN_CODE::SUCCESS && !this->CreateRenderPass())
             init_status = RETURN_CODE::RENDER_PASS_CREATION_FAILURE;
@@ -275,6 +272,10 @@ namespace Engine
         // Initialisation de la boucle principale
         if(init_status == RETURN_CODE::SUCCESS && !this->InitMainThread())
             init_status = RETURN_CODE::MAIN_THREAD_INITIALIZATION_FAILURE;
+
+        // Création des frame buffers
+        if(init_status == RETURN_CODE::SUCCESS && !this->CreateFrameBuffers())
+            init_status = RETURN_CODE::FRAME_BUFFERS_CREATION_FAILURE;
         
         // Initialisation des resources partagées
         if(init_status == RETURN_CODE::SUCCESS && !this->InitThreadSharedResources())
@@ -2710,6 +2711,43 @@ namespace Engine
     }
 
     /**
+     * Création des frame buffers
+     */
+    bool Vulkan::CreateFrameBuffers()
+    {
+        for(uint32_t i=0; i<this->concurrent_frame_count; i++) {
+            VkImageView pAttachments[2];
+            pAttachments[0] = this->swap_chain.images[i].view;
+            //pAttachments[1] = this->depth_buffer.view;
+
+            VkFramebufferCreateInfo framebuffer_create_info = {};
+            framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebuffer_create_info.pNext = nullptr;
+            framebuffer_create_info.flags = 0;
+            framebuffer_create_info.renderPass = this->render_pass;
+            framebuffer_create_info.attachmentCount = 1;
+            framebuffer_create_info.pAttachments = pAttachments;
+            framebuffer_create_info.width = this->draw_surface.width;
+            framebuffer_create_info.height = this->draw_surface.height;
+            framebuffer_create_info.layers = 1;
+
+            VkResult result = vkCreateFramebuffer(this->device, &framebuffer_create_info, nullptr, &this->main[i].framebuffer);
+            if(result != VK_SUCCESS) {
+                #if defined(_DEBUG)
+                std::cout << "CreateFrameBuffers => vkCreateFramebuffer[" << i << "] : Failed" << std::endl;
+                #endif
+                return false;
+            }
+        }
+
+        #if defined(_DEBUG)
+        std::cout << "CreateFrameBuffers : Success" << std::endl;
+        #endif
+
+        return true;
+    }
+
+    /**
      * Affichage
      */
     void Vulkan::Draw()
@@ -2778,38 +2816,6 @@ namespace Engine
                 std::cout << "Draw => vkAcquireNextImageKHR : Failed" << std::endl;
                 #endif
                 return;
-        }
-
-        ////////////////////////////////////
-        //    Création du Frame Buffer    //   
-        ////////////////////////////////////
-        
-        if(current_rendering_resource.framebuffer != VK_NULL_HANDLE) {
-            vkDestroyFramebuffer(this->device, current_rendering_resource.framebuffer, nullptr);
-            this->main[this->current_frame_index].framebuffer = VK_NULL_HANDLE;
-        }
-
-        VkImageView pAttachments[2];
-        pAttachments[0] = this->swap_chain.images[swap_chain_image_index].view;
-        //pAttachments[1] = this->depth_buffer.view;
-
-        VkFramebufferCreateInfo framebuffer_create_info = {};
-        framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        framebuffer_create_info.pNext = nullptr;
-        framebuffer_create_info.flags = 0;
-        framebuffer_create_info.renderPass = this->render_pass;
-        framebuffer_create_info.attachmentCount = 1;
-        framebuffer_create_info.pAttachments = pAttachments;
-        framebuffer_create_info.width = this->draw_surface.width;
-        framebuffer_create_info.height = this->draw_surface.height;
-        framebuffer_create_info.layers = 1;
-
-        result = vkCreateFramebuffer(this->device, &framebuffer_create_info, nullptr, &this->main[this->current_frame_index].framebuffer);
-        if(result != VK_SUCCESS) {
-            #if defined(_DEBUG)
-            std::cout << "Draw => vkCreateFramebuffer : Failed" << std::endl;
-            #endif
-            return;
         }
 
         /////////////////////////////////

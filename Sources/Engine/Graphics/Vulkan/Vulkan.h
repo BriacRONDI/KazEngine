@@ -52,7 +52,8 @@ namespace Engine
                 SHARED_RESOURCES_INITIALIZATION_FAILURE = 19,
                 BACKGROUND_INITIALIZATION_FAILURE       = 20,
                 DESCRIPTOR_SETS_PREPARATION_FAILURE     = 21,
-                THREAD_INITIALIZATION_FAILURE           = 22
+                THREAD_INITIALIZATION_FAILURE           = 22,
+                FRAME_BUFFERS_CREATION_FAILURE          = 23
             };
 
             // Structure utilisée pour le contenu du vertex buffer
@@ -348,6 +349,7 @@ namespace Engine
             bool InitThreads();                                                                                 // Initialisation des threads
             static void ThreadJob(uint32_t thread_id);                                                          // Fonction de traitement exécutée par les threads
             void ReleaseThreads();                                                                              // Arrête les threads et libère les ressources associées
+            bool CreateFrameBuffers();                                                                          // Création des frame buffers
 
             //////////////////////
             // HELPER FUNCTIONS //
