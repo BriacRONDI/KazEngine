@@ -6,6 +6,7 @@
 
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
 #pragma comment(lib,"Version.lib")
+#define NOMINMAX
 #include <Windows.h>
 #include <string>
 

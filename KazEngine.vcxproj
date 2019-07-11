@@ -89,12 +89,13 @@
       <ConformanceMode>true</ConformanceMode>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <PreprocessorDefinitions>VK_USE_PLATFORM_WIN32_KHR;USE_SWAPCHAIN_EXTENSIONS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>D:\VulkanSDK\1.1.108.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\GitHub\assimp\include;D:\VulkanSDK\1.1.108.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalLibraryDirectories>D:\VulkanSDK\1.1.108.0\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>D:\GitHub\assimp\build\code\Debug;D:\VulkanSDK\1.1.108.0\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>assimp-vc142-mtd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -121,18 +122,20 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <PreprocessorDefinitions>VK_USE_PLATFORM_WIN32_KHR;USE_SWAPCHAIN_EXTENSIONS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>D:\VulkanSDK\1.1.108.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\GitHub\assimp\include;D:\VulkanSDK\1.1.108.0\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>D:\VulkanSDK\1.1.108.0\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>assimp-vc142-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>D:\GitHub\assimp\build\code\Release;D:\VulkanSDK\1.1.108.0\Lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Sources\Engine\Graphics\ModelLoader\ModelLoader.cpp" />
     <ClCompile Include="Sources\Engine\Graphics\Vulkan\Vulkan.cpp" />
     <ClCompile Include="Sources\Engine\Platform\Inputs\Keyboard\Keyboard.cpp" />
     <ClCompile Include="Sources\Engine\Platform\Win32\Console\Console.cpp" />
@@ -142,6 +145,7 @@
     <ClCompile Include="Sources\Main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Sources\Engine\Graphics\ModelLoader\ModelLoader.h" />
     <ClInclude Include="Sources\Engine\Graphics\Vulkan\Vulkan.h" />
     <ClInclude Include="Sources\Engine\Tools\Matrix\Maths.h" />
     <ClInclude Include="Sources\Engine\Tools\stb_image.h" />

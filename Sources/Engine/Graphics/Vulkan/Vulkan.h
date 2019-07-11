@@ -53,7 +53,8 @@ namespace Engine
                 BACKGROUND_INITIALIZATION_FAILURE       = 20,
                 DESCRIPTOR_SETS_PREPARATION_FAILURE     = 21,
                 THREAD_INITIALIZATION_FAILURE           = 22,
-                FRAME_BUFFERS_CREATION_FAILURE          = 23
+                FRAME_BUFFERS_CREATION_FAILURE          = 23,
+                DEPTH_BUFFER_CREATION_FAILURE           = 24
             };
 
             // Structure utilisée pour le contenu du vertex buffer
@@ -68,10 +69,11 @@ namespace Engine
             static Vulkan* GetInstance();                                                                                           // Récupération de l'instance du singleton
             static void DestroyInstance();                                                                                          // Libération des ressources allouées à Vulkan
             RETURN_CODE Initialize(Engine::Window* draw_window, uint32_t application_version, std::string aplication_name);         // Initialisation de Vulkan
-            uint32_t CreateTexture(std::vector<unsigned char> data, uint32_t width, uint32_t height);                               // Copie d'une texture dans la carte graphique
+            uint32_t CreateTexture(Tools::IMAGE_MAP& image);                                                                        // Copie d'une texture dans la carte graphique
             uint32_t CreateVertexBuffer(std::vector<VERTEX>& data);                                                                 // Création d'un vertex buffer
+            uint32_t CreateIndexBuffer(std::vector<uint32_t>& data);                                                                // Création d'un vertex buffer
             void Draw();                                                                                                            // Boucle d'affichage principale
-            uint32_t CreateModel(uint32_t vertex_buffer_id, uint32_t texture_id);                                                   // Création d'un model
+            uint32_t CreateModel(uint32_t vertex_buffer_id, uint32_t texture_id, uint32_t index_buffer_id);                         // Création d'un model
 
         private:
 
@@ -146,10 +148,12 @@ namespace Engine
                 VkBuffer handle;
                 VkDeviceMemory memory;
                 VkDeviceSize size;
-                uint32_t vertex_count;
+                uint32_t count;
 
-                VERTEX_BUFFER() : handle(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), size(0), vertex_count(0) {}
+                VERTEX_BUFFER() : handle(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), size(0), count(0) {}
             };
+
+            typedef struct VERTEX_BUFFER INDEX_BUFFER;
 
             struct MAIN_THREAD_RESOURCES {
                 VkFramebuffer framebuffer;
@@ -172,6 +176,15 @@ namespace Engine
                 TEXTURE() : image(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), view(VK_NULL_HANDLE), sampler(VK_NULL_HANDLE) {}
             };
 
+            struct DEPTH_BUFFER {
+                VkImage image;
+                VkDeviceMemory memory;
+                VkImageView view;
+                VkFormat format;
+
+                DEPTH_BUFFER() : image(VK_NULL_HANDLE), memory(VK_NULL_HANDLE), view(VK_NULL_HANDLE), format(VK_FORMAT_UNDEFINED) {}
+            };
+
             struct BACKGROUD_TASKS_RESOURCES {
                 VkCommandPool transfer_command_pool;
                 VkCommandPool graphics_command_pool;
@@ -188,25 +201,21 @@ namespace Engine
             struct MODEL {
                 uint32_t vertex_buffer_id;
                 uint32_t texture_id;
-            };
+                uint32_t index_buffer_id;
 
-            struct TRANSFORMATION {
-                Matrix4x4 translation;
-                Matrix4x4 rotation_x;
-                Matrix4x4 rotation_y;
-                Matrix4x4 rotation_z;
-
-                TRANSFORMATION() : translation(IDENTITY_MATRIX), rotation_x(IDENTITY_MATRIX), rotation_y(IDENTITY_MATRIX), rotation_z(IDENTITY_MATRIX) {}
+                MODEL() : vertex_buffer_id(0), texture_id(0), index_buffer_id(0) {}
             };
 
             struct ENTITY {
-                TRANSFORMATION transformation;
+                Matrix4x4 transformation;
                 uint32_t vertex_count;
                 VkBuffer vertex_buffer;
+                VkBuffer index_buffer;
+                uint32_t index_count;
                 VkDescriptorSet descriptor_set;
                 uint32_t ubo_offset;
 
-                ENTITY() : vertex_count(0), vertex_buffer(VK_NULL_HANDLE), descriptor_set(VK_NULL_HANDLE) {}
+                ENTITY() : vertex_count(0), vertex_buffer(VK_NULL_HANDLE), index_buffer(VK_NULL_HANDLE), descriptor_set(VK_NULL_HANDLE) {}
             };
 
             struct CONDITION_VARIABLE {
@@ -274,6 +283,9 @@ namespace Engine
             // Pipeline
             PIPELINE graphics_pipeline;
 
+            // Depth Buffer
+            DEPTH_BUFFER depth_buffer;
+
             // Descriptor Sets
             VkDescriptorSetLayout descriptor_set_layout;
             VkDescriptorPool descriptor_pool;
@@ -294,9 +306,13 @@ namespace Engine
             uint32_t last_texture_index;                                    // Index de la prochaine texture à allouer
             std::unordered_map<uint32_t, TEXTURE> textures;                 // Structure de stockage pour les textures créées
 
-            // Vertex
+            // Vertex Buffers
             uint32_t last_vbo_index;                                        // Index du prochain vertex buffer à allouer
             std::unordered_map<uint32_t, VERTEX_BUFFER> vertex_buffers;     // Structure de stockage pour les vertex buffers créés
+
+            // Index Buffers
+            uint32_t last_ibo_index;                                        // Index du prochain index buffer à allouer
+            std::unordered_map<uint32_t, INDEX_BUFFER> index_buffers;       // Structure de stockage pour les index buffers créés
 
             // Model
             uint32_t last_model_index;                                      // Index du prochain model à allouer
@@ -350,6 +366,7 @@ namespace Engine
             static void ThreadJob(uint32_t thread_id);                                                          // Fonction de traitement exécutée par les threads
             void ReleaseThreads();                                                                              // Arrête les threads et libère les ressources associées
             bool CreateFrameBuffers();                                                                          // Création des frame buffers
+            bool CreateDepthBuffer();                                                                           // Depth Buffer
 
             //////////////////////
             // HELPER FUNCTIONS //

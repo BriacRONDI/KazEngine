@@ -108,6 +108,12 @@ namespace Engine
             if(element.second.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, element.second.handle, nullptr);
         }
 
+        // Index Buffers
+        for(std::pair<uint32_t, INDEX_BUFFER> element : this->index_buffers) {
+            if(element.second.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, element.second.memory, nullptr);
+            if(element.second.handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, element.second.handle, nullptr);
+        }
+
         // Textures
         for(auto iterator = this->textures.begin(); iterator!=this->textures.end(); iterator++) {
             if(iterator->second.view != VK_NULL_HANDLE) vkDestroyImageView(this->device, iterator->second.view, nullptr);
@@ -115,6 +121,11 @@ namespace Engine
             if(iterator->second.sampler != VK_NULL_HANDLE) vkDestroySampler(this->device, iterator->second.sampler, nullptr);
             if(iterator->second.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, iterator->second.memory, nullptr);
         }
+
+        // Depth Buffer
+        if(this->depth_buffer.memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->depth_buffer.memory, nullptr);
+        if(this->depth_buffer.view != VK_NULL_HANDLE) vkDestroyImageView(this->device, this->depth_buffer.view, nullptr);
+        if(this->depth_buffer.image != VK_NULL_HANDLE) vkDestroyImage(this->device, this->depth_buffer.image, nullptr);
 
         // Resources de la création de textures
         this->ReleaseBackgroundResources();
@@ -195,9 +206,9 @@ namespace Engine
         this->base_projection = PerspectiveProjectionMatrix(
             4.0f/3.0f,                                                                                      // aspect_ration
             //static_cast<float>(this->draw_surface.width) / static_cast<float>(this->draw_surface.height),   
-            45.0f,                                                                                          // field_of_view
-            1.0f,                                                                                           // near_clip
-            20.0f                                                                                           // far_clip
+            60.0f,                                                                                          // field_of_view
+            0.1f,                                                                                           // near_clip
+            2000.0f                                                                                           // far_clip
         );
 
         // Valeur de retourn de la fonction
@@ -257,6 +268,18 @@ namespace Engine
         if(init_status == RETURN_CODE::SUCCESS && !this->CreateSwapChain())
             init_status = RETURN_CODE::SWAP_CHAIN_CREATION_FAILURE;
 
+        // Initialisation de la boucle principale
+        if(init_status == RETURN_CODE::SUCCESS && !this->InitMainThread())
+            init_status = RETURN_CODE::MAIN_THREAD_INITIALIZATION_FAILURE;
+
+        // Initialisation des resources d'arrière plan
+        if(init_status == RETURN_CODE::SUCCESS && !this->InitBackgroundResources())
+            init_status = RETURN_CODE::BACKGROUND_INITIALIZATION_FAILURE;
+
+        // Création du depth buffer
+        if(init_status == RETURN_CODE::SUCCESS && !this->CreateDepthBuffer())
+            init_status = RETURN_CODE::DEPTH_BUFFER_CREATION_FAILURE;
+
         // Création de la render pass
         if(init_status == RETURN_CODE::SUCCESS && !this->CreateRenderPass())
             init_status = RETURN_CODE::RENDER_PASS_CREATION_FAILURE;
@@ -269,10 +292,6 @@ namespace Engine
         if(init_status == RETURN_CODE::SUCCESS && !this->CreatePipeline())
             init_status = RETURN_CODE::GRAPHICS_PIPELINE_CREATION_FAILURE;
 
-        // Initialisation de la boucle principale
-        if(init_status == RETURN_CODE::SUCCESS && !this->InitMainThread())
-            init_status = RETURN_CODE::MAIN_THREAD_INITIALIZATION_FAILURE;
-
         // Création des frame buffers
         if(init_status == RETURN_CODE::SUCCESS && !this->CreateFrameBuffers())
             init_status = RETURN_CODE::FRAME_BUFFERS_CREATION_FAILURE;
@@ -280,10 +299,6 @@ namespace Engine
         // Initialisation des resources partagées
         if(init_status == RETURN_CODE::SUCCESS && !this->InitThreadSharedResources())
             init_status = RETURN_CODE::SHARED_RESOURCES_INITIALIZATION_FAILURE;
-
-        // Initialisation des resources d'arrière plan
-        if(init_status == RETURN_CODE::SUCCESS && !this->InitBackgroundResources())
-            init_status = RETURN_CODE::BACKGROUND_INITIALIZATION_FAILURE;
 
         // Initialisation des threads
         if(init_status == RETURN_CODE::SUCCESS && !this->InitThreads())
@@ -1104,13 +1119,13 @@ namespace Engine
         attachment[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         attachment[0].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         attachment[0].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        attachment[0].finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachment[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         attachment[0].flags = 0;
-        attachment[1].format = VK_FORMAT_D16_UNORM;
+        attachment[1].format = depth_buffer.format;
         attachment[1].samples = VK_SAMPLE_COUNT_1_BIT;
         attachment[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachment[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachment[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachment[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachment[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         attachment[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         attachment[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -1132,19 +1147,28 @@ namespace Engine
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &color_reference;
         subpass.pResolveAttachments = nullptr;
-        subpass.pDepthStencilAttachment = nullptr;
+        subpass.pDepthStencilAttachment = &depth_reference;
+        //subpass.pDepthStencilAttachment = nullptr;
         subpass.preserveAttachmentCount = 0;
         subpass.pPreserveAttachments = nullptr;
+
+        VkSubpassDependency dependency = {};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+        dependency.dstSubpass = 0;
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = 0;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
         VkRenderPassCreateInfo rp_info = {};
         rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         rp_info.pNext = nullptr;
-        rp_info.attachmentCount = 1;
+        rp_info.attachmentCount = 2;
         rp_info.pAttachments = attachment;
         rp_info.subpassCount = 1;
         rp_info.pSubpasses = &subpass;
-        rp_info.dependencyCount = 0;
-        rp_info.pDependencies = nullptr;
+        rp_info.dependencyCount = 1;
+        rp_info.pDependencies = &dependency;
 
         VkResult result = vkCreateRenderPass(this->device, &rp_info, nullptr, &this->render_pass);
         if(result != VK_SUCCESS) {
@@ -1324,7 +1348,7 @@ namespace Engine
         rs.flags = 0;
         rs.polygonMode = VK_POLYGON_MODE_FILL;
         rs.cullMode = VK_CULL_MODE_BACK_BIT;
-        rs.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        rs.frontFace = VK_FRONT_FACE_CLOCKWISE;
         rs.depthClampEnable = VK_FALSE;
         rs.rasterizerDiscardEnable = VK_FALSE;
         rs.depthBiasEnable = VK_FALSE;
@@ -1356,7 +1380,7 @@ namespace Engine
         cb.blendConstants[2] = 0.0f;
         cb.blendConstants[3] = 0.0f;
 
-        /*VkPipelineDepthStencilStateCreateInfo ds;
+        VkPipelineDepthStencilStateCreateInfo ds;
         ds.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
         ds.pNext = nullptr;
         ds.flags = 0;
@@ -1374,7 +1398,7 @@ namespace Engine
         ds.back.reference = 0;
         ds.back.depthFailOp = VK_STENCIL_OP_KEEP;
         ds.back.writeMask = 0;
-        ds.front = ds.back;*/
+        ds.front = ds.back;
 
         VkPipelineMultisampleStateCreateInfo ms;
         ms.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -1402,7 +1426,7 @@ namespace Engine
         pipeline.pMultisampleState = &ms;
         pipeline.pDynamicState = (dynamic_viewport) ? &dynamicState : nullptr;
         pipeline.pViewportState = &viewport_state_create_info;
-        pipeline.pDepthStencilState = nullptr;
+        pipeline.pDepthStencilState = &ds;
         pipeline.pStages = &shader_stage_create_infos[0];
         pipeline.stageCount = 2;
         pipeline.renderPass = this->render_pass;
@@ -1422,6 +1446,196 @@ namespace Engine
         #if defined(_DEBUG)
         std::cout << "CreatePipeline : Success" << std::endl;
         #endif
+        return true;
+    }
+
+    bool Vulkan::CreateDepthBuffer()
+    {
+        //////////////////////////////////
+        // Recherche d'un format adapté //
+        //    pour le depth buffer      //
+        //////////////////////////////////
+
+        std::vector<VkFormat> depthFormats = {
+			VK_FORMAT_D32_SFLOAT_S8_UINT,
+			VK_FORMAT_D32_SFLOAT,
+			VK_FORMAT_D24_UNORM_S8_UINT,
+			VK_FORMAT_D16_UNORM_S8_UINT,
+			VK_FORMAT_D16_UNORM
+		};
+
+		for(auto& format : depthFormats)
+		{
+			VkFormatProperties formatProps;
+			vkGetPhysicalDeviceFormatProperties(this->physical_device.handle, format, &formatProps);
+			if(formatProps.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) this->depth_buffer.format = format;
+		}
+
+        if(this->depth_buffer.format == VK_FORMAT_UNDEFINED) {
+            #if defined(_DEBUG)
+            std::cout << "CreateDepthBuffer => Format : VK_FORMAT_UNDEFINED" << std::endl;
+            #endif
+            return false;
+        }
+
+        /////////////////////////
+        // Création de l'image //
+        /////////////////////////
+
+        VkImageCreateInfo image_info = {};
+        image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        image_info.pNext = NULL;
+        image_info.imageType = VK_IMAGE_TYPE_2D;
+        image_info.format = this->depth_buffer.format;
+        image_info.extent.width = this->draw_surface.width;
+        image_info.extent.height = this->draw_surface.height;
+        image_info.extent.depth = 1;
+        image_info.mipLevels = 1;
+        image_info.arrayLayers = 1;
+        image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+        image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        image_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        image_info.queueFamilyIndexCount = 0;
+        image_info.pQueueFamilyIndices = NULL;
+        image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        image_info.flags = 0;
+        image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+
+        VkResult result = vkCreateImage(this->device, &image_info, NULL, &depth_buffer.image);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateDepthBuffer => vkCreateImage : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        ///////////////////////////////////////////////////////
+        //      Réservation d'un segment de mémoire          //
+        // dans la carte graphique pour y placer la vue      //
+        ///////////////////////////////////////////////////////
+
+        VkMemoryRequirements image_memory_requirements;
+        vkGetImageMemoryRequirements(this->device, depth_buffer.image, &image_memory_requirements);
+
+        VkMemoryAllocateInfo mem_alloc = {};
+        mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        mem_alloc.pNext = nullptr;
+        mem_alloc.allocationSize = image_memory_requirements.size;
+        
+        if(!this->MemoryTypeFromProperties(image_memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, mem_alloc.memoryTypeIndex)) {
+            #if defined(_DEBUG)
+            std::cout << "CreateDepthBuffer => MemoryType VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : Not found" << std::endl;
+            #endif
+            return false;
+        }
+
+        result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &depth_buffer.memory);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateDepthBuffer => vkAllocateMemory : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        result = vkBindImageMemory(this->device, depth_buffer.image, depth_buffer.memory, 0);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateDepthBuffer => vkBindImageMemory : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        //////////////////////////////
+        // Création de l'image view //
+        //////////////////////////////
+
+        VkImageViewCreateInfo view_info = {};
+        view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        view_info.pNext = nullptr;
+        view_info.image = VK_NULL_HANDLE;
+        view_info.format = this->depth_buffer.format;
+        view_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        view_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        view_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        view_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        view_info.subresourceRange.baseMipLevel = 0;
+        view_info.subresourceRange.levelCount = 1;
+        view_info.subresourceRange.baseArrayLayer = 0;
+        view_info.subresourceRange.layerCount = 1;
+        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view_info.flags = 0;
+        view_info.image = this->depth_buffer.image;
+
+        result = vkCreateImageView(this->device, &view_info, nullptr, &depth_buffer.view);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateDepthBuffer => vkCreateImageView : Failed" << std::endl;
+            #endif
+
+            return false;
+        }
+
+        ///////////////////////////////////////////////////
+        //      On change le layout de notre image       //
+        // pour la préparer aux opérations du depth test //
+        ///////////////////////////////////////////////////
+
+        // On évite que plusieurs opérations aient lieu en même temps en utilisant une fence
+        result = vkWaitForFences(this->device, 1, &this->background.graphics_command_buffer.fence, VK_FALSE, 1000000000);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateDepthBuffer => vkWaitForFences : Timeout" << std::endl;
+            #endif
+            return false;
+        }
+        vkResetFences(this->device, 1, &this->background.graphics_command_buffer.fence);
+
+        VkCommandBufferBeginInfo command_buffer_begin_info = {};
+        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        command_buffer_begin_info.pNext = nullptr; 
+        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        command_buffer_begin_info.pInheritanceInfo = nullptr;
+
+        vkBeginCommandBuffer(this->background.graphics_command_buffer.handle, &command_buffer_begin_info);
+
+        VkImageMemoryBarrier image_memory_barrier = {};
+        image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        image_memory_barrier.pNext = nullptr;
+        image_memory_barrier.srcAccessMask = 0;
+        image_memory_barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+        image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        image_memory_barrier.image = this->depth_buffer.image;
+        image_memory_barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        image_memory_barrier.subresourceRange.baseMipLevel = 0;
+        image_memory_barrier.subresourceRange.levelCount = 1;
+        image_memory_barrier.subresourceRange.baseArrayLayer = 0;
+        image_memory_barrier.subresourceRange.layerCount = 1;
+
+        vkCmdPipelineBarrier(this->background.graphics_command_buffer.handle, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT, 0, 0, nullptr, 0, nullptr, 1, &image_memory_barrier);
+
+        vkEndCommandBuffer(this->background.graphics_command_buffer.handle);
+
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.pNext = nullptr;
+        submit_info.waitSemaphoreCount = 0;
+        submit_info.pWaitSemaphores = nullptr;
+        submit_info.pWaitDstStageMask = nullptr;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &this->background.graphics_command_buffer.handle;
+
+        result = vkQueueSubmit(this->background.graphics_queue.handle, 1, &submit_info, this->background.graphics_command_buffer.fence);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateTexture => vkQueueSubmit : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
         return true;
     }
 
@@ -1746,7 +1960,7 @@ namespace Engine
     bool Vulkan::InitThreadSharedResources()
     {
         // Taille des uniform et staging buffers
-        uint32_t count = 2;
+        uint32_t count = 50;
         VkDeviceSize buffer_size = this->ubo_alignement * (count - 1) + sizeof(Matrix4x4);
 
         // On veut autant de ressources qu'il y a d'images dans la Swap Chain
@@ -1883,7 +2097,7 @@ namespace Engine
         return this->CreateSwapChain();
     }
 
-    uint32_t Vulkan::CreateTexture(std::vector<unsigned char> data, uint32_t width, uint32_t height)
+    uint32_t Vulkan::CreateTexture(Tools::IMAGE_MAP& image)
     {
         TEXTURE texture = {};
 
@@ -1897,8 +2111,8 @@ namespace Engine
         image_info.flags = 0;
         image_info.imageType = VK_IMAGE_TYPE_2D;
         image_info.format = VK_FORMAT_R8G8B8A8_UNORM;
-        image_info.extent.width = width;
-        image_info.extent.height = height;
+        image_info.extent.width = image.width;
+        image_info.extent.height = image.height;
         image_info.extent.depth = 1;
         image_info.mipLevels = 1;
         image_info.arrayLayers = 1;
@@ -1909,6 +2123,7 @@ namespace Engine
         image_info.queueFamilyIndexCount = 0;
         image_info.pQueueFamilyIndices = nullptr;
         image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
         
         VkResult result = vkCreateImage(this->device, &image_info, nullptr, &texture.image);
         if(result != VK_SUCCESS) {
@@ -2032,8 +2247,8 @@ namespace Engine
         //    le staging buffer     //
         //////////////////////////////
 
-        size_t flush_size = static_cast<size_t>(data.size() * sizeof(data[0]));
-        std::memcpy(this->background.staging.pointer, &data[0], flush_size);
+        size_t flush_size = static_cast<size_t>(image.data.size() * sizeof(image.data[0]));
+        std::memcpy(this->background.staging.pointer, &image.data[0], flush_size);
 
         unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
         flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * (static_cast<uint64_t>(multiple) + 1);
@@ -2090,8 +2305,8 @@ namespace Engine
         buffer_image_copy_info.imageOffset.x = 0;
         buffer_image_copy_info.imageOffset.y = 0;
         buffer_image_copy_info.imageOffset.z = 0;
-        buffer_image_copy_info.imageExtent.width = width;
-        buffer_image_copy_info.imageExtent.height = height;
+        buffer_image_copy_info.imageExtent.width = image.width;
+        buffer_image_copy_info.imageExtent.height = image.height;
         buffer_image_copy_info.imageExtent.depth = 1;
 
         vkCmdCopyBufferToImage(this->background.transfer_command_buffer.handle, this->background.staging.handle, texture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_image_copy_info);
@@ -2280,7 +2495,7 @@ namespace Engine
         // Valeur de retour
         VERTEX_BUFFER vertex_buffer;
         vertex_buffer.size = sizeof(VERTEX) * data.size();
-        vertex_buffer.vertex_count = static_cast<uint32_t>(data.size());
+        vertex_buffer.count = static_cast<uint32_t>(data.size());
 
         ////////////////////////////////
         //     Création du buffer     //
@@ -2337,10 +2552,6 @@ namespace Engine
             #endif
             return UINT32_MAX;
         }
-
-        #if defined(_DEBUG)
-        std::cout << "CreateVertexBuffer : Success" << std::endl;
-        #endif
 
         // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
         result = vkWaitForFences(this->device, 1, &this->background.transfer_command_buffer.fence, VK_FALSE, 1000000000);
@@ -2427,14 +2638,166 @@ namespace Engine
             #endif
             return UINT32_MAX;
         }
-
-        #if defined(_DEBUG)
-        std::cout << "CreateVertexBuffer : Success" << std::endl;
-        #endif
         
         uint32_t buffer_index = this->last_vbo_index;
         this->vertex_buffers[buffer_index] = vertex_buffer;
         this->last_vbo_index++;
+
+        return buffer_index;
+    }
+
+    uint32_t Vulkan::CreateIndexBuffer(std::vector<uint32_t>& data)
+    {
+        // Valeur de retour
+        INDEX_BUFFER index_buffer;
+        index_buffer.size = sizeof(uint32_t) * data.size();
+        index_buffer.count = static_cast<uint32_t>(data.size());
+
+        ////////////////////////////////
+        //     Création du buffer     //
+        ////////////////////////////////
+
+        VkBufferCreateInfo buffer_create_info = {};
+        buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buffer_create_info.pNext = nullptr;
+        buffer_create_info.flags = 0;
+        buffer_create_info.size = index_buffer.size;
+        buffer_create_info.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        buffer_create_info.queueFamilyIndexCount = 0;
+        buffer_create_info.pQueueFamilyIndices = nullptr;
+
+        VkResult result = vkCreateBuffer(this->device, &buffer_create_info, nullptr, &index_buffer.handle);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateIndexBuffer => vkCreateBuffer : Failed" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+
+        VkMemoryRequirements mem_reqs;
+        vkGetBufferMemoryRequirements(this->device, index_buffer.handle, &mem_reqs);
+
+        VkMemoryAllocateInfo mem_alloc = {};
+        mem_alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        mem_alloc.pNext = nullptr;
+        mem_alloc.allocationSize = 0;
+        mem_alloc.memoryTypeIndex = 0;
+        mem_alloc.allocationSize = mem_reqs.size;
+        
+        if(!this->MemoryTypeFromProperties(mem_reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, mem_alloc.memoryTypeIndex)) {
+            #if defined(_DEBUG)
+            std::cout << "CreateIndexBuffer => MemoryType VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT : Not found" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+
+        // Allocation de la mémoire pour le vertex buffer
+        result = vkAllocateMemory(this->device, &mem_alloc, nullptr, &index_buffer.memory);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateIndexBuffer => vkAllocateMemory : Failed" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+
+        result = vkBindBufferMemory(this->device, index_buffer.handle, index_buffer.memory, 0);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateIndexBuffer => vkBindBufferMemory : Failed" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+
+        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
+        result = vkWaitForFences(this->device, 1, &this->background.transfer_command_buffer.fence, VK_FALSE, 1000000000);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateVertexBuffer => vkWaitForFences : Timeout" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+        vkResetFences(this->device, 1, &this->background.transfer_command_buffer.fence);
+
+        ////////////////////////////////
+        //   Copie des données vers   //
+        //      le staging buffer     //
+        ////////////////////////////////
+
+        size_t flush_size = static_cast<size_t>(index_buffer.size);
+        unsigned int multiple = static_cast<unsigned int>(flush_size / this->physical_device.properties.limits.nonCoherentAtomSize);
+        flush_size = this->physical_device.properties.limits.nonCoherentAtomSize * (static_cast<uint64_t>(multiple) + 1);
+
+        std::memcpy(this->background.staging.pointer, &data[0], index_buffer.size);
+
+        // Flush staging buffer
+        VkMappedMemoryRange flush_range = {};
+        flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        flush_range.pNext = nullptr;
+        flush_range.memory = this->background.staging.memory;
+        flush_range.offset = 0;
+        flush_range.size = flush_size;
+        vkFlushMappedMemoryRanges(this->device, 1, &flush_range);
+
+        ///////////////////////////////////////////
+        //       Envoi des données vers          //
+        //   la mémoire de la carte graphique    //
+        ///////////////////////////////////////////
+
+        // Préparation de la copie de l'image depuis le staging buffer vers un vertex buffer
+        VkCommandBufferBeginInfo command_buffer_begin_info = {};
+        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        command_buffer_begin_info.pNext = nullptr; 
+        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        command_buffer_begin_info.pInheritanceInfo = nullptr;
+
+        vkBeginCommandBuffer(this->background.transfer_command_buffer.handle, &command_buffer_begin_info);
+
+        VkBufferCopy buffer_copy_info = {};
+        buffer_copy_info.srcOffset = 0;
+        buffer_copy_info.dstOffset = 0;
+        buffer_copy_info.size = index_buffer.size;
+
+        vkCmdCopyBuffer(this->background.transfer_command_buffer.handle, this->background.staging.handle, index_buffer.handle, 1, &buffer_copy_info);
+
+        VkBufferMemoryBarrier buffer_memory_barrier = {};
+        buffer_memory_barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+        buffer_memory_barrier.pNext = nullptr;
+        buffer_memory_barrier.srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT;
+        buffer_memory_barrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+        buffer_memory_barrier.srcQueueFamilyIndex = this->background.transfer_queue.index;
+        buffer_memory_barrier.dstQueueFamilyIndex = this->background.graphics_queue.index;
+        buffer_memory_barrier.buffer = index_buffer.handle;
+        buffer_memory_barrier.offset = 0;
+        buffer_memory_barrier.size = VK_WHOLE_SIZE;
+
+        vkCmdPipelineBarrier(this->background.transfer_command_buffer.handle, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 0, nullptr, 1, &buffer_memory_barrier, 0, nullptr);
+        
+        vkEndCommandBuffer(this->background.transfer_command_buffer.handle);
+
+        // Exécution de la commande de copie
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.pNext = nullptr;
+        submit_info.waitSemaphoreCount = 0;
+        submit_info.pWaitSemaphores = nullptr;
+        submit_info.pWaitDstStageMask = nullptr;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &this->background.transfer_command_buffer.handle;
+        submit_info.signalSemaphoreCount = 0;
+        submit_info.pSignalSemaphores = nullptr;
+
+        result = vkQueueSubmit(this->background.transfer_queue.handle, 1, &submit_info, this->background.transfer_command_buffer.fence);
+        if(result != VK_SUCCESS) {
+            #if defined(_DEBUG)
+            std::cout << "CreateIndexBuffer => vkQueueSubmit : Failed" << std::endl;
+            #endif
+            return UINT32_MAX;
+        }
+
+        uint32_t buffer_index = this->last_ibo_index;
+        this->index_buffers[buffer_index] = index_buffer;
+        this->last_ibo_index++;
 
         return buffer_index;
     }
@@ -2503,13 +2866,14 @@ namespace Engine
     /**
      * Création d'un Mesh
      */
-    uint32_t Vulkan::CreateModel(uint32_t vertex_buffer_id, uint32_t texture_id)
+    uint32_t Vulkan::CreateModel(uint32_t vertex_buffer_id, uint32_t texture_id, uint32_t index_buffer_id)
     {
         uint32_t model_index = this->last_model_index;
 
         MODEL model = {};
         model.vertex_buffer_id = vertex_buffer_id;
         model.texture_id = texture_id;
+        model.index_buffer_id = index_buffer_id;
 
         this->models[model_index] = model;
         this->last_model_index++;
@@ -2518,7 +2882,9 @@ namespace Engine
         for(uint32_t i=0; i<this->concurrent_frame_count; i++) {
             ENTITY entity;
             entity.vertex_buffer = this->vertex_buffers[vertex_buffer_id].handle;
-            entity.vertex_count = this->vertex_buffers[vertex_buffer_id].vertex_count;
+            entity.vertex_count = this->vertex_buffers[vertex_buffer_id].count;
+            entity.index_buffer = this->index_buffers[index_buffer_id].handle;
+            entity.index_count = this->index_buffers[index_buffer_id].count;
             entity.descriptor_set = this->textures[texture_id].descriptors[i];
             entity.ubo_offset = model_index * this->ubo_alignement;
             this->shared[i].entities.push_back(entity);
@@ -2535,26 +2901,6 @@ namespace Engine
         //////////////////////////////////////
         //   Transformations géométriques   //
         //////////////////////////////////////
-
-        /*static float angle_y = 0;
-        static float angle_x = 0;
-
-        angle_y += 1.0f;
-        angle_x += 0.3f;
-
-        this->shared[frame_index].entities[0].transformation.rotation_x = RotationMatrix(angle_x, {1.0f, 0.0f, 0.0f});
-        this->shared[frame_index].entities[0].transformation.rotation_y = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
-        this->shared[frame_index].entities[0].transformation.translation = TranslationMatrix(1.8f, 0.0f, -7.0f);
-
-        this->shared[frame_index].entities[1].transformation.rotation_x = RotationMatrix(angle_x, {-1.0f, 0.0f, 0.0f});
-        this->shared[frame_index].entities[1].transformation.rotation_y = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
-        this->shared[frame_index].entities[1].transformation.translation = TranslationMatrix(-1.8f, 0.0f, -7.0f);
-        
-        for(auto entity : this->shared[frame_index].entities) {
-            Matrix4x4 transformation = this->base_projection * entity.transformation.translation * entity.transformation.rotation_x * entity.transformation.rotation_y * entity.transformation.rotation_z;
-            std::memcpy(reinterpret_cast<char*>(this->shared[frame_index].staging.pointer) + entity.ubo_offset, &transformation, sizeof(Matrix4x4));
-        }*/
-
 
         // On récupère le commande buffer à utiliser pour les opérations de transfert
         COMMAND_BUFFER& transfer = (this->transfer_queue.index == this->graphics_queue.index) ? this->main[frame_index].graphics_command_buffer : this->main[frame_index].transfer_command_buffer;
@@ -2716,16 +3062,17 @@ namespace Engine
     bool Vulkan::CreateFrameBuffers()
     {
         for(uint32_t i=0; i<this->concurrent_frame_count; i++) {
+
             VkImageView pAttachments[2];
             pAttachments[0] = this->swap_chain.images[i].view;
-            //pAttachments[1] = this->depth_buffer.view;
+            pAttachments[1] = this->depth_buffer.view;
 
             VkFramebufferCreateInfo framebuffer_create_info = {};
             framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             framebuffer_create_info.pNext = nullptr;
             framebuffer_create_info.flags = 0;
             framebuffer_create_info.renderPass = this->render_pass;
-            framebuffer_create_info.attachmentCount = 1;
+            framebuffer_create_info.attachmentCount = 2;
             framebuffer_create_info.pAttachments = pAttachments;
             framebuffer_create_info.width = this->draw_surface.width;
             framebuffer_create_info.height = this->draw_surface.height;
@@ -2862,9 +3209,9 @@ namespace Engine
 
         vkCmdPipelineBarrier(command_buffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier_from_present_to_draw);
 
-        VkClearValue clear_value[2];
+        std::array<VkClearValue, 2> clear_value = {};
         clear_value[0].color = { 0.1f, 0.2f, 0.3f, 0.0f };
-        clear_value[1].color = { 0.0f, 0.0f, 0.0f, 0.0f };
+        clear_value[1].depthStencil = { 1.0f, 0 };
 
         VkRenderPassBeginInfo render_pass_begin_info = {};
         render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -2875,8 +3222,8 @@ namespace Engine
         render_pass_begin_info.renderArea.offset.y = 0;
         render_pass_begin_info.renderArea.extent.width = this->draw_surface.width;
         render_pass_begin_info.renderArea.extent.height = this->draw_surface.height;
-        render_pass_begin_info.clearValueCount = 2;
-        render_pass_begin_info.pClearValues = clear_value;
+        render_pass_begin_info.clearValueCount = static_cast<uint32_t>(clear_value.size());
+        render_pass_begin_info.pClearValues = clear_value.data();
 
         // On prépare les threads pour le travail
         std::unique_lock<std::mutex> sleep_lock(this->thread_sleep.mutex);
@@ -2887,17 +3234,33 @@ namespace Engine
 
         static float angle_y = 0;
         static float angle_x = 0;
+        static float translator = 0;
 
         angle_y += 1.0f;
-        angle_x += 0.3f;
+        angle_x += 0.01f;
 
-        this->shared[this->current_frame_index].entities[0].transformation.rotation_x = RotationMatrix(angle_x, {1.0f, 0.0f, 0.0f});
-        this->shared[this->current_frame_index].entities[0].transformation.rotation_y = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
-        this->shared[this->current_frame_index].entities[0].transformation.translation = TranslationMatrix(1.8f, 0.0f, -7.0f);
+        //this->shared[this->current_frame_index].entities[0].transformation = TranslationMatrix(-0.25f, -0.25f, -3.0f) * ScalingMatrix(1.0f/10000.0f, 1.0f/10000.0f, 1.0f/10000.0f);
+        //this->shared[this->current_frame_index].entities[1].transformation = TranslationMatrix(0.25f, 0.25f, -3.0f - cos(angle_x)) * ScalingMatrix(1.0f/10000.0f, 1.0f/10000.0f, 1.0f/10000.0f);
 
-        this->shared[this->current_frame_index].entities[1].transformation.rotation_x = RotationMatrix(angle_x, {-1.0f, 0.0f, 0.0f});
+        //this->shared[this->current_frame_index].entities[0].transformation.rotation_x = RotationMatrix(angle_x, {1.0f, 0.0f, 0.0f});
+        //this->shared[this->current_frame_index].entities[0].transformation.rotation_y = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
+        //this->shared[this->current_frame_index].entities[0].transformation.translation = TranslationMatrix(1.8f, 0.0f, -7.0f);
+
+
+        //this->shared[this->current_frame_index].entities[0].transformation = TranslationMatrix(0.0f, 1.8f, -5.0f) * RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f}) * RotationMatrix(90, {1.0f, 0.0f, 0.0f}) * RotationMatrix(180, {0.0f, 1.0f, 0.0f}) * ScalingMatrix(1.0f/1000.0f, 1.0f/1000.0f, 1.0f/1000.0f);
+        //this->shared[this->current_frame_index].entities[0].transformation = TranslationMatrix(0.0f, 1.5f, -5.0f) * RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f}) * RotationMatrix(90, {1.0f, 0.0f, 0.0f}) * RotationMatrix(180, {0.0f, 1.0f, 0.0f});
+
+        // Transformations
+        for(uint32_t i=0; i<this->shared[this->current_frame_index].entities.size(); i++) {
+            this->shared[this->current_frame_index].entities[i].transformation = TranslationMatrix(0.0f, 1.5f, -3.5f) * RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f}) * RotationMatrix(90, {1.0f, 0.0f, 0.0f});
+            Matrix4x4 transformation = this->base_projection * this->shared[this->current_frame_index].entities[i].transformation;
+            std::memcpy(reinterpret_cast<char*>(this->shared[this->current_frame_index].staging.pointer) + this->shared[this->current_frame_index].entities[i].ubo_offset, &transformation, sizeof(Matrix4x4));
+        }
+
+
+        /*this->shared[this->current_frame_index].entities[1].transformation.rotation_x = RotationMatrix(angle_x, {-1.0f, 0.0f, 0.0f});
         this->shared[this->current_frame_index].entities[1].transformation.rotation_y = RotationMatrix(angle_y, {0.0f, 1.0f, 0.0f});
-        this->shared[this->current_frame_index].entities[1].transformation.translation = TranslationMatrix(-1.8f, 0.0f, -7.0f);
+        this->shared[this->current_frame_index].entities[1].transformation.translation = TranslationMatrix(-1.8f, 0.0f, -7.0f);*/
 
         // On déclenche le travail des threads
         std::unique_lock<std::mutex> frame_ready_lock(this->frame_ready.mutex);
@@ -3099,15 +3462,12 @@ namespace Engine
                     thread->graphics_command_buffer[frameid].opened = true;
                 }
 
-                // Transformations
-                Matrix4x4 transformation = self->base_projection * entity.transformation.translation * entity.transformation.rotation_x * entity.transformation.rotation_y * entity.transformation.rotation_z;
-                std::memcpy(reinterpret_cast<char*>(self->shared[frameid].staging.pointer) + entity.ubo_offset, &transformation, sizeof(Matrix4x4));
-
                 // Affichage
                 VkDeviceSize offset = 0;
                 vkCmdBindVertexBuffers(command_buffer.handle, 0, 1, &entity.vertex_buffer, &offset);
+                vkCmdBindIndexBuffer(command_buffer.handle, entity.index_buffer, 0, VK_INDEX_TYPE_UINT32);
                 vkCmdBindDescriptorSets(command_buffer.handle, VK_PIPELINE_BIND_POINT_GRAPHICS, self->graphics_pipeline.layout, 0, 1, &entity.descriptor_set, 1, &entity.ubo_offset);
-                vkCmdDraw(command_buffer.handle, entity.vertex_count, 1, 0, 0);
+                vkCmdDrawIndexed(command_buffer.handle, entity.index_count, 1, 0, 0, 0);
 
                 // Le travail est terminé, on notifie la boucle principale
                 std::unique_lock<std::mutex> frame_ready_lock(self->frame_ready.mutex);

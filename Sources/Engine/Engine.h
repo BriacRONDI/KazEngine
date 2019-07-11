@@ -2,3 +2,4 @@
 
 #include "Platform\Common\Window\Window.h"
 #include "Graphics\Vulkan\Vulkan.h"
+#include "Graphics\ModelLoader\ModelLoader.h"

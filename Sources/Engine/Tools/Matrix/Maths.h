@@ -8,6 +8,7 @@ namespace Engine
 {
     using Matrix4x4 = std::array<float, 16>;
     using Matrix1x4 = std::array<float, 4>;
+    using Vector2 = std::array<float, 3>;
     using Vector3 = std::array<float, 3>;
     using Vector4 = std::array<float, 4>;
     using TexCood = std::array<float, 2>;
@@ -30,6 +31,7 @@ namespace Engine
 
     Matrix4x4 TranslationMatrix(float x, float y, float z);
     Matrix4x4 RotationMatrix(float angle, Vector3 const & axis, float normalize_axis = false);
+    Matrix4x4 ScalingMatrix(float x, float y, float z);
     Matrix4x4 operator*(Matrix4x4 const & left, Matrix4x4 const & right);
     Vector3 Normalize(Vector3 const & vector);
 

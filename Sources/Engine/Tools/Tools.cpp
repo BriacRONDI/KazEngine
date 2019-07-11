@@ -1,5 +1,10 @@
 #include "Tools.h"
 
+#if !defined(STBI_INCLUDE_STB_IMAGE_H)
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#endif
+
 namespace Engine
 {
     namespace Tools
@@ -28,6 +33,18 @@ namespace Engine
             file.close();
 
             return result;
+        }
+
+        IMAGE_MAP LoadImageFile(std::string filename)
+        {
+            IMAGE_MAP image = {};
+            stbi_uc* stbi_data = stbi_load(filename.c_str(), reinterpret_cast<int*>(&image.width), reinterpret_cast<int*>(&image.height), reinterpret_cast<int*>(&image.format), STBI_rgb_alpha);
+            if(stbi_data != nullptr) {
+                image.data.resize(image.width * image.height * STBI_rgb_alpha);
+                std::memcpy(image.data.data(), stbi_data, image.width * image.height * STBI_rgb_alpha);
+                stbi_image_free(stbi_data);
+            }
+            return image;
         }
     }
 }

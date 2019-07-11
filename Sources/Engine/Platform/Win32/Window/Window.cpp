@@ -66,7 +66,7 @@ namespace Engine
             //Style de la fenête (avec ou sans bords, taille fixe ou non etc...)
             dwExStyle = WS_EX_APPWINDOW | WS_EX_WINDOWEDGE;
             dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-            dwStyle = WS_OVERLAPPEDWINDOW;
+            //dwStyle = WS_OVERLAPPEDWINDOW;
 
             // La fenêtre est en mode fenêtré
             this->WindowState = WINDOW_STATE_WINDOWED;

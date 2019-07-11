@@ -36,6 +36,9 @@
     <ClCompile Include="Sources\Engine\Graphics\Vulkan\Vulkan.cpp">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
+    <ClCompile Include="Sources\Engine\Graphics\ModelLoader\ModelLoader.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Sources\Engine\Platform\Common\Window\EWindowState.h">
@@ -75,6 +78,9 @@
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
     <ClInclude Include="Sources\Engine\Graphics\Vulkan\Vulkan.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Engine\Graphics\ModelLoader\ModelLoader.h">
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
   </ItemGroup>
