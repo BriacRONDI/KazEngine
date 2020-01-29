@@ -1,0 +1,10 @@
+x64/
+ModelConverter/x64/
+ModelConverter/x64/
+ModelConverter/.vs/
+KazEngine/x64/
+.vs/
+*.exe
+*.dll
+*.log
+*.spv
