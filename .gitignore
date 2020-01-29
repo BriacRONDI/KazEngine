@@ -8,3 +8,5 @@ KazEngine/x64/
 *.dll
 *.log
 *.spv
+!zlib.dll
+!zlibd.dll
