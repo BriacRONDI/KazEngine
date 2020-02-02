@@ -5,7 +5,6 @@
 #define MAX_BONE_PER_VERTEX		4
 #define UINT32_MAX				4294967295
 
-
 layout (location = 0) in vec3  inPos;
 layout (location = 1) in vec3  inNormal;
 layout (location = 2) in vec2  inUV;
@@ -21,8 +20,7 @@ layout (set=0, binding=0) uniform Camera
 layout (set=0, binding=1) uniform Entity
 {
 	mat4 model;
-	uint frame_id;
-	// uint bone_id;
+	// uint frame_id;
 } entity;
 
 layout (set=2, binding=0) uniform Skeleton
@@ -40,11 +38,14 @@ layout (location = 0) out vec3 outNormal;
 layout (location = 1) out vec2 outUV;
 layout (location = 2) out vec3 outViewVec;
 layout (location = 3) out vec3 outLightVec;
+layout (location = 4) out vec4 outBoneWeights;
+layout (location = 5) out ivec4 outBoneIDs;
+layout (location = 6) out vec3 outPos;
 
-out gl_PerVertex 
+/*out gl_PerVertex 
 {
 	vec4 gl_Position;   
-};
+};*/
 
 vec3 MatrixMultT(mat4 matrix, vec3 vertex)
 {
@@ -61,10 +62,13 @@ void main()
 	mat4 modelView = camera.view * entity.model;
 	bool has_bone = false;
 	float total_weight;
-	
+
 	outUV = inUV;
 	outNormal = mat3(modelView) * inNormal;
-	
+	outBoneWeights = inBoneWeights;
+	outBoneIDs = inBoneIDs;
+	outPos = inPos;
+
 	/*if(entity.bone_id != UINT32_MAX) {
 	
 		has_bone = true;
@@ -96,10 +100,10 @@ void main()
 		vec3 transformed_vertex = MatrixMultT(boneTransform, inPos) / total_weight;
 		
 		vec4 pos = modelView * vec4(transformed_vertex, 1.0);
-		outLightVec = vec3(0); //vec3(1.5f, 1.5f, 1.5f) - pos.xyz;
-		outViewVec = vec3(0); //-pos.xyz;
+		outLightVec = vec3(1.5f, 1.5f, 1.5f) - pos.xyz;
+		outViewVec = -pos.xyz;
 		
-		gl_Position = camera.projection * modelView * vec4(transformed_vertex, 1.0);
+		gl_Position = camera.projection * pos;
 		
 	}
 }

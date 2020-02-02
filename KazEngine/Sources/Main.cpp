@@ -43,6 +43,18 @@ int main(int argc, char** argv)
     Engine::Core engine;
     engine.Initialize();
 
+    engine.model_manager.LoadFile("./Assets/base_cube.kea");
+    std::shared_ptr<Engine::DefaultColorEntity> light(new Engine::DefaultColorEntity);
+    light->AttachMesh(engine.model_manager.models["SimplestCube"]);
+    light->default_color = {1.0f, 1.0f, 1.0f};
+    engine.AddEntity(light);
+
+    /*engine.model_manager.LoadFile("./Assets/base_sphere.kea");
+    std::shared_ptr<Engine::DefaultColorEntity> sphere(new Engine::DefaultColorEntity);
+    sphere->AttachMesh(engine.model_manager.models["Sphere"]);
+    sphere->default_color = {0.0f, 1.0f, 0.0f};
+    engine.AddEntity(sphere);*/
+
     engine.model_manager.LoadFile("./Assets/chevalier.kea");
     std::shared_ptr<Engine::DefaultColorEntity> chevalier(new Engine::DefaultColorEntity);
     chevalier->AttachMesh(engine.model_manager.models["18489_Knight_V1_"]);
@@ -52,19 +64,19 @@ int main(int argc, char** argv)
     engine.model_manager.LoadFile("./Assets/multi_textured_cube.kea");
     std::shared_ptr<Engine::Entity> multi_textured_cube(new Engine::Entity);
     multi_textured_cube->AttachMesh(engine.model_manager.models["Cube"]);
-    engine.AddEntity(multi_textured_cube);
+    //engine.AddEntity(multi_textured_cube);
 
     engine.model_manager.LoadFile("./Assets/mono_textured_cube.kea");
     std::shared_ptr<Engine::Entity> mono_textured_cube(new Engine::Entity);
     mono_textured_cube->AttachMesh(engine.model_manager.models["MT_Cube"]);
-    engine.AddEntity(mono_textured_cube);
+    //engine.AddEntity(mono_textured_cube);
 
     engine.model_manager.LoadFile("./Assets/multi_material_cube.kea");
     std::shared_ptr<Engine::Entity> multi_material_cube(new Engine::Entity);
     multi_material_cube->AttachMesh(engine.model_manager.models["MM_Cube"]);
-    engine.AddEntity(multi_material_cube);
+    //engine.AddEntity(multi_material_cube);
 
-    engine.model_manager.LoadFile("./Assets/hellscream.kea");
+    /*engine.model_manager.LoadFile("./Assets/hellscream.kea");
     std::shared_ptr<Engine::SkeletonEntity> hellscream(new Engine::SkeletonEntity);
     hellscream->AttachMesh(engine.model_manager.models["shackle"]);
     hellscream->AttachMesh(engine.model_manager.models["eyes"]);
@@ -82,7 +94,7 @@ int main(int argc, char** argv)
     hellscream->AttachMesh(engine.model_manager.models["rope"]);
     hellscream->AttachMesh(engine.model_manager.models["body"]);
 
-    engine.AddEntity(hellscream);
+    engine.AddEntity(hellscream);*/
 
     engine.camera.SetPosition({0.0f, 3.5f, -7.5f});
     engine.camera.Rotate({0.0f, 30.0f, 0.0f});
@@ -120,11 +132,21 @@ int main(int argc, char** argv)
         rotation = Engine::Matrix4x4::RotationMatrix(angle, {0.0f, -1.0f, 0.0f});
         mono_textured_cube->matrix = translation * rotation;
 
+        
+        light->matrix = Engine::Matrix4x4::TranslationMatrix({-1.0f, -2.0f, 0.0f}) * Engine::Matrix4x4::ScalingMatrix({0.1f, 0.1f, 0.1f});
         translation = Engine::Matrix4x4::TranslationMatrix({1.5f, 1.0f, 0.0f});
+        translation = Engine::Matrix4x4::TranslationMatrix({0.0f, 0.0f, 0.0f});
         rotation = Engine::Matrix4x4::RotationMatrix(-90.0f, {1.0f, 0.0f, 0.0f});
         rotation = rotation * Engine::Matrix4x4::RotationMatrix(angle + 180.0f, {0.0f, 0.0f, 1.0f});
         Engine::Matrix4x4 scale = Engine::Matrix4x4::ScalingMatrix({0.18f, 0.18f, 0.18f});
         chevalier->matrix = translation * rotation * scale;
+
+        // light->matrix = Engine::Matrix4x4::TranslationMatrix({1.0f, 3.0f, 0.0f}) * Engine::Matrix4x4::ScalingMatrix({0.1f, 0.1f, 0.1f});
+        // sphere->matrix = Engine::Matrix4x4::TranslationMatrix({1.0f, 2.0f, 1.0f});
+        
+        // light->matrix = Engine::Matrix4x4::TranslationMatrix({0.0f, -3.5f, 15.0f}) * Engine::Matrix4x4::ScalingMatrix({0.1f, 0.1f, 0.1f});
+        // rotation = Engine::Matrix4x4::RotationMatrix(angle + 180.0f, {0.0f, 0.0f, 1.0f});
+        // chevalier->matrix = rotation;
 
         translation = Engine::Matrix4x4::TranslationMatrix({2.0f, 0.0f, -3.5f});
         rotation = Engine::Matrix4x4::RotationMatrix(angle, {0.0f, 1.0f, 0.0f});
@@ -132,8 +154,8 @@ int main(int argc, char** argv)
         
         translation = Engine::Matrix4x4::TranslationMatrix({0.0f, 1.0f, 2.5f});
         rotation = Engine::Matrix4x4::RotationMatrix(180.0, {0.0f, 0.0f, 1.0f});
-        scale = Engine::Matrix4x4::ScalingMatrix({0.01f, 0.01f, 0.01f});
-        hellscream->matrix = translation * rotation * scale;
+        // scale = Engine::Matrix4x4::ScalingMatrix({0.01f, 0.01f, 0.01f});
+        //hellscream->matrix = translation * rotation * scale;
 
         engine.DrawScene();
     }
@@ -147,7 +169,7 @@ int main(int argc, char** argv)
     multi_textured_cube->Clear();
     chevalier->Clear();
     multi_material_cube->Clear();
-    hellscream->Clear();
+    //hellscream->Clear();
 
     #if defined(DISPLAY_LOGS)
     system("PAUSE");

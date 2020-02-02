@@ -6,7 +6,7 @@ CALL :COMPILE basic_model.vert
 CALL :COMPILE basic_model_geom.vert
 CALL :COMPILE colored_model.frag
 CALL :COMPILE textured_model.frag
-CALL :COMPILE basic_normal_debug.geom
+CALL :COMPILE normal_debug.geom
 CALL :COMPILE base.frag
 CALL :COMPILE material_basic_model.vert
 CALL :COMPILE material_basic_model.frag

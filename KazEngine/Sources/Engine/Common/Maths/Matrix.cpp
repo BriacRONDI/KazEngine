@@ -314,6 +314,19 @@ namespace Engine
     }
 
     /**
+     * Extrait la partie de la matrice qui concerne la translation
+     */
+    Matrix4x4 Matrix4x4::ExtractTranslation() const
+    {
+        return {
+            1.0f,               0.0f,               0.0f,               0.0f,
+            0.0f,               1.0f,               0.0f,               0.0f,
+            0.0f,               0.0f,               1.0f,               0.0f,
+            this->value[12],    this->value[13],    this->value[14],    1.0f
+        };
+    }
+
+    /**
      * Change la partie translation de la matrice
      */
     void Matrix4x4::SetTranslation(Vector3 const& translation)

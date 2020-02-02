@@ -9,18 +9,18 @@ namespace Engine
         public :
 
             // Couleur globale de l'entité
-            Vector3 default_color;
+            Vector4 default_color;
 
             virtual uint32_t UpdateUBO(ManagedBuffer& buffer)
             {
                 uint32_t bytes_written = Entity::UpdateUBO(buffer);
-                buffer.WriteData(&this->default_color, sizeof(Vector3), this->dynamic_buffer_offset + bytes_written, Core::SUB_BUFFER_TYPE::ENTITY_UBO);
-                return bytes_written + sizeof(Vector3);
+                buffer.WriteData(&this->default_color, sizeof(Vector4), this->dynamic_buffer_offset + bytes_written, Core::SUB_BUFFER_TYPE::ENTITY_UBO);
+                return bytes_written + sizeof(Vector4);
             }
 
             virtual inline uint32_t GetUboSize()
             {
-                return Entity::GetUboSize() + sizeof(Vector3);
+                return Entity::GetUboSize() + sizeof(Vector4);
             }
     };
 }

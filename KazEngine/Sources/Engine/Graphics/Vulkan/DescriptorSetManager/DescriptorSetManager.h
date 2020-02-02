@@ -37,9 +37,11 @@ namespace Engine
             // inline bool HasTexture(std::string const& texture) const { return this->texture_sets.count(texture); }
             // inline VkDescriptorSetLayout const& GetLayout() const {return this->layout;}
 
-            bool CreateViewDescriptorSet(VkDescriptorBufferInfo& camera_buffer, VkDescriptorBufferInfo& entity_buffer, bool enable_geometry_shader = false);
-            bool CreateSkeletonDescriptorSet(VkDescriptorBufferInfo& skeleton_buffer, VkDescriptorBufferInfo& mesh_buffer);
+            bool CreateViewDescriptorSet(VkDescriptorBufferInfo& camera_buffer, VkDescriptorBufferInfo& entity_buffer,
+                                         VkDescriptorBufferInfo& lights_buffer, bool enable_geometry_shader = false);
+            bool CreateSkeletonDescriptorSet(VkDescriptorBufferInfo& skeleton_buffer, VkDescriptorBufferInfo& mesh_buffer, bool enable_geometry_shader = false);
             bool CreateTextureDescriptorSet(VkImageView const view = nullptr, std::string const& texture = {});
+            // bool CreateLightDescriptorSet(VkDescriptorBufferInfo& light_buffer);
             std::vector<VkDescriptorSetLayout> const GetLayoutArray(LAYOUT_ARRAY_TYPE type);
 
             inline VkDescriptorSet const GetViewDescriptorSet() { return this->view_set; }
@@ -73,6 +75,11 @@ namespace Engine
             VkDescriptorPool texture_pool;
             VkDescriptorSetLayout texture_layout;
             std::map<std::string, VkDescriptorSet> texture_sets;
+
+            // Descriptor set de lumières
+            VkDescriptorPool light_pool;
+            VkDescriptorSetLayout light_layout;
+            VkDescriptorSet light_set;
 
             // Helpers
             bool CreateSampler();

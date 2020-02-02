@@ -10,45 +10,6 @@ namespace Engine
         // Capacités de rendu des shaders
         this->render_mask = schema;
 
-        // Descriptor Set Layouts
-        // this->ds_layouts = descriptor_set_layouts;
-
-        ///////////////////////////////////
-        // Description du Descriptor Set //
-        ///////////////////////////////////
-
-        /*std::vector<VkDescriptorSetLayoutBinding> descriptor_set_bindings(2);
-
-        // Camera
-        descriptor_set_bindings[0].binding             = 0;
-        descriptor_set_bindings[0].descriptorType      = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptor_set_bindings[0].descriptorCount     = 1;
-        descriptor_set_bindings[0].stageFlags          = VK_SHADER_STAGE_VERTEX_BIT;
-        descriptor_set_bindings[0].pImmutableSamplers  = nullptr;
-        if(!shaders[2].empty()) descriptor_set_bindings[0].stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
-
-        // Entity
-        descriptor_set_bindings[1].binding             = 1;
-        descriptor_set_bindings[1].descriptorType      = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-        descriptor_set_bindings[1].descriptorCount     = 1;
-        descriptor_set_bindings[1].stageFlags          = VK_SHADER_STAGE_VERTEX_BIT;
-        descriptor_set_bindings[1].pImmutableSamplers  = nullptr;
-        if(!shaders[2].empty()) descriptor_set_bindings[1].stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
-
-        // Texture
-        if(schema & SCHEMA_PRIMITIVE::TEXTURE) {
-            VkDescriptorSetLayoutBinding texture_binding;
-            texture_binding.binding             = 2;
-            texture_binding.descriptorType      = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            texture_binding.descriptorCount     = 1;
-            texture_binding.stageFlags          = VK_SHADER_STAGE_FRAGMENT_BIT;
-            texture_binding.pImmutableSamplers  = nullptr;
-            descriptor_set_bindings.push_back(texture_binding);
-        }
-
-        if(!this->descriptor_set.Initialize(descriptor_set_bindings)) return false;
-        if(!buffer_updates.empty()) this->descriptor_set.UpdateDescriptorSet(buffer_updates);*/
-
         //////////////////////////////////
         // Description du Vertex Buffer //
         //////////////////////////////////
@@ -135,7 +96,7 @@ namespace Engine
         }
 
         std::vector<VkPushConstantRange> push_constant_ranges;
-        if(schema & SCHEMA_PRIMITIVE::MATERIAL) {
+        if(schema & SCHEMA_PRIMITIVE::MATERIAL && shaders[2].empty()) {
             VkPushConstantRange range;
             range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
             range.offset = 0;

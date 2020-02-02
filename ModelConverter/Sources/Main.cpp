@@ -19,6 +19,12 @@ int main(int argc, char* argv[])
         std::string input_filename = std::string(argv[1]);
         std::string output_filename = std::string(argv[2]);
 
+        // input_filename = "Assets/Models/base_cube.fbx";
+        // output_filename = "../KazEngine/Assets/base_cube.kea";
+        input_filename = "Assets/Models/base_sphere.fbx";
+        output_filename = "../KazEngine/Assets/base_sphere.kea";
+        // input_filename = "Assets/Models/Bulb/Bulb.FBX";
+        // output_filename = "../KazEngine/Assets/ampoule.kea";
         // input_filename = "Assets/Models/textured_cube/mono_textured_cube.fbx";
         // output_filename = "../KazEngine/Assets/mono_textured_cube.kea";
         // input_filename = "Assets/Models/textured_cube/multi_textured_cube.fbx";
@@ -27,8 +33,8 @@ int main(int argc, char* argv[])
         // output_filename = "../KazEngine/Assets/chevalier.kea";
         // input_filename = "Assets/Models/textured_cube/multi_material_cube.fbx";
         // output_filename = "../KazEngine/Assets/multi_material_cube.kea";
-        input_filename = "Assets/Models/grom-hellscream/grom_rig.fbx";
-        output_filename = "../KazEngine/Assets/hellscream.kea";
+        // input_filename = "Assets/Models/grom-hellscream/grom_rig.fbx";
+        // output_filename = "../KazEngine/Assets/hellscream.kea";
 
         std::cout << "Opening file : " << input_filename << std::endl;
         std::vector<char> data = Engine::Tools::GetBinaryFileContents(input_filename);

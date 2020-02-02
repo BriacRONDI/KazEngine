@@ -142,6 +142,7 @@
     <ClCompile Include="Sources\Engine\Core\Entity\Entity.cpp" />
     <ClCompile Include="Sources\Engine\Core\ModelManager\ModelManager.cpp" />
     <ClCompile Include="Sources\Engine\Graphics\Camera\Camera.cpp" />
+    <ClCompile Include="Sources\Engine\Graphics\Lighting\Lighting.cpp" />
     <ClCompile Include="Sources\Engine\Graphics\Mesh\Mesh.cpp" />
     <ClCompile Include="Sources\Engine\Graphics\Renderer\Renderer.cpp" />
     <ClCompile Include="Sources\Engine\Graphics\Skeleton\Deformer.cpp" />
@@ -173,6 +174,7 @@
     <ClInclude Include="Sources\Engine\Core\ModelManager\ModelManager.h" />
     <ClInclude Include="Sources\Engine\Engine.h" />
     <ClInclude Include="Sources\Engine\Graphics\Camera\Camera.h" />
+    <ClInclude Include="Sources\Engine\Graphics\Lighting\Lighting.h" />
     <ClInclude Include="Sources\Engine\Graphics\Mesh\Mesh.h" />
     <ClInclude Include="Sources\Engine\Graphics\Renderer\Renderer.h" />
     <ClInclude Include="Sources\Engine\Graphics\Skeleton\Skeleton.h" />

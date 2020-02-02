@@ -15,8 +15,8 @@ namespace Engine
             inline Vulkan::DATA_BUFFER& GetBuffer() { return this->buffer; }
             void SetBuffer(Vulkan::DATA_BUFFER& buffer);
             inline VkDescriptorBufferInfo CreateSubBuffer(uint8_t id, VkDeviceSize offset, VkDeviceSize range) { this->sub_buffer[id] = {offset, range}; return this->GetSubBuffer(id); }
-            void WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize data_offset);
-            void WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize data_offset, uint8_t sub_buffer_id);
+            void WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize global_offset);
+            void WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize relative_offset, uint8_t sub_buffer_id);
             bool Flush();
             inline VkDescriptorBufferInfo GetSubBuffer(uint8_t id) { return {this->buffer.handle, this->sub_buffer[id].offset, this->sub_buffer[id].range}; }
             inline void SetChunkAlignment(VkDeviceSize alignment) { this->chunck_alignment = alignment; }

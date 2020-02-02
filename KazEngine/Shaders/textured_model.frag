@@ -24,12 +24,13 @@ layout (location = 0) out vec4 outColor;
 
 void main()
 {
-	vec4 color = texture(inTexture, inUV);
+	/*vec4 color = texture(inTexture, inUV);
 	vec3 N = inNormal;
 	vec3 L = normalize(inLightVec);
 	vec3 V = normalize(inViewVec);
 	vec3 R = reflect(-L, N);
 	vec3 diffuse = max(dot(N, L), 0.0) * material.diffuse.rgb;
 	vec3 specular = pow(max(dot(R, V), 0.0), 16.0) * material.specular.rgb;
-	outColor = vec4((material.ambient.rgb + diffuse) * color.rgb + specular, 1.0 - material.opacity);
+	outColor = vec4((material.ambient.rgb + diffuse) * color.rgb + specular, 1.0 - material.opacity);*/
+	outColor = material.diffuse;
 }

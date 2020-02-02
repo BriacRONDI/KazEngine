@@ -17,6 +17,7 @@ namespace Engine
             struct CAMERA_UBO {
                 Matrix4x4 projection;
                 Matrix4x4 view;
+                Vector3 position;
             };
 
             Camera();

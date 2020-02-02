@@ -30,15 +30,15 @@ namespace Engine
         if(end_offset > this->flush_range_end) this->flush_range_end = end_offset;
     }
 
-    void ManagedBuffer::WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize data_offset)
+    void ManagedBuffer::WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize global_offset)
     {
-        std::memcpy(this->data.get() + data_offset, data, data_size);
-        this->UpdateFlushRange(data_offset, data_size);
+        std::memcpy(this->data.get() + global_offset, data, data_size);
+        this->UpdateFlushRange(global_offset, data_size);
     }
 
-    void ManagedBuffer::WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize data_offset, uint8_t sub_buffer_id)
+    void ManagedBuffer::WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize relative_offset, uint8_t sub_buffer_id)
     {
-        size_t start_offset = data_offset + this->sub_buffer[sub_buffer_id].offset;
+        size_t start_offset = relative_offset + this->sub_buffer[sub_buffer_id].offset;
         std::memcpy(this->data.get() + start_offset, data, data_size);
         this->UpdateFlushRange(start_offset, data_size);
     }
@@ -46,6 +46,8 @@ namespace Engine
     bool ManagedBuffer::Flush()
     {
         if(this->need_flush) {
+            // VIRER CETTE LIGNE
+            std::vector<char> debug_data(this->data.get() + this->flush_range_start, this->data.get() + this->flush_range_end);
             size_t bytes_sent = Vulkan::GetInstance().SendToBuffer(this->buffer, this->data.get() + this->flush_range_start,
                                                                    this->flush_range_end - this->flush_range_start, this->flush_range_start);
 
@@ -128,7 +130,7 @@ namespace Engine
                     split_chunk = true;
                 }
 
-                offset = static_cast<uint32_t>(chunk->offset);
+                offset = static_cast<uint32_t>(chunk->offset - this->sub_buffer[sub_buffer_id].offset);
                 if(chunk->range == claimed_range) {
 
                     // Le chunk est occupé en totalité, il est détruit

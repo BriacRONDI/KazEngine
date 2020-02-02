@@ -16,6 +16,8 @@ namespace Engine
         this->camera.view           = this->rotation * this->translation;
         this->camera.projection     = Matrix4x4::PerspectiveProjectionMatrix(4.0f/3.0f, 60.0f, 0.1f, 100.0f);
 
+        this->camera.position       = {0.0f, 0.0f, 0.0f};
+
         Mouse::GetInstance().AddListener(this);
     }
 
@@ -63,6 +65,7 @@ namespace Engine
             Vector3 position = this->position + strafe_x + strafe_y;
             this->translation = Matrix4x4::TranslationMatrix(position);
             this->camera.view = this->rotation * this->translation;
+            this->camera.position = position;
             
         }else if(Mouse::GetInstance().IsButtonPressed(MOUSE_BUTTON::MOUSE_BUTTON_RIGHT)) {
 
@@ -75,7 +78,7 @@ namespace Engine
             Vector3 position = this->position + direction;
             this->translation = Matrix4x4::TranslationMatrix(position);
             this->camera.view = this->rotation * this->translation;
-
+            this->camera.position = position;
         }
     }
 
@@ -121,6 +124,7 @@ namespace Engine
             Vector3 strafe_y = Vector3({0.0f, 0.0f, delta_fy}) * Matrix4x4::RotationMatrix(90.0f, {1.0f, 0.0f, 0.0f}) * this->rotation;
             this->position = this->position + strafe_x + strafe_y;
             this->translation = Matrix4x4::TranslationMatrix(this->position);
+            this->camera.position = this->position;
 
         }else if(button == MOUSE_BUTTON::MOUSE_BUTTON_RIGHT) {
 
@@ -133,9 +137,9 @@ namespace Engine
             Vector3 direction = Vector3({0.0f, 0.0f, delta_fy}) * this->rotation;
 
             this->position = this->position + direction;
-            this->translation = Matrix4x4::TranslationMatrix(position);
+            this->translation = Matrix4x4::TranslationMatrix(this->position);
             this->camera.view = this->rotation * this->translation;
-
+            this->camera.position = this->position;
         }
     }
 
@@ -160,6 +164,7 @@ namespace Engine
         this->position = position;
         this->translation = Matrix4x4::TranslationMatrix(this->position);
         this->camera.view = this->rotation * this->translation;
+        this->camera.position = position;
     }
 
     /**

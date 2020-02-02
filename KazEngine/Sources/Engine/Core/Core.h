@@ -9,6 +9,7 @@
 #include "./ManagedBuffer/ManagedBuffer.h"
 #include "../Graphics/Renderer/Renderer.h"
 #include "./ModelManager/ModelManager.h"
+#include "../Graphics/Lighting/Lighting.h"
 
 namespace Engine {
 
@@ -24,12 +25,16 @@ namespace Engine {
             enum SUB_BUFFER_TYPE : uint8_t {
                 CAMERA_UBO      = 0,
                 ENTITY_UBO      = 1,
-                SKELETON_UBO    = 2,
-                MESH_UBO        = 3
+                LIGHT_UBO       = 2,
+                SKELETON_UBO    = 3,
+                MESH_UBO        = 4
             };
 
             // Camera
             Camera camera;
+
+            // Lumières
+            Lighting lighting;
 
             // Gestionnaire de models
             ModelManager model_manager;

@@ -71,9 +71,14 @@ namespace Engine
             camera_buffer_infos.offset + camera_buffer_infos.range,
             Vulkan::GetInstance().ComputeUniformBufferAlignment(Entity::MAX_UBO_SIZE * 10));
 
+        VkDescriptorBufferInfo light_buffer_infos = this->work_buffer.CreateSubBuffer(
+            SUB_BUFFER_TYPE::LIGHT_UBO,
+            entity_buffer_infos.offset + entity_buffer_infos.range,
+            Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(Lighting::LIGHTING_UBO)));
+
         VkDescriptorBufferInfo skeleton_buffer_infos = this->work_buffer.CreateSubBuffer(
             SUB_BUFFER_TYPE::SKELETON_UBO,
-            entity_buffer_infos.offset + entity_buffer_infos.range,
+            light_buffer_infos.offset + light_buffer_infos.range,
             Vulkan::GetDeviceLimits().maxUniformBufferRange);
 
         VkDescriptorBufferInfo mesh_buffer_infos = this->work_buffer.CreateSubBuffer(
@@ -82,9 +87,23 @@ namespace Engine
             Vulkan::GetDeviceLimits().maxUniformBufferRange);
 
         // Création des descriptor sets
-        this->ds_manager.CreateViewDescriptorSet(camera_buffer_infos, entity_buffer_infos);
+        bool enable_geometry_shader = false;
+        #if defined(DISPLAY_LOGS)
+        enable_geometry_shader = true;
+        #endif
+        this->ds_manager.CreateViewDescriptorSet(camera_buffer_infos, entity_buffer_infos, light_buffer_infos, enable_geometry_shader);
         this->ds_manager.CreateTextureDescriptorSet();
-        this->ds_manager.CreateSkeletonDescriptorSet(skeleton_buffer_infos, mesh_buffer_infos);
+        this->ds_manager.CreateSkeletonDescriptorSet(skeleton_buffer_infos, mesh_buffer_infos, enable_geometry_shader);
+
+        // On réserve un chunk pour la lumière
+        uint32_t light_offset;
+        if(!this->work_buffer.ReserveChunk(light_offset, sizeof(Lighting::LIGHTING_UBO), SUB_BUFFER_TYPE::LIGHT_UBO)) return false;
+
+
+        this->lighting.light.color = {1.0f, 1.0f, 1.0f};
+        this->lighting.light.ambient_strength = 0.2f;
+        this->lighting.light.specular_strength = 5.0f;
+        this->work_buffer.WriteData(&this->lighting.GetUniformBuffer(), sizeof(Lighting::LIGHTING_UBO), 0, SUB_BUFFER_TYPE::LIGHT_UBO);
 
         // On réserve un chunk pour la caméra
         uint32_t camera_offset;
@@ -136,6 +155,15 @@ namespace Engine
             this->Clear();
             return false;
         }
+
+        /*shaders[0] = "./Shaders/dynamic_model.vert.spv";
+        shaders[1] = "./Shaders/base.frag.spv";
+        shaders[2] = "./Shaders/normal_debug.geom.spv";
+        schema = Renderer::POSITION_VERTEX | Renderer::NORMAL_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE | Renderer::SKELETON;
+        if(!normal_debug.Initialize(schema, shaders, ds_manager.GetLayoutArray(DescriptorSetManager::SKELETON_TEXTURE_LAYOUT_ARRAY))) {
+            this->Clear();
+            return false;
+        }*/
 
         // On initialise les command buffers, même s'il n'y a encore rien à afficher,
         // cela évite des warnings dans le cas où la scène serait vide.
@@ -480,11 +508,11 @@ namespace Engine
             for(auto& entity : this->entities) {
                 for(auto& model : entity->GetMeshes()) {
 
-                    std::vector<VkDescriptorSet> bind_descriptor_sets = {this->ds_manager.GetViewDescriptorSet()};
-                    std::vector<uint32_t> dynamic_offsets = {entity->dynamic_buffer_offset};
-
                     // Si ce renderer n'est pas compatible avec le modèle à afficher, on passe au suivant
                     if(!renderer.MatchRenderMask(model->render_mask)) continue;
+
+                    std::vector<VkDescriptorSet> bind_descriptor_sets = {this->ds_manager.GetViewDescriptorSet()};
+                    std::vector<uint32_t> dynamic_offsets = {entity->dynamic_buffer_offset};
 
                     if(!pipeline_bound) {
                         // On associe la pipeline
@@ -500,8 +528,6 @@ namespace Engine
                         // Si ce matériau est associé à une texture, on ajoute son descriptor set
                         if(!material.texture.empty() && !model->uv_buffer.empty())
                             bind_descriptor_sets.push_back(this->ds_manager.GetTextureDescriptorSet(material.texture));
-
-                        // if(descriptor_set == nullptr) descriptor_set = renderer.GetDescriptorSet(material.texture);
                     }
 
                     // Si ce modèle a un squelette, on ajoute son descriptor set
@@ -588,24 +614,41 @@ namespace Engine
         // -> uniquement disponible en mode debug //
         ////////////////////////////////////////////
 
-        /*#if defined(DISPLAY_LOGS)
+        #if defined(DISPLAY_LOGS)
         if(this->normal_debug.GetPipeline().handle != nullptr) {
             vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->normal_debug.GetPipeline().handle);
             for(auto& entity : this->entities) {
                 for(auto& model : entity->GetMeshes()) {
-                    VkDescriptorSet descriptor_set = this->normal_debug.GetDescriptorSet();
-                    vkCmdBindVertexBuffers(command_buffer, 0, 1, &this->model_buffer.GetBuffer().handle, &model->vertex_buffer_offset);
-                    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->normal_debug.GetPipeline().layout, 0, 1, &descriptor_set, 1, &entity->dynamic_buffer_offset);
-                    if(model->index_buffer_offset != UINT32_MAX) {
-                        vkCmdBindIndexBuffer(command_buffer, this->model_buffer.GetBuffer().handle, model->index_buffer_offset, VK_INDEX_TYPE_UINT32);
-                        vkCmdDrawIndexed(command_buffer, static_cast<uint32_t>(model->index_buffer.size()), 1, 0, 0, 0);
-                    }else{
-                        vkCmdDraw(command_buffer, static_cast<uint32_t>(model->index_buffer.size()), 1, 0, 0);
+
+                    if(!this->normal_debug.MatchRenderMask(model->render_mask)) continue;
+
+                    std::vector<VkDescriptorSet> bind_descriptor_sets = {this->ds_manager.GetViewDescriptorSet()};
+                    std::vector<uint32_t> dynamic_offsets = {entity->dynamic_buffer_offset};
+
+                    if(model->sub_meshes.empty() && !model->materials.empty()) {
+                        auto& material = this->model_manager.materials[model->materials[0].first];
+
+                        if(!material.texture.empty() && !model->uv_buffer.empty())
+                            bind_descriptor_sets.push_back(this->ds_manager.GetTextureDescriptorSet(material.texture));
                     }
+
+                    if(!model->skeleton.empty()) {
+                        bind_descriptor_sets.push_back(this->ds_manager.GetSkeletonDescriptorSet());
+                        dynamic_offsets.push_back(this->skeletons[model->skeleton]);
+                        dynamic_offsets.push_back(model->skeleton_buffer_offset);
+                    }
+                    
+                    vkCmdBindVertexBuffers(command_buffer, 0, 1, &this->model_buffer.GetBuffer().handle, &model->vertex_buffer_offset);
+
+                    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->normal_debug.GetPipeline().layout, 0,
+                                static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(),
+                                static_cast<uint32_t>(dynamic_offsets.size()), dynamic_offsets.data());
+
+                    vkCmdDraw(command_buffer, static_cast<uint32_t>(model->index_buffer.size()), 1, 0, 0);
                 }
             }
         }
-        #endif*/
+        #endif
 
         // Fin de la render pass
         vkCmdEndRenderPass(command_buffer);
@@ -631,8 +674,19 @@ namespace Engine
     void Core::DrawScene()
     {
         // Mise à jour des Uniform Buffers
-        for(auto& entity : this->entities) entity->UpdateUBO(this->work_buffer);
+        
+        for(auto& entity : this->entities) {
+            entity->UpdateUBO(this->work_buffer);
+
+            for(auto& model : entity->GetMeshes()) {
+                if(model->name == "SimplestCube") {
+                    this->lighting.light.position = {entity->matrix[12], entity->matrix[13], entity->matrix[14]};
+                    break;
+                }
+            }
+        }
         this->work_buffer.WriteData(&this->camera.GetUniformBuffer(), sizeof(Camera::CAMERA_UBO), 0, SUB_BUFFER_TYPE::CAMERA_UBO);
+        this->work_buffer.WriteData(&this->lighting.GetUniformBuffer(), sizeof(Lighting::LIGHTING_UBO), 0, SUB_BUFFER_TYPE::LIGHT_UBO);
         if(!this->work_buffer.Flush()) return;
 
         // On pase à l'image suivante

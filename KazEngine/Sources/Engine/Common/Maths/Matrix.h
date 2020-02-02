@@ -30,6 +30,7 @@ namespace Engine
             inline Matrix4x4& operator=(Matrix4x4&& other) { if(this != &other) this->value = std::move(other.value); return *this; }
             Matrix4x4 operator*(Matrix4x4 const& other) const;
             Matrix4x4 ExtractRotation() const;
+            Matrix4x4 ExtractTranslation() const;
             void SetTranslation(Vector3 const& translation);
             Vector3 GetTranslation() const;
             Matrix4x4 ToTranslationMatrix() const;
