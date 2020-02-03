@@ -76,7 +76,7 @@
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-debug\include;D:\VulkanSDK\1.1.126.0\Include;I:\Developpement\Sources\C++\KazEngine\KazEngine\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-debug\include;D:\VulkanSDK\1.1.126.0\Include;D:\GitHub\KazEngine\KazEngine\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>
       </UndefinePreprocessorDefinitions>
       <PreprocessorDefinitions>VK_USE_PLATFORM_WIN32_KHR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -121,7 +121,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-release\include;D:\VulkanSDK\1.1.126.0\Include;I:\Developpement\Sources\C++\KazEngine\KazEngine\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-release\include;D:\VulkanSDK\1.1.126.0\Include;D:\GitHub\KazEngine\KazEngine\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <UndefinePreprocessorDefinitions>
       </UndefinePreprocessorDefinitions>
       <PreprocessorDefinitions>VK_USE_PLATFORM_WIN32_KHR;%(PreprocessorDefinitions)</PreprocessorDefinitions>

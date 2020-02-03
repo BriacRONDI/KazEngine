@@ -34,7 +34,7 @@ namespace Engine {
             Camera camera;
 
             // Lumières
-            Lighting lighting;
+            // Lighting lighting;
 
             // Gestionnaire de models
             ModelManager model_manager;

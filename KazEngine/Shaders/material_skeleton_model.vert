@@ -1,15 +1,12 @@
 #version 450
 
 #define MAX_BONES				100
-#define MAX_MESH_OFFSETS		100
+#define MAX_BONE_OFFSETS		100
 #define MAX_BONE_PER_VERTEX		4
-#define UINT32_MAX				4294967295
-
 
 layout (location = 0) in vec3  inPos;
-layout (location = 1) in vec3  inNormal;
-layout (location = 2) in vec4  inBoneWeights;
-layout (location = 3) in ivec4 inBoneIDs;
+layout (location = 1) in vec4  inBoneWeights;
+layout (location = 2) in ivec4 inBoneIDs;
 
 layout (set=0, binding=0) uniform Camera
 {
@@ -21,7 +18,6 @@ layout (set=0, binding=1) uniform Entity
 {
 	mat4 model;
 	uint frame_id;
-	// uint bone_id;
 } entity;
 
 layout (set=1, binding=0) uniform Skeleton
@@ -30,18 +26,10 @@ layout (set=1, binding=0) uniform Skeleton
 	uint bones_per_frame;
 } skeleton;
 
-layout (set=1, binding=1) uniform Mesh
+layout (set=1, binding=1) uniform BoneOffsets
 {
-	mat4 offsets[MAX_MESH_OFFSETS];
-} mesh;
-
-layout (location = 0) out vec3 outNormal;
-layout (location = 1) out vec3 outViewVec;
-layout (location = 2) out vec3 outLightVec;
-
-out gl_PerVertex 
-{
-	vec4 gl_Position;   
+	uint offset_ids[MAX_BONES];
+	mat4 offsets[MAX_BONE_OFFSETS];
 };
 
 vec3 MatrixMultT(mat4 matrix, vec3 vertex)
@@ -58,32 +46,16 @@ void main()
 	mat4 boneTransform = mat4(0);
 	mat4 modelView = camera.view * entity.model;
 	bool has_bone = false;
-	float total_weight;
+	float total_weight = 0.0f;
 	
-	outNormal = mat3(modelView) * inNormal;
-	
-	vec4 pos = modelView * vec4(inPos, 1.0);
-    outLightVec = vec3(1.5f, 1.5f, 1.5f) - pos.xyz;
-    outViewVec = -pos.xyz;
-	
-	/*if(entity.bone_id != UINT32_MAX) {
-	
+	for(int i=0; i<MAX_BONE_PER_VERTEX; i++) {
+		if(inBoneWeights[i] == 0) break;
+		// boneTransform += skeleton.bones[inBoneIDs[i] * skeleton.bones_per_frame * entity.frame_id] * mesh.offsets[inBoneIDs[i]] * inBoneWeights[i];
+		// boneTransform += skeleton.bones[inBoneIDs[i]] * mesh.offsets[inBoneIDs[i]] * inBoneWeights[i];
+		boneTransform += skeleton.bones[inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
+		total_weight += inBoneWeights[i];
 		has_bone = true;
-		total_weight = 1.0f;
-		boneTransform = skeleton.bones[entity.bone_id];
-		
-	}else{*/
-	
-		total_weight = 0.0f;
-		for(int i=0; i<MAX_BONE_PER_VERTEX; i++) {
-			if(inBoneWeights[i] == 0) break;
-			// boneTransform += skeleton.bones[inBoneIDs[i] * skeleton.bones_per_frame * entity.frame_id] * mesh.offsets[inBoneIDs[i]] * inBoneWeights[i];
-			boneTransform += skeleton.bones[inBoneIDs[i]] * mesh.offsets[inBoneIDs[i]] * inBoneWeights[i];
-			total_weight += inBoneWeights[i];
-			has_bone = true;
-		}
-		
-	//}
+	}
 	
 	if(!has_bone) {
 	

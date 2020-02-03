@@ -71,39 +71,38 @@ namespace Engine
             camera_buffer_infos.offset + camera_buffer_infos.range,
             Vulkan::GetInstance().ComputeUniformBufferAlignment(Entity::MAX_UBO_SIZE * 10));
 
-        VkDescriptorBufferInfo light_buffer_infos = this->work_buffer.CreateSubBuffer(
+        /*VkDescriptorBufferInfo light_buffer_infos = this->work_buffer.CreateSubBuffer(
             SUB_BUFFER_TYPE::LIGHT_UBO,
             entity_buffer_infos.offset + entity_buffer_infos.range,
-            Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(Lighting::LIGHTING_UBO)));
+            Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(Lighting::LIGHTING_UBO)));*/
+
+        VkDescriptorBufferInfo bone_offsets_buffer_infos = this->work_buffer.CreateSubBuffer(
+            SUB_BUFFER_TYPE::MESH_UBO,
+            entity_buffer_infos.offset + entity_buffer_infos.range,
+            Vulkan::GetDeviceLimits().maxUniformBufferRange);
 
         VkDescriptorBufferInfo skeleton_buffer_infos = this->work_buffer.CreateSubBuffer(
             SUB_BUFFER_TYPE::SKELETON_UBO,
-            light_buffer_infos.offset + light_buffer_infos.range,
-            Vulkan::GetDeviceLimits().maxUniformBufferRange);
-
-        VkDescriptorBufferInfo mesh_buffer_infos = this->work_buffer.CreateSubBuffer(
-            SUB_BUFFER_TYPE::MESH_UBO,
-            skeleton_buffer_infos.offset + skeleton_buffer_infos.range,
-            Vulkan::GetDeviceLimits().maxUniformBufferRange);
+            bone_offsets_buffer_infos.offset + bone_offsets_buffer_infos.range,
+            WORK_BUFFER_SIZE - (bone_offsets_buffer_infos.offset + bone_offsets_buffer_infos.range));
 
         // Création des descriptor sets
         bool enable_geometry_shader = false;
         #if defined(DISPLAY_LOGS)
         enable_geometry_shader = true;
         #endif
-        this->ds_manager.CreateViewDescriptorSet(camera_buffer_infos, entity_buffer_infos, light_buffer_infos, enable_geometry_shader);
+        this->ds_manager.CreateViewDescriptorSet(camera_buffer_infos, entity_buffer_infos, enable_geometry_shader);
         this->ds_manager.CreateTextureDescriptorSet();
-        this->ds_manager.CreateSkeletonDescriptorSet(skeleton_buffer_infos, mesh_buffer_infos, enable_geometry_shader);
+        this->ds_manager.CreateSkeletonDescriptorSet(skeleton_buffer_infos, bone_offsets_buffer_infos);
+        // this->ds_manager.CreateBoneOffsetsDescriptorSet(bone_offsets_buffer_infos);
 
         // On réserve un chunk pour la lumière
-        uint32_t light_offset;
+        /*uint32_t light_offset;
         if(!this->work_buffer.ReserveChunk(light_offset, sizeof(Lighting::LIGHTING_UBO), SUB_BUFFER_TYPE::LIGHT_UBO)) return false;
-
-
         this->lighting.light.color = {1.0f, 1.0f, 1.0f};
         this->lighting.light.ambient_strength = 0.2f;
         this->lighting.light.specular_strength = 5.0f;
-        this->work_buffer.WriteData(&this->lighting.GetUniformBuffer(), sizeof(Lighting::LIGHTING_UBO), 0, SUB_BUFFER_TYPE::LIGHT_UBO);
+        this->work_buffer.WriteData(&this->lighting.GetUniformBuffer(), sizeof(Lighting::LIGHTING_UBO), 0, SUB_BUFFER_TYPE::LIGHT_UBO);*/
 
         // On réserve un chunk pour la caméra
         uint32_t camera_offset;
@@ -113,45 +112,53 @@ namespace Engine
         // Création des pipelines //
         ////////////////////////////
 
-        this->renderers.resize(5);
+        this->renderers.resize(6);
         std::array<std::string, 3> shaders;
 
         shaders[0] = "./Shaders/basic_model.vert.spv";
         shaders[1] = "./Shaders/colored_model.frag.spv";
-        uint16_t schema = Renderer::POSITION_VERTEX | Renderer::NORMAL_VERTEX;
-        if(!this->renderers[0].Initialize(schema, shaders, ds_manager.GetLayoutArray(DescriptorSetManager::ENTITY_ONLY_LAYOUT_ARRAY))) {
+        uint16_t schema = Renderer::POSITION_VERTEX; // 1
+        if(!this->renderers[0].Initialize(schema, shaders, ds_manager.GetLayoutArray(schema))) {
             this->Clear();
             return false;
         }
 
         shaders[0] = "./Shaders/material_basic_model.vert.spv";
         shaders[1] = "./Shaders/material_basic_model.frag.spv";
-        schema = Renderer::POSITION_VERTEX | Renderer::NORMAL_VERTEX | Renderer::MATERIAL;
-        if(!this->renderers[1].Initialize(schema, shaders, ds_manager.GetLayoutArray(DescriptorSetManager::ENTITY_ONLY_LAYOUT_ARRAY))) {
+        schema = Renderer::POSITION_VERTEX | Renderer::MATERIAL; // 33
+        if(!this->renderers[1].Initialize(schema, shaders, ds_manager.GetLayoutArray(schema))) {
             this->Clear();
             return false;
         }
 
         shaders[0] = "./Shaders/texture_basic_model.vert.spv";
         shaders[1] = "./Shaders/textured_model.frag.spv";
-        schema = Renderer::POSITION_VERTEX | Renderer::NORMAL_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE;
-        if(!this->renderers[2].Initialize(schema, shaders, ds_manager.GetLayoutArray(DescriptorSetManager::TEXTURE_LAYOUT_ARRAY))) {
+        schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE; // 101
+        if(!this->renderers[2].Initialize(schema, shaders, ds_manager.GetLayoutArray(schema))) {
             this->Clear();
             return false;
         }
 
         shaders[0] = "./Shaders/dynamic_model.vert.spv";
         shaders[1] = "./Shaders/textured_model.frag.spv";
-        schema = Renderer::POSITION_VERTEX | Renderer::NORMAL_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE | Renderer::SKELETON;
-        if(!this->renderers[3].Initialize(schema, shaders, ds_manager.GetLayoutArray(DescriptorSetManager::SKELETON_TEXTURE_LAYOUT_ARRAY))) {
+        schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE | Renderer::SKELETON; // 229
+        if(!this->renderers[3].Initialize(schema, shaders, ds_manager.GetLayoutArray(schema))) {
             this->Clear();
             return false;
         }
 
         shaders[0] = "./Shaders/material_skeleton_model.vert.spv";
         shaders[1] = "./Shaders/material_basic_model.frag.spv";
-        schema = Renderer::POSITION_VERTEX | Renderer::NORMAL_VERTEX | Renderer::MATERIAL | Renderer::SKELETON;
-        if(!this->renderers[4].Initialize(schema, shaders, ds_manager.GetLayoutArray(DescriptorSetManager::SKELETON_LAYOUT_ARRAY))) {
+        schema = Renderer::POSITION_VERTEX | Renderer::MATERIAL | Renderer::SKELETON; // 161
+        if(!this->renderers[4].Initialize(schema, shaders, ds_manager.GetLayoutArray(schema))) {
+            this->Clear();
+            return false;
+        }
+
+        shaders[0] = "./Shaders/global_bone_model.vert.spv";
+        shaders[1] = "./Shaders/textured_model.frag.spv";
+        schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE | Renderer::SINGLE_BONE;
+        if(!this->renderers[5].Initialize(schema, shaders, ds_manager.GetLayoutArray(schema))) {
             this->Clear();
             return false;
         }
@@ -296,18 +303,18 @@ namespace Engine
         // Construction du buffer
         std::vector<char> skeleton_ubo, offsets_ubo;
         std::map<std::string, uint32_t> mesh_ubo_offsets;
-        this->model_manager.skeletons[skeleton]->BuildUBO(skeleton_ubo, offsets_ubo, mesh_ubo_offsets);
+        uint32_t alignment = static_cast<uint32_t>(Vulkan::GetDeviceLimits().minUniformBufferOffsetAlignment);
+        this->model_manager.skeletons[skeleton]->BuildUBO(skeleton_ubo, offsets_ubo, mesh_ubo_offsets, alignment);
 
         // Réservation d'un chunk sur le buffer du squelette
         if(!this->work_buffer.ReserveChunk(this->skeletons[skeleton], skeleton_ubo.size(), SUB_BUFFER_TYPE::SKELETON_UBO)) return false;
-        this->work_buffer.WriteData(skeleton_ubo.data(), skeleton_ubo.size(), this->skeletons[skeleton]);
-        this->skeletons[skeleton] -= static_cast<uint32_t>(this->work_buffer.GetSubBuffer(SUB_BUFFER_TYPE::SKELETON_UBO).offset);
+        this->work_buffer.WriteData(skeleton_ubo.data(), skeleton_ubo.size(), this->skeletons[skeleton], SUB_BUFFER_TYPE::SKELETON_UBO);
 
         // Réservation d'un chunk sur le buffer des offsets
         uint32_t mesh_ubo_base_offset;
         if(!this->work_buffer.ReserveChunk(mesh_ubo_base_offset, offsets_ubo.size(), SUB_BUFFER_TYPE::MESH_UBO)) return false;
-        this->work_buffer.WriteData(offsets_ubo.data(), offsets_ubo.size(), mesh_ubo_base_offset);
-        mesh_ubo_base_offset -= static_cast<uint32_t>(this->work_buffer.GetSubBuffer(SUB_BUFFER_TYPE::MESH_UBO).offset);
+        this->work_buffer.WriteData(offsets_ubo.data(), offsets_ubo.size(), mesh_ubo_base_offset, SUB_BUFFER_TYPE::MESH_UBO);
+
         // On positionne tous les skeleton_buffer_offset des mesh
         for(auto& mesh : mesh_ubo_offsets)
             if(this->model_manager.models.count(mesh.first))
@@ -535,6 +542,9 @@ namespace Engine
                         bind_descriptor_sets.push_back(this->ds_manager.GetSkeletonDescriptorSet());
                         dynamic_offsets.push_back(this->skeletons[model->skeleton]);
                         dynamic_offsets.push_back(model->skeleton_buffer_offset);
+                        if(model->render_mask & Renderer::SINGLE_BONE)
+                            vkCmdPushConstants(command_buffer, renderer.GetPipeline().layout, VK_SHADER_STAGE_VERTEX_BIT,
+                                               Mesh::MATERIAL::Size(), sizeof(uint32_t), &model->deformers[0].bone_ids[0]);
                     }
 
                     // On associe le vertex buffer
@@ -674,19 +684,8 @@ namespace Engine
     void Core::DrawScene()
     {
         // Mise à jour des Uniform Buffers
-        
-        for(auto& entity : this->entities) {
-            entity->UpdateUBO(this->work_buffer);
-
-            for(auto& model : entity->GetMeshes()) {
-                if(model->name == "SimplestCube") {
-                    this->lighting.light.position = {entity->matrix[12], entity->matrix[13], entity->matrix[14]};
-                    break;
-                }
-            }
-        }
+        for(auto& entity : this->entities) entity->UpdateUBO(this->work_buffer);
         this->work_buffer.WriteData(&this->camera.GetUniformBuffer(), sizeof(Camera::CAMERA_UBO), 0, SUB_BUFFER_TYPE::CAMERA_UBO);
-        this->work_buffer.WriteData(&this->lighting.GetUniformBuffer(), sizeof(Lighting::LIGHTING_UBO), 0, SUB_BUFFER_TYPE::LIGHT_UBO);
         if(!this->work_buffer.Flush()) return;
 
         // On pase à l'image suivante

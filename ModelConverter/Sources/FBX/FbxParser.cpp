@@ -191,22 +191,22 @@ void FbxParser::ParseLimb(std::vector<FBX_NODE> const& nodes)
         if(limb.attribute_type != "LimbNode" && limb.attribute_type != "Null") continue;
 
         FBX_NODE root_node = this->GetRootModel(limb, models);
-        Engine::BONE root_bone;
+        Engine::Bone root_bone;
 
         this->bone_trees[root_node.attribute_name] = this->GetBoneTree(limb, root_bone, models);
         return;
     }
 }
 
-Engine::BONE FbxParser::GetBoneTree(FBX_NODE const& node, Engine::BONE const& parent, std::vector<FBX_NODE> const& models)
+Engine::Bone FbxParser::GetBoneTree(FBX_NODE const& node, Engine::Bone const& parent, std::vector<FBX_NODE> const& models)
 {
-    Engine::BONE bone = this->CreateBone(node, parent);
+    Engine::Bone bone = this->CreateBone(node, parent);
 
     for(auto child : this->connections[node.id].children) {
         for(FBX_NODE const& model : models) {
             if(model.id == child.id) {
                 if(model.attribute_type == "LimbNode") {
-                    Engine::BONE child_bone = this->GetBoneTree(model, bone, models);
+                    Engine::Bone child_bone = this->GetBoneTree(model, bone, models);
                     bone.children.push_back(child_bone);
                 }
             }
@@ -216,9 +216,9 @@ Engine::BONE FbxParser::GetBoneTree(FBX_NODE const& node, Engine::BONE const& pa
     return bone;
 }
 
-Engine::BONE FbxParser::CreateBone(FBX_NODE const& node, Engine::BONE const& parent)
+Engine::Bone FbxParser::CreateBone(FBX_NODE const& node, Engine::Bone const& parent)
 {
-    Engine::BONE bone;
+    Engine::Bone bone;
 
     if(this->referenced_bones.count(node.id) == 0) {
         this->referenced_bones[node.id] = this->next_referenced_bone_id;
@@ -234,25 +234,25 @@ Engine::BONE FbxParser::CreateBone(FBX_NODE const& node, Engine::BONE const& par
     return bone;
 }
 
-Engine::BONE& FbxParser::FindBone(uint32_t bone_id, Engine::BONE& parent)
+Engine::Bone& FbxParser::FindBone(uint32_t bone_id, Engine::Bone& parent)
 {
     if(parent.index == bone_id) return parent;
     for(auto& child : parent.children) {
-        Engine::BONE& bone = this->FindBone(bone_id, child);
+        Engine::Bone& bone = this->FindBone(bone_id, child);
         if(bone.index != UINT32_MAX) return bone;
     }
 
     return this->null_bone;
 }
 
-Engine::BONE FbxParser::RebuildBoneTree(Engine::BONE& bone, bool& skeep_me)
+Engine::Bone FbxParser::RebuildBoneTree(Engine::Bone& bone, bool& skeep_me)
 {
-    std::vector<Engine::BONE> new_children;
+    std::vector<Engine::Bone> new_children;
     skeep_me = true;
 
     for(auto child : bone.children) {
         bool skeep_child = false;
-        Engine::BONE child_bone = this->RebuildBoneTree(child, skeep_child);
+        Engine::Bone child_bone = this->RebuildBoneTree(child, skeep_child);
         if(!skeep_child) new_children.push_back(child_bone);
     }
         
@@ -295,7 +295,7 @@ void FbxParser::ComputeAnimations()
             if(this->unused_bones.count(ref_id)) bone_id = this->unused_bones[ref_id];
 
             for(auto& tree : this->bone_trees) {
-                Engine::BONE& bone = this->FindBone(bone_id, tree.second);
+                Engine::Bone& bone = this->FindBone(bone_id, tree.second);
                 if(bone.index != UINT32_MAX) {
                     bone.animations[layer.name].translations = translations;
                     bone.animations[layer.name].rotations = rotations;
@@ -593,14 +593,14 @@ void FbxParser::ParseSkeletons(std::vector<FBX_NODE> const& nodes)
     }
 }
 
-void FbxParser::SetBoneOffset(uint32_t bone_id, std::string const& mesh_name, Engine::Matrix4x4 const& offset, Engine::BONE& bone_tree)
+void FbxParser::SetBoneOffset(uint32_t bone_id, std::string const& mesh_name, Engine::Matrix4x4 const& offset, Engine::Bone& bone_tree)
 {
     if(bone_tree.index == bone_id) {
         bone_tree.offsets[mesh_name] = offset;
         return;
     }
 
-    for(Engine::BONE& child : bone_tree.children)
+    for(Engine::Bone& child : bone_tree.children)
         this->SetBoneOffset(bone_id, mesh_name, offset, child);
 }
 
@@ -609,7 +609,7 @@ void FbxParser::ApplyBonesOffsets(FBX_MESH_GEOMETRY& mesh_geometry, std::string 
     if(mesh_geometry.skeleton.id >= 0) {
         for(auto& tree : this->bone_trees) {
             for(auto& cluster : mesh_geometry.skeleton.bones) {
-                Engine::BONE bone = this->GetBone(cluster, tree.second);
+                Engine::Bone bone = this->GetBone(cluster, tree.second);
                 this->SetBoneOffset(bone.index, mesh_name, cluster.transform, tree.second);
             }
         }
@@ -617,7 +617,7 @@ void FbxParser::ApplyBonesOffsets(FBX_MESH_GEOMETRY& mesh_geometry, std::string 
 
     if(mesh_geometry.cluster.id >= 0) {
         for(auto& tree : this->bone_trees) {
-            Engine::BONE bone = this->GetBone(mesh_geometry.cluster, tree.second);
+            Engine::Bone bone = this->GetBone(mesh_geometry.cluster, tree.second);
             this->SetBoneOffset(bone.index, mesh_name, mesh_geometry.local_transformation, tree.second);
         }
     }
@@ -725,8 +725,32 @@ void FbxParser::ParseMeshes(std::vector<FBX_NODE> const& nodes)
                     }
                 }
             }
+        }else if(mesh_geometry.cluster.id >= 0) {
+            uint32_t bone_id = UINT32_MAX;
+            if(this->referenced_bones.count(mesh_geometry.cluster.bone_id)) bone_id = this->referenced_bones[mesh_geometry.cluster.bone_id];
+
+            uint32_t use_bone_id;
+            if(!this->used_bones.count(bone_id)) {
+                use_bone_id = this->next_used_bone_id;
+                this->next_used_bone_id++;
+                this->used_bones[bone_id] = use_bone_id;
+            }else{
+                use_bone_id = this->used_bones[bone_id];
+            }
+
+            for(auto& tree : this->bone_trees) {
+                auto bone = this->FindBone(bone_id, tree.second);
+                if(bone.index == bone_id) {
+                    serialized_mesh.skeleton = tree.first;
+                    this->ApplyBonesOffsets(mesh_geometry, serialized_mesh.name);
+                    break;
+                }
+            }
+
+            serialized_mesh.deformers.resize(1);
+            serialized_mesh.deformers[0].AddBone(use_bone_id, 1.0f);
         }
-    
+
         ////////////////////////////////////
         // Passage des faces en triangles //
         //   Et refonte du index buffer   //
@@ -860,34 +884,34 @@ FbxParser::FBX_BONE FbxParser::FindCluster(int64_t id)
     return {};
 }
 
-Engine::BONE FbxParser::GetBone(FBX_BONE const& node, Engine::BONE const& bone_tree)
+Engine::Bone FbxParser::GetBone(FBX_BONE const& node, Engine::Bone const& bone_tree)
 {
     uint32_t bone_id = this->referenced_bones[node.bone_id];
 
     if(bone_tree.index == bone_id) return bone_tree;
 
     for(auto& child : bone_tree.children) {
-        Engine::BONE bone = this->GetBone(node, child);
+        Engine::Bone bone = this->GetBone(node, child);
         if(bone.index != UINT32_MAX) return bone;
     }
 
     return {};
 }
 
-Engine::BONE FbxParser::GetParentBone(Engine::BONE const& bone, Engine::BONE const& bone_tree)
+Engine::Bone FbxParser::GetParentBone(Engine::Bone const& bone, Engine::Bone const& bone_tree)
 {
     for(auto& child : bone_tree.children) {
         if(child.index == bone.index) return bone_tree;
-        Engine::BONE search = GetParentBone(bone, child);
+        Engine::Bone search = GetParentBone(bone, child);
         if(search.index != UINT32_MAX) return search;
     }
 
     return {};
 }
 
-Engine::Matrix4x4 FbxParser::GetBoneGlobalTransform(Engine::BONE const& bone, Engine::BONE const& bone_tree)
+Engine::Matrix4x4 FbxParser::GetBoneGlobalTransform(Engine::Bone const& bone, Engine::Bone const& bone_tree)
 {
-    Engine::BONE parent = this->GetParentBone(bone, bone_tree);
+    Engine::Bone parent = this->GetParentBone(bone, bone_tree);
     if(parent.index == UINT32_MAX) return bone.transformation;
     return this->GetBoneGlobalTransform(parent, bone_tree) * bone.transformation;
 }
@@ -896,7 +920,7 @@ void FbxParser::ComputeClusterDeformation(FBX_MESH_GEOMETRY& mesh_geometry)
 {
     for(auto& cluster : mesh_geometry.skeleton.bones) {
         for(auto& tree : this->bone_trees) {
-            Engine::BONE bone = this->GetBone(cluster, tree.second);
+            Engine::Bone bone = this->GetBone(cluster, tree.second);
             cluster.deformation = this->GetBoneGlobalTransform(bone, tree.second) * cluster.transform;
         }
     }
@@ -941,6 +965,8 @@ void FbxParser::ParseMeshGeometry(std::vector<FBX_NODE> const& nodes)
             for(FBX_NODE const& model : models) {
                 if(model.id == parent.id) {
                     mesh_geometry.cluster = this->FindCluster(model.id);
+                    auto skeleton = this->GetRootModel(model, models);
+                    for(FBX_SKELETON& item : this->skeletons) if(item.id == skeleton.id) mesh_geometry.skeleton = item;
                     break;
                 }
             }

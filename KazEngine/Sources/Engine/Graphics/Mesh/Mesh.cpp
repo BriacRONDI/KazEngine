@@ -11,7 +11,7 @@ namespace Engine
         this->render_mask = Renderer::POSITION_VERTEX;
 
         // Normales
-        if(!this->normal_buffer.empty()) this->render_mask |= Renderer::NORMAL_VERTEX;
+        // if(!this->normal_buffer.empty()) this->render_mask |= Renderer::NORMAL_VERTEX;
 
         // UV
         if(!this->uv_buffer.empty()) this->render_mask |= Renderer::UV_VERTEX;
@@ -20,7 +20,8 @@ namespace Engine
         if(!this->materials.empty()) this->render_mask |= Renderer::MATERIAL;
 
         // Squelette
-        if(!this->deformers.empty()) this->render_mask |= Renderer::SKELETON;
+        if(this->deformers.size() == 1) this->render_mask |= Renderer::SINGLE_BONE;
+        if(this->deformers.size() > 1) this->render_mask |= Renderer::SKELETON;
 
         // Textures
         for(auto& material : this->materials) {
@@ -50,7 +51,7 @@ namespace Engine
         uint32_t vertex_buffer_size;
         uint32_t index_buffer_size = 0;
         uint32_t vertex_size = sizeof(Vector3);
-        if(!this->normal_buffer.empty()) vertex_size += sizeof(Vector3);
+        // if(!this->normal_buffer.empty()) vertex_size += sizeof(Vector3);
 
         if(!this->uv_index.empty()) {
             // Autant de composantes qu'il y a d'indices
@@ -111,10 +112,10 @@ namespace Engine
                         offset += sizeof(Vector3);
 
                         // Normale
-                        if(!this->normal_buffer.empty()) {
+                        /*if(!this->normal_buffer.empty()) {
                             std::memcpy(output.get() + offset, &this->normal_buffer[vertex_index], sizeof(Vector3));
                             offset += sizeof(Vector3);
-                        }
+                        }*/
 
                         // UV
                         uint32_t uv_index = this->uv_index[face_index * 3 + j];
@@ -132,10 +133,10 @@ namespace Engine
                 offset += sizeof(Vector3);
 
                 // Normale
-                if(!this->normal_buffer.empty()) {
+                /*if(!this->normal_buffer.empty()) {
                     std::memcpy(output.get() + offset, &this->normal_buffer[i], sizeof(Vector3));
                     offset += sizeof(Vector3);
-                }
+                }*/
 
                 // UV
                 if(!this->uv_buffer.empty()) {
@@ -194,12 +195,12 @@ namespace Engine
         if(!this->uv_index.empty()) {
             // Autant de composantes qu'il n'y a d'indice
             vertex_buffer_size = static_cast<uint32_t>(this->index_buffer.size() * (sizeof(Vector3) + sizeof(Vector2)));
-            if(!this->normal_buffer.empty()) vertex_buffer_size += static_cast<uint32_t>(this->index_buffer.size() * sizeof(Vector3));
+            // if(!this->normal_buffer.empty()) vertex_buffer_size += static_cast<uint32_t>(this->index_buffer.size() * sizeof(Vector3));
             if(!this->deformers.empty()) vertex_buffer_size += static_cast<uint32_t>(this->index_buffer.size() * sizeof(DEFORMER));
         }else{
             // Autant de composantes qu'il n'y a de sommets
             vertex_buffer_size = static_cast<uint32_t>(this->GetVertexBufferSize() + this->GetUvBufferSize());
-            if(!this->normal_buffer.empty()) vertex_buffer_size += static_cast<uint32_t>(this->GetVertexBufferSize());
+            // if(!this->normal_buffer.empty()) vertex_buffer_size += static_cast<uint32_t>(this->GetVertexBufferSize());
             if(!this->deformers.empty()) vertex_buffer_size += static_cast<uint32_t>(this->vertex_buffer.size() * sizeof(DEFORMER));
         }
 
@@ -228,10 +229,10 @@ namespace Engine
                 offset += sizeof(Vector3);
 
                 // Normale
-                if(!this->normal_buffer.empty()) {
+                /*if(!this->normal_buffer.empty()) {
                     std::memcpy(output.get() + offset, &this->normal_buffer[vertex_index], sizeof(Vector3));
                     offset += sizeof(Vector3);
-                }
+                }*/
 
                 // UV
                 uint32_t uv_index = this->uv_index[i];
@@ -239,7 +240,7 @@ namespace Engine
                 offset += sizeof(Vector2);
 
                 // Squelette
-                if(!this->deformers.empty()) {
+                if(this->deformers.size() > 1) {
                     std::memcpy(output.get() + offset, &this->deformers[vertex_index], sizeof(DEFORMER));
                     offset += sizeof(DEFORMER);
                 }
@@ -254,10 +255,10 @@ namespace Engine
                 offset += sizeof(Vector3);
 
                 // Normale
-                if(!this->normal_buffer.empty()) {
+                /*if(!this->normal_buffer.empty()) {
                     std::memcpy(output.get() + offset, &this->normal_buffer[i], sizeof(Vector3));
                     offset += sizeof(Vector3);
-                }
+                }*/
 
                 // UV
                 if(!this->uv_buffer.empty()) {
@@ -266,7 +267,7 @@ namespace Engine
                 }
 
                 // Squelette
-                if(!this->deformers.empty()) {
+                if(this->deformers.size() > 1) {
                     std::memcpy(output.get() + offset, &this->deformers[i], sizeof(DEFORMER));
                     offset += sizeof(DEFORMER);
                 }

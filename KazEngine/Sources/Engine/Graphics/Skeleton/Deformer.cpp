@@ -5,7 +5,7 @@ namespace Engine
     /**
      * Renvoie la taille de l'objet après sérialisation
      */
-    uint32_t BONE::SerializedSize() const
+    uint32_t Bone::SerializedSize() const
     {
         uint32_t serialized_size = static_cast<uint32_t>(sizeof(char) + this->name.size() + sizeof(uint32_t) + sizeof(Matrix4x4) + sizeof(uint16_t) * 3);
 
@@ -28,7 +28,7 @@ namespace Engine
     /**
      * Sérialisation
      */
-    std::vector<char> BONE::Serialize() const
+    std::vector<char> Bone::Serialize() const
     {
         // Création du buffer de sortie
         std::vector<char> output(this->SerializedSize());
@@ -128,7 +128,7 @@ namespace Engine
         return output;
     }
 
-    uint32_t BONE::Deserialize(const char* data)
+    uint32_t Bone::Deserialize(const char* data)
     {
         uint32_t offset = 0;
 
@@ -302,7 +302,7 @@ namespace Engine
     /**
      * Compte le nombre d'os contenus dans l'arbre
      */
-    uint32_t BONE::Count() const
+    uint32_t Bone::Count() const
     {
         uint32_t count = 1;
 
@@ -312,67 +312,60 @@ namespace Engine
         return count;
     }
 
-    /**
-     * Passage de l'arbre sous forme de liste
-     */
-    /*std::vector<const BONE*> BONE::Linearize() const
+    void Bone::BuildUBO(std::vector<char>& skeleton, std::vector<char>& offsets, std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment)
     {
-        std::vector<const BONE*> output = {this};
-        for(auto const& child : this->children) {
-            auto child_list = child.Linearize();
-            output.insert(output.end(), child_list.begin(), child_list.end());
-        }
+        this->BuildSkeletonUBO(skeleton, IDENTITY_MATRIX, Bone::MAX_BONES_PER_UBO);
 
-        return output;
-    }*/
-
-    /*void InitializeBones(std::array<Matrix4x4, MAX_BONES>& ubo, BONE const& tree, std::string const& mesh, Matrix4x4 const& parent_transformation)
-    {
-        Matrix4x4 bone_transfromation = parent_transformation * tree.transformation;
-
-        if(tree.offsets.count(mesh)) {
-            if(tree.offsets.count(mesh) && tree.index < ubo.size())
-                ubo[tree.index] = bone_transfromation * tree.offsets.at(mesh);
-        }
-
-        for(BONE const& child : tree.children) this->InitializeBones(ubo, child, mesh, bone_transfromation);
-    }*/
-
-    void BONE::BuildUBO(std::vector<char>& skeleton, std::vector<char>& offsets, std::map<std::string, uint32_t>& mesh_ubo_offsets)
-    {
-        this->BuildSkeletonUBO(skeleton, IDENTITY_MATRIX, BONE::MAX_BONES_PER_UBO);
-        this->BuildOffsetsUBO(offsets, mesh_ubo_offsets, static_cast<uint8_t>(skeleton.size() / sizeof(Matrix4x4)));
+        std::map<std::string, std::map<uint8_t, Matrix4x4*>> prepared_bone_offsets_ubo;
+        this->PrepareOffsetUbo(static_cast<uint8_t>(skeleton.size() / sizeof(Matrix4x4)), prepared_bone_offsets_ubo);
+        this->BuildOffsetsUBO(offsets, prepared_bone_offsets_ubo, mesh_ubo_offsets, alignment);
     }
 
-    void BONE::BuildOffsetsUBO(std::vector<char>& offsets, std::map<std::string, uint32_t>& mesh_ubo_offsets, uint8_t max_count)
+    void Bone::PrepareOffsetUbo(uint8_t max_count, std::map<std::string, std::map<uint8_t, Matrix4x4*>>& prepared_ubo)
     {
-        if(this->index < max_count && !this->offsets.empty()) {
-
-            // Pour chaque offset du bone
-            for(auto& offset : this->offsets) {
-                if(!mesh_ubo_offsets.count(offset.first)) {
-
-                    // Le mesh n'a pas d'indice, on en créé un
-                    mesh_ubo_offsets[offset.first] = static_cast<uint32_t>(mesh_ubo_offsets.size() * max_count * sizeof(Matrix4x4));
-                    offsets.resize(mesh_ubo_offsets[offset.first] + max_count * sizeof(Matrix4x4));
-                }
-
-                // Écriture de l'offset
-                uint32_t matrix_offset = mesh_ubo_offsets[offset.first] + this->index * sizeof(Matrix4x4);
-                *reinterpret_cast<Matrix4x4*>(offsets.data() + matrix_offset) = offset.second;
-            }
-        }
+        if(this->index < max_count && !this->offsets.empty())
+            for(auto& offset : this->offsets)
+                prepared_ubo[offset.first][this->index] = &offset.second;
 
         for(auto& child : this->children)
-            child.BuildOffsetsUBO(offsets, mesh_ubo_offsets, max_count);
+            child.PrepareOffsetUbo(max_count, prepared_ubo);
     }
 
-    void BONE::BuildSkeletonUBO(std::vector<char>& skeleton, Matrix4x4 const& parent_transformation, uint8_t max_count)
+    void Bone::BuildOffsetsUBO(std::vector<char>& offsets, std::map<std::string, std::map<uint8_t, Matrix4x4*>> const& prepared_bone_offsets_ubo,
+                               std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment)
+    {
+        // Calcul de la taille du buffer final
+        uint32_t output_size = 0;
+        for(auto const& item : prepared_bone_offsets_ubo) {
+            uint32_t buffer_size = static_cast<uint32_t>(sizeof(uint32_t) * 4 * Bone::MAX_BONES_PER_UBO + sizeof(Matrix4x4) * item.second.size());
+            if(alignment > 0) buffer_size = static_cast<uint32_t>((buffer_size + alignment - 1) & ~(alignment - 1));
+            output_size += buffer_size;
+        }
+
+        // Création du buffer de sortie
+        offsets.resize(output_size);
+
+        uint32_t write_offset = 0;
+        for(auto const& item : prepared_bone_offsets_ubo) {
+            uint32_t offset_index = 0;
+            mesh_ubo_offsets[item.first] = write_offset;
+            for(auto const& bone : item.second) {
+                *reinterpret_cast<uint32_t*>(offsets.data() + write_offset + bone.first * sizeof(uint32_t) * 4) = offset_index;
+                *reinterpret_cast<Matrix4x4*>(offsets.data() + write_offset + sizeof(uint32_t) * 4 * Bone::MAX_BONES_PER_UBO + offset_index * sizeof(Matrix4x4)) = *bone.second;
+                offset_index++;
+            }
+            uint32_t buffer_size = static_cast<uint32_t>(sizeof(uint32_t) * 4 * Bone::MAX_BONES_PER_UBO + sizeof(Matrix4x4) * item.second.size());
+            if(alignment > 0) buffer_size = static_cast<uint32_t>((buffer_size + alignment - 1) & ~(alignment - 1));
+            write_offset += buffer_size;
+        }
+    }
+
+    void Bone::BuildSkeletonUBO(std::vector<char>& skeleton, Matrix4x4 const& parent_transformation, uint8_t max_count)
     {
         // Calcul de la transformation globale
         Matrix4x4 bone_transfromation = parent_transformation * this->transformation;
 
-        if(this->index < max_count && !this->offsets.empty()) {
+        if(this->index < max_count) {
 
             // Écriture du bone
             uint32_t skeleton_offset = this->index * sizeof(Matrix4x4);

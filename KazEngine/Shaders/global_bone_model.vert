@@ -6,8 +6,11 @@
 
 layout (location = 0) in vec3  inPos;
 layout (location = 1) in vec2  inUV;
-layout (location = 2) in vec4  inBoneWeights;
-layout (location = 3) in ivec4 inBoneIDs;
+
+layout(push_constant) uniform BoneID
+{
+	layout(offset = 52) uint bone_id;
+};
 
 layout (set=0, binding=0) uniform Camera
 {
@@ -46,28 +49,10 @@ vec3 MatrixMultT(mat4 matrix, vec3 vertex)
 
 void main() 
 {
-	mat4 boneTransform = mat4(0);
-	mat4 modelView = camera.view * entity.model;
-	bool has_bone = false;
-	float total_weight = 0.0f;
-
 	outUV = inUV;
-
-	for(int i=0; i<MAX_BONE_PER_VERTEX; i++) {
-		if(inBoneWeights[i] == 0) break;
-		boneTransform += skeleton.bones[inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
-		total_weight += inBoneWeights[i];
-		has_bone = true;
-	}
-		
-	if(!has_bone) {
 	
-		gl_Position = camera.projection * modelView * vec4(inPos, 1.0);
-		
-	}else{
-	
-		vec3 transformed_vertex = MatrixMultT(boneTransform, inPos) / total_weight;
-		gl_Position = camera.projection * modelView * vec4(transformed_vertex, 1.0);
-		
-	}
+	mat4 boneTransform = skeleton.bones[bone_id] * offsets[offset_ids[bone_id]];
+	// mat4 boneTransform = skeleton.bones[bone_id] * offsets[0];
+	vec3 transformed_vertex = MatrixMultT(boneTransform, inPos);
+	gl_Position = camera.projection * camera.view * entity.model * vec4(transformed_vertex, 1.0);
 }

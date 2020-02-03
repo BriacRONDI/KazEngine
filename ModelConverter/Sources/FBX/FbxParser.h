@@ -237,11 +237,11 @@ class FbxParser
         std::vector<FBX_ANIMATION_LAYER> animation_layers;
         std::vector<CONNECTION_TREE> connection_tree;
         std::map<int64_t, uint32_t> referenced_bones;
-        std::map<std::string, Engine::BONE> bone_trees;
+        std::map<std::string, Engine::Bone> bone_trees;
         std::map<int64_t, uint32_t> used_bones;
         std::map<int64_t, uint32_t> unused_bones;
         uint32_t next_used_bone_id;
-        Engine::BONE null_bone;
+        Engine::Bone null_bone;
 
         //////////////
         // Méthodes //
@@ -278,17 +278,17 @@ class FbxParser
         std::vector<Engine::KEYFRAME> ParseCurveNode(FBX_CURVE_NODE const& curve_node);
         void ComputeAnimations();
         FbxParser::FBX_NODE GetRootModel(FBX_NODE const& node, std::vector<FBX_NODE> const& models);
-        Engine::BONE GetBoneTree(FBX_NODE const& node, Engine::BONE const& parent, std::vector<FBX_NODE> const& models);
-        Engine::BONE CreateBone(FBX_NODE const& node, Engine::BONE const& parent);
-        Engine::BONE& FindBone(uint32_t bone_id, Engine::BONE& parent);
-        Engine::BONE RebuildBoneTree(Engine::BONE& bone, bool& skeep_me);
+        Engine::Bone GetBoneTree(FBX_NODE const& node, Engine::Bone const& parent, std::vector<FBX_NODE> const& models);
+        Engine::Bone CreateBone(FBX_NODE const& node, Engine::Bone const& parent);
+        Engine::Bone& FindBone(uint32_t bone_id, Engine::Bone& parent);
+        Engine::Bone RebuildBoneTree(Engine::Bone& bone, bool& skeep_me);
         FbxParser::FBX_BONE FindCluster(int64_t id);
         void ComputeClusterDeformation(FBX_MESH_GEOMETRY& mesh_geometry);
-        Engine::BONE GetBone(FBX_BONE const& node, Engine::BONE const& bone_tree);
-        Engine::Matrix4x4 GetBoneGlobalTransform(Engine::BONE const& bone, Engine::BONE const& bone_tree);
-        Engine::BONE GetParentBone(Engine::BONE const& bone, Engine::BONE const& bone_tree);
+        Engine::Bone GetBone(FBX_BONE const& node, Engine::Bone const& bone_tree);
+        Engine::Matrix4x4 GetBoneGlobalTransform(Engine::Bone const& bone, Engine::Bone const& bone_tree);
+        Engine::Bone GetParentBone(Engine::Bone const& bone, Engine::Bone const& bone_tree);
         void ApplyBonesOffsets(FBX_MESH_GEOMETRY& mesh_geometry, std::string const& mesh_name);
-        void SetBoneOffset(uint32_t bone_id, std::string const& mesh_name, Engine::Matrix4x4 const& offset, Engine::BONE& bone_tree);
+        void SetBoneOffset(uint32_t bone_id, std::string const& mesh_name, Engine::Matrix4x4 const& offset, Engine::Bone& bone_tree);
 
         std::vector<float> ParseFloat32Array(FBX_PROPERTY const& property);
         std::vector<int64_t> ParseInt64Array(FBX_PROPERTY const& property);

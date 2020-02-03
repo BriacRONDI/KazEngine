@@ -96,11 +96,18 @@ namespace Engine
         }
 
         std::vector<VkPushConstantRange> push_constant_ranges;
-        if(schema & SCHEMA_PRIMITIVE::MATERIAL && shaders[2].empty()) {
+        if(schema & SCHEMA_PRIMITIVE::MATERIAL) {
             VkPushConstantRange range;
             range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
             range.offset = 0;
             range.size = Mesh::MATERIAL::Size();
+            push_constant_ranges.push_back(range);
+        }
+        if(schema & SCHEMA_PRIMITIVE::SINGLE_BONE) {
+            VkPushConstantRange range;
+            range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+            range.offset = Mesh::MATERIAL::Size();
+            range.size = sizeof(uint32_t);
             push_constant_ranges.push_back(range);
         }
 

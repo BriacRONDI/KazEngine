@@ -1,8 +1,7 @@
 #version 450
 
-layout (location = 0) in vec3 inNormal;
-layout (location = 1) in vec3 inColor;
-layout (location = 2) in vec3 inFragPos;
+layout (location = 0) in vec3 inColor;
+// layout (location = 1) in vec3 inFragPos;
 
 layout (set=0, binding=0) uniform Camera
 {
@@ -11,19 +10,20 @@ layout (set=0, binding=0) uniform Camera
 	vec3 position;
 } camera;
 
-layout (set=0, binding=2) uniform Lighting
+/*layout (set=0, binding=2) uniform Lighting
 {
 	vec3 color;
 	vec3 position;
 	float ambient_strength;
 	float specular_strength;
-}light;
+}light;*/
 
 layout (location = 0) out vec4 outColor;
 
 void main()
 {
-	vec3 normal = normalize(inNormal);
+	outColor = vec4(inColor, 1.0);
+	/*vec3 normal = normalize(inNormal);
 	
 	// Ambient light
 	vec3 ambient_color = inColor * light.color * light.ambient_strength;
@@ -41,15 +41,5 @@ void main()
 	vec3 specular_color = light.specular_strength * specular * light.color;  
 	
 	vec3 color = (ambient_color + diffuse_color + specular_color) * inColor;
-	// vec3 color = specular_color * inColor;
-    outColor = vec4(color, 1.0);
-	
-	/*vec3 N = normalize(inNormal);
-	vec3 L = normalize(inLightVec);
-	vec3 V = normalize(inViewVec);
-	vec3 R = reflect(-L, N);
-	vec3 diffuse = max(dot(N, L), 0.0) * inColor;
-	vec3 specular = pow(max(dot(R, V), 0.0), 8.0) * vec3(0.75);
-	vec3 ambiant = vec3(0.25) * inColor;
-	outColor = vec4(diffuse + specular + ambiant, 1.0);*/
+    outColor = vec4(color, 1.0);*/
 }

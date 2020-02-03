@@ -12,6 +12,7 @@ CALL :COMPILE material_basic_model.vert
 CALL :COMPILE material_basic_model.frag
 CALL :COMPILE texture_basic_model.vert
 CALL :COMPILE material_skeleton_model.vert
+CALL :COMPILE global_bone_model.vert
 pause
 
 :COMPILE

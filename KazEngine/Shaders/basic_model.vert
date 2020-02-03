@@ -1,7 +1,6 @@
 #version 450
 
 layout (location = 0) in vec3  inPos;
-layout (location = 1) in vec3  inNormal;
 
 layout (set=0, binding=0) uniform Camera
 {
@@ -16,17 +15,10 @@ layout (set=0, binding=1) uniform Entity
 	vec3 color;
 } entity;
 
-layout (location = 0) out vec3 outNormal;
-layout (location = 1) out vec3 outColor;
-layout (location = 2) out vec3 outFragPos;
+layout (location = 0) out vec3 outColor;
 
 void main() 
 {
-	mat4 modelView = camera.view * entity.model;
-	
-	outNormal = mat3(entity.model) * inNormal;
 	outColor = entity.color;
-    outFragPos = (entity.model * vec4(inPos, 1.0)).xyz;
-	
-	gl_Position = camera.projection * modelView * vec4(inPos, 1.0);
+	gl_Position = camera.projection * camera.view * entity.model * vec4(inPos, 1.0);
 }

@@ -69,7 +69,7 @@ namespace Engine
                 }
 
                 // Désérialization du squelette
-                std::shared_ptr<Engine::BONE> bone(new Engine::BONE);
+                std::shared_ptr<Engine::Bone> bone(new Engine::Bone);
                 bone->Deserialize(raw_data.data() + skeleton_packed_data.position + skeleton_packed_data.HeaderSize());
                 this->skeletons[bone->name] = bone;
                 #if defined(DISPLAY_LOGS)
