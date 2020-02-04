@@ -311,7 +311,7 @@ namespace Engine
 
             //La touche VK_DOWN est enfoncée
             case WM_KEYDOWN :
-                //Keyboard::GetInstance()->PressKey((unsigned char)wParam);
+                Keyboard::GetInstance()->PressKey(static_cast<unsigned char>(wParam));
                 switch(wParam)
                 {
                     case VK_ESCAPE:
@@ -322,7 +322,7 @@ namespace Engine
 
             //La touche VK_UP est enfoncée
             case WM_KEYUP :
-                //Keyboard::GetInstance()->ReleaseKey((unsigned char)wParam);
+                Keyboard::GetInstance()->ReleaseKey(static_cast<unsigned char>(wParam));
                 break;
 
             // La souris de séplace sur la fenêtre

@@ -35,6 +35,7 @@ namespace Engine
             Vector3& operator=(Vector3&& other);
             inline bool operator==(Vector3 const& other) const { return this->xyz == other.xyz; }
             Vector3 operator*(Matrix4x4 const& matrix) const;
+            inline Vector3 operator*(float const scalar) const { return { this->x * scalar, this->y * scalar, this->z * scalar }; }
             Vector3 operator+(Vector3 const& other) const;
             Vector3 operator-(Vector3 const& other) const;
             Vector3 Normalize() const;
@@ -42,5 +43,6 @@ namespace Engine
             float Length() const;
             std::unique_ptr<char> Serialize() const;
             size_t Deserialize(const char* data);
+            static Vector3 Interpolate(Vector3 const& source, Vector3 const& dest, float ratio);
     };
 }

@@ -54,6 +54,9 @@
     <ClCompile Include="..\KazEngine\Sources\Engine\Graphics\Skeleton\Deformer.cpp">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
+    <ClCompile Include="..\KazEngine\Sources\Engine\Platform\Inputs\Keyboard\Keyboard.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Sources\FBX\FbxParser.h">

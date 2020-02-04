@@ -29,14 +29,13 @@ namespace Engine
             bool CreateViewDescriptorSet(VkDescriptorBufferInfo& camera_buffer, VkDescriptorBufferInfo& entity_buffer, bool enable_geometry_shader = false);
             bool CreateSkeletonDescriptorSet(VkDescriptorBufferInfo const& skeleton_buffer, VkDescriptorBufferInfo const& bone_offsets_buffer);
             bool CreateTextureDescriptorSet(VkImageView const view = nullptr, std::string const& texture = {});
-            // bool CreateBoneOffsetsDescriptorSet(VkDescriptorBufferInfo& bone_offsets_buffer);
             // bool CreateLightDescriptorSet(VkDescriptorBufferInfo& light_buffer);
             std::vector<VkDescriptorSetLayout> const GetLayoutArray(uint16_t schema);
+            void UpdateSkeletonDescriptorSet(VkDescriptorBufferInfo const& skeleton_buffer, VkDescriptorBufferInfo const& bone_offsets_buffer);
 
             inline VkDescriptorSet const GetViewDescriptorSet() { return this->view_set; }
             inline VkDescriptorSet const GetSkeletonDescriptorSet() { return this->skeleton_set; }
             inline VkDescriptorSet const GetTextureDescriptorSet(std::string const& texture) { return this->texture_sets[texture]; }
-            // inline VkDescriptorSet const GetBoneOffsetsDescriptorSet() { return this->bone_offsets_set; }
 
         private :
 
@@ -52,11 +51,6 @@ namespace Engine
             VkDescriptorPool skeleton_pool;
             VkDescriptorSetLayout skeleton_layout;
             VkDescriptorSet skeleton_set;
-
-            // Descriptor set pointant sur le uniform buffer des offsets des squelettes
-            /*VkDescriptorPool bone_offsets_pool;
-            VkDescriptorSetLayout bone_offsets_layout;
-            VkDescriptorSet bone_offsets_set;*/
 
             // Descriptor set avec texture
             VkDescriptorPool texture_pool;

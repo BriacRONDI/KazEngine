@@ -156,7 +156,7 @@ namespace Engine
 
         VkDescriptorSetLayoutBinding descriptor_set_bindings[2];
         descriptor_set_bindings[0].binding             = 0;
-        descriptor_set_bindings[0].descriptorType      = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+        descriptor_set_bindings[0].descriptorType      = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         descriptor_set_bindings[0].descriptorCount     = 1;
         descriptor_set_bindings[0].stageFlags          = VK_SHADER_STAGE_VERTEX_BIT;
         descriptor_set_bindings[0].pImmutableSamplers  = nullptr;
@@ -188,7 +188,7 @@ namespace Engine
 
         VkDescriptorPoolSize pool_sizes[2];
 
-		pool_sizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
+		pool_sizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 		pool_sizes[0].descriptorCount = 1;
 
         pool_sizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
@@ -231,7 +231,7 @@ namespace Engine
         // Mise à jour du Descriptor Set //
         ///////////////////////////////////
 
-        VkWriteDescriptorSet writes[2];
+        /*VkWriteDescriptorSet writes[2];
 
         writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[0].pNext = nullptr;
@@ -256,13 +256,49 @@ namespace Engine
         writes[1].dstSet = this->skeleton_set;
 
         // Mise à jour
-        vkUpdateDescriptorSets(Vulkan::GetDevice(), 2, writes, 0, nullptr);
+        vkUpdateDescriptorSets(Vulkan::GetDevice(), 2, writes, 0, nullptr);*/
+
+        this->UpdateSkeletonDescriptorSet(skeleton_buffer, bone_offsets_buffer);
 
         #if defined(DISPLAY_LOGS)
         std::cout <<"CreateSkeletonDescriptorSet : Success" << std::endl;
         #endif
 
         return true;
+    }
+
+    void DescriptorSetManager::UpdateSkeletonDescriptorSet(VkDescriptorBufferInfo const& skeleton_buffer, VkDescriptorBufferInfo const& bone_offsets_buffer)
+    {
+        VkWriteDescriptorSet writes[2];
+
+        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[0].pNext = nullptr;
+        writes[0].dstBinding = 0;
+        writes[0].dstArrayElement = 0;
+        writes[0].descriptorCount = 1;
+        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        writes[0].pBufferInfo = &skeleton_buffer;
+        writes[0].pTexelBufferView = nullptr;
+        writes[0].pImageInfo = nullptr;
+        writes[0].dstSet = this->skeleton_set;
+
+        writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[1].pNext = nullptr;
+        writes[1].dstBinding = 1;
+        writes[1].dstArrayElement = 0;
+        writes[1].descriptorCount = 1;
+        writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        writes[1].pBufferInfo = &bone_offsets_buffer;
+        writes[1].pTexelBufferView = nullptr;
+        writes[1].pImageInfo = nullptr;
+        writes[1].dstSet = this->skeleton_set;
+
+        // Mise à jour
+        vkUpdateDescriptorSets(Vulkan::GetDevice(), 2, writes, 0, nullptr);
+
+        #if defined(DISPLAY_LOGS)
+        std::cout <<"CreateSkeletonDescriptorSet : Success" << std::endl;
+        #endif
     }
 
     bool DescriptorSetManager::CreateTextureDescriptorSet(VkImageView const view, std::string const& texture)

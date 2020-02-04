@@ -312,15 +312,40 @@ namespace Engine
         return count;
     }
 
+    /**
+     * Construction des Uniform Buffers qui seront passés à la carte graphique, un buffer contient le squelette, l'autre, les offsets des bones
+     * @param skeleton[out] Buffer contenant le squelette
+     * @param offsets[out] Buffer contenant les offsets des bones
+     * @param mesh_ubo_offsets[out] Renvoie la liste des offsets des données associées à chaque mesh (ces données sont toutes contenus dans le buffer offsets)
+     * @param alignment[in] Alignement mémoire des bone offsets (minUniformBufferOffsetAlignment)
+     */
     void Bone::BuildUBO(std::vector<char>& skeleton, std::vector<char>& offsets, std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment)
     {
-        this->BuildSkeletonUBO(skeleton, IDENTITY_MATRIX, Bone::MAX_BONES_PER_UBO);
+        this->BuildSkeletonSBO(skeleton, IDENTITY_MATRIX, Bone::MAX_BONES_PER_UBO);
 
         std::map<std::string, std::map<uint8_t, Matrix4x4*>> prepared_bone_offsets_ubo;
         this->PrepareOffsetUbo(static_cast<uint8_t>(skeleton.size() / sizeof(Matrix4x4)), prepared_bone_offsets_ubo);
         this->BuildOffsetsUBO(offsets, prepared_bone_offsets_ubo, mesh_ubo_offsets, alignment);
     }
 
+    /**
+     * Construction du Uniform Buffer des bone offsets qui sera passé à la carte graphique
+     * @param offsets[out] Buffer contenant les offsets des bones
+     * @param mesh_ubo_offsets[out] Renvoie la liste des offsets des données associées à chaque mesh (ces données sont toutes contenus dans le buffer offsets)
+     * @param alignment[in] Alignement mémoire des bone offsets (minUniformBufferOffsetAlignment)
+     */
+    void Bone::BuildBoneOffsetsUBO(std::vector<char>& offsets, std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment)
+    {
+        std::map<std::string, std::map<uint8_t, Matrix4x4*>> prepared_bone_offsets_ubo;
+        this->PrepareOffsetUbo(Bone::MAX_BONES_PER_UBO, prepared_bone_offsets_ubo);
+        this->BuildOffsetsUBO(offsets, prepared_bone_offsets_ubo, mesh_ubo_offsets, alignment);
+    }
+
+    /**
+     * Création d'un std::map indiquant pour chaque mesh, la liste des indices des bones auxquels il est associés ainsi que la valeur des matreices de ces bones
+     * @param max_count[in] limite de bone offsets pour un mesh
+     * @param prepared_ubo[out] Clé : nom du mesh, Valeur : std::map => Clé : indice du bone, Valeur bone offset du mesh
+     */
     void Bone::PrepareOffsetUbo(uint8_t max_count, std::map<std::string, std::map<uint8_t, Matrix4x4*>>& prepared_ubo)
     {
         if(this->index < max_count && !this->offsets.empty())
@@ -331,6 +356,14 @@ namespace Engine
             child.PrepareOffsetUbo(max_count, prepared_ubo);
     }
 
+    /**
+     * Création du buffer des bone offsets, pour obtenir la transformation finale d'un mesh,
+     * il faut multiplier chacun des bones auxquels il est associé à cette matrice
+     * @param offsets[out] Buffer contenant les offsets des bones
+     * @param prepared_bone_offsets_ubo[in] résultat de @ref PrepareOffsetUbo
+     * @param mesh_ubo_offsets[out] Renvoie la liste des offsets des données associées à chaque mesh (ces données sont toutes contenus dans le buffer offsets)
+     * @param alignment[in] Alignement mémoire des bone offsets (minUniformBufferOffsetAlignment)
+     */
     void Bone::BuildOffsetsUBO(std::vector<char>& offsets, std::map<std::string, std::map<uint8_t, Matrix4x4*>> const& prepared_bone_offsets_ubo,
                                std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment)
     {
@@ -360,7 +393,13 @@ namespace Engine
         }
     }
 
-    void Bone::BuildSkeletonUBO(std::vector<char>& skeleton, Matrix4x4 const& parent_transformation, uint8_t max_count)
+    /**
+     * Création du squelette sans animation
+     * @param skeleton[out] Buffer contenant le squelette
+     * @param parent_transformation[in] Transformation du bone parent
+     * @param max_count[in] limite du nombre de bones dansle squelette
+     */
+    void Bone::BuildSkeletonSBO(std::vector<char>& skeleton, Matrix4x4 const& parent_transformation, uint8_t max_count)
     {
         // Calcul de la transformation globale
         Matrix4x4 bone_transfromation = parent_transformation * this->transformation;
@@ -374,6 +413,128 @@ namespace Engine
         }
 
         for(auto& child : this->children)
-            child.BuildSkeletonUBO(skeleton, bone_transfromation, max_count);
+            child.BuildSkeletonSBO(skeleton, bone_transfromation, max_count);
     }
+
+    /**
+     * Création du squelette positionné à un instant donné d'une animation
+     * @param skeleton[out] Buffer contenant le squelette
+     * @param parent_transformation[in] Transformation du bone parent
+     * @param max_count[in] limite du nombre de bones dansle squelette
+     * @param time Avancement de l'animation dans le temps
+     * @param animation Animation souhaitée
+     */
+    void Bone::BuildSkeletonSBO(std::vector<char>& skeleton, Matrix4x4 const& parent_transformation, uint8_t max_count,
+                                std::chrono::milliseconds const& time, std::string const& animation, uint32_t base_offset)
+    {
+        // Évaluation de la transformation au temps indiqué
+        Matrix4x4 bone_transfromation;
+        if(this->animations.count(animation)) {
+            Vector3 translation = this->EvalInterpolation(this->animations[animation].translations, time);
+            Vector3 scaling = this->EvalInterpolation(this->animations[animation].scalings, time, {std::chrono::milliseconds(0), {1,1,1}});
+            Vector3 rotation = this->EvalInterpolation(this->animations[animation].rotations, time) * DEGREES_TO_RADIANS;
+            Matrix4x4 anim_transformation = Matrix4x4::TranslationMatrix(translation) * Matrix4x4::EulerRotation(IDENTITY_MATRIX, rotation, Matrix4x4::EULER_ORDER::ZYX) * Matrix4x4::ScalingMatrix(scaling);
+            bone_transfromation = parent_transformation * anim_transformation;
+        }else{
+            bone_transfromation = parent_transformation * this->transformation;
+        }
+
+        // Écriture du bone
+        if(this->index < max_count) {
+            uint32_t skeleton_offset = base_offset + this->index * sizeof(Matrix4x4);
+            if(skeleton.size() < skeleton_offset + sizeof(Matrix4x4)) skeleton.resize(skeleton_offset + sizeof(Matrix4x4));
+            *reinterpret_cast<Matrix4x4*>(skeleton.data() + skeleton_offset) = bone_transfromation;
+        }
+
+        // Traitement récursif sur tous les enfants
+        for(auto& child : this->children)
+            child.BuildSkeletonSBO(skeleton, bone_transfromation, max_count, time, animation, base_offset);
+    }
+
+    /**
+     * Calcule la durée totale de l'animation en cherchant la KeyFrame la plus avancée dans le temps
+     * @param animation Nom de l'animation dont on souhaite connaitre la durée
+     */
+    std::chrono::milliseconds Bone::GetAnimationTotalDuration(std::string const& animation) const
+    {
+        std::chrono::milliseconds total_duration(0);
+        for(auto const& animation : this->animations) {
+            for(auto const& translation : animation.second.translations) if(translation.time > total_duration) total_duration = translation.time;
+            for(auto const& rotation : animation.second.rotations) if(rotation.time > total_duration) total_duration = rotation.time;
+            for(auto const& scaling : animation.second.scalings) if(scaling.time > total_duration) total_duration = scaling.time;
+        }
+
+        for(auto const& child : this->children) {
+            std::chrono::milliseconds child_total_duration = child.GetAnimationTotalDuration(animation);
+            if(child_total_duration > total_duration) total_duration = child_total_duration;
+        }
+
+        return total_duration;
+    }
+
+    void Bone::BuildAnimationSBO(std::vector<char>& skeleton, std::string const& animation, uint16_t& frame_count, uint32_t& bone_per_frame, uint8_t frames_per_second)
+    {
+        std::chrono::milliseconds total_duration = this->GetAnimationTotalDuration(animation);
+        std::chrono::milliseconds time_per_frame(1000 / frames_per_second);
+        std::chrono::milliseconds final_duration = total_duration;
+        if(final_duration.count() % time_per_frame.count() != 0) final_duration += std::chrono::milliseconds(final_duration.count() % time_per_frame.count());
+
+        this->BuildSkeletonSBO(skeleton, IDENTITY_MATRIX, Bone::MAX_BONES_PER_UBO, std::chrono::milliseconds(0), animation, 0);
+        frame_count = static_cast<uint16_t>(final_duration /  time_per_frame);
+        bone_per_frame = static_cast<uint32_t>(skeleton.size() / sizeof(Matrix4x4));
+        for(uint16_t i=1; i<frame_count; i++)
+            this->BuildSkeletonSBO(skeleton, IDENTITY_MATRIX, Bone::MAX_BONES_PER_UBO, time_per_frame * i, animation, static_cast<uint32_t>(skeleton.size()));
+    }
+
+    /**
+     * Interpolation d'une KeyFrame : Calcul d'un état intermédiaire entre une KeyFrame et la suivante afin de créer une animation sans discontinuité.
+     * @param keyframes Liste des KeyFrames composant un mouvement
+     * @param time Stade d'avancement de l'animation
+     * @param base Stade initial de l'animation
+     */
+    Vector3 Bone::EvalInterpolation(std::vector<KEYFRAME> const& keyframes, std::chrono::milliseconds const& time, KEYFRAME const& base)
+    {
+        if(keyframes.size() == 0) return base.value;
+
+        uint32_t source_key = UINT32_MAX;
+        uint32_t dest_key = UINT32_MAX;
+
+        for(uint32_t i=0; i<keyframes.size(); i++) {
+            auto& keyframe = keyframes[i];
+            if(keyframe.time <= time) {
+                source_key = i;
+            } else {
+                dest_key = i;
+                break;
+            }
+        }
+
+        if(dest_key == UINT32_MAX) {
+
+            KEYFRAME const& last_keyframe = keyframes[keyframes.size() - 1];
+            return last_keyframe.value;
+
+        }else{
+
+            KEYFRAME const& source_keyframe = (source_key == UINT32_MAX) ? base : keyframes[source_key];
+            KEYFRAME const& dest_keyframe = keyframes[dest_key];
+
+            std::chrono::milliseconds current_key_duration = dest_keyframe.time - source_keyframe.time;
+            std::chrono::milliseconds key_progression = time - source_keyframe.time;
+            float ratio = static_cast<float>(key_progression.count()) / static_cast<float>(current_key_duration.count());
+
+            return Vector3::Interpolate(source_keyframe.value, dest_keyframe.value, ratio);
+        }
+    }
+
+    /*void Vulkan::UpdateSkeleton(uint32_t mesh_id, std::chrono::milliseconds& time, std::string const& animation)
+    {
+        MESH& mesh = this->meshes[mesh_id];
+        Matrix4x4 identity = IDENTITY_MATRIX;
+
+        for(auto& resource : this->shared) {
+            ENTITY& entity = resource.entities[mesh_id];
+            this->EvalBones(entity.ubo, this->bone_trees[mesh.bone_tree_id], mesh.vertex_buffer_id, identity, time, animation);
+        }
+    }*/
 }

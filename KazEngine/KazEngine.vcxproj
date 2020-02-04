@@ -137,6 +137,7 @@
     <ClCompile Include="Sources\Engine\Common\Maths\Vector4.cpp" />
     <ClCompile Include="Sources\Engine\Common\Packer\Packer.cpp" />
     <ClCompile Include="Sources\Engine\Common\Tools\Tools.cpp" />
+    <ClCompile Include="Sources\Engine\Core\Entity\SkeletonEntity\SkeletonEntity.cpp" />
     <ClCompile Include="Sources\Engine\Core\ManagedBuffer\ManagedBuffer.cpp" />
     <ClCompile Include="Sources\Engine\Core\Core.cpp" />
     <ClCompile Include="Sources\Engine\Core\Entity\Entity.cpp" />

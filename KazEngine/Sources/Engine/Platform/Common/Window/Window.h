@@ -3,6 +3,7 @@
 #include "IWindowListener.h"
 #include "../../../Common/EventEmitter.hpp"
 #include "../../Inputs/Mouse/Mouse.h"
+#include "../../Inputs/Keyboard/Keyboard.h"
 
 #if defined(_WIN32)
 #include <map>

@@ -2,7 +2,7 @@
 
 namespace Engine
 {
-    void ManagedBuffer::Reset()
+    void ManagedBuffer::Clear()
     {
         this->data.reset();
         this->sub_buffer.clear();

@@ -46,7 +46,11 @@ namespace Engine
 
         if(!this->AllocateRenderingResources()) return false;
         
-        // Model buffer : vertex buffer + index buffer
+        ////////////////////
+        //  Model buffer  //
+        // Vertex / Index //
+        ////////////////////
+
         Vulkan::DATA_BUFFER buffer;
         Vulkan::GetInstance().CreateDataBuffer(
                 buffer, MODEL_BUFFER_SIZE,
@@ -54,7 +58,11 @@ namespace Engine
                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         this->model_buffer.SetBuffer(buffer);
 
-        // Work buffer : descriptor sets
+        ////////////////////
+        //  Work buffer   //
+        // Uniform Buffer //
+        ////////////////////
+
         Vulkan::GetInstance().CreateDataBuffer(
                 buffer, WORK_BUFFER_SIZE,
                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -77,20 +85,33 @@ namespace Engine
             Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(Lighting::LIGHTING_UBO)));*/
 
         VkDescriptorBufferInfo bone_offsets_buffer_infos = this->work_buffer.CreateSubBuffer(
-            SUB_BUFFER_TYPE::MESH_UBO,
+            SUB_BUFFER_TYPE::BONE_OFFSETS_UBO,
             entity_buffer_infos.offset + entity_buffer_infos.range,
             Vulkan::GetDeviceLimits().maxUniformBufferRange);
 
-        VkDescriptorBufferInfo skeleton_buffer_infos = this->work_buffer.CreateSubBuffer(
-            SUB_BUFFER_TYPE::SKELETON_UBO,
-            bone_offsets_buffer_infos.offset + bone_offsets_buffer_infos.range,
-            WORK_BUFFER_SIZE - (bone_offsets_buffer_infos.offset + bone_offsets_buffer_infos.range));
+        ////////////////////////////////////
+        //         Storage buffer         //
+        // Stockage des données en volume //
+        ////////////////////////////////////
+
+        Vulkan::GetInstance().CreateDataBuffer(
+                buffer, STORAGE_BUFFER_SIZE,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        this->storage_buffer.SetBuffer(buffer);
+        this->storage_buffer.SetChunkAlignment(Vulkan::GetDeviceLimits().minStorageBufferOffsetAlignment);
+        VkDescriptorBufferInfo skeleton_buffer_infos = this->storage_buffer.GetBufferInfos();
 
         // Création des descriptor sets
         bool enable_geometry_shader = false;
         #if defined(DISPLAY_LOGS)
         enable_geometry_shader = true;
         #endif
+
+        // Pour les buffers dynamiques, vulkan attend le range par section et non pas le range du buffer complet
+        entity_buffer_infos.range = Entity::MAX_UBO_SIZE;
+        bone_offsets_buffer_infos.range = Bone::MAX_BONES_PER_UBO * sizeof(Matrix4x4);
+
         this->ds_manager.CreateViewDescriptorSet(camera_buffer_infos, entity_buffer_infos, enable_geometry_shader);
         this->ds_manager.CreateTextureDescriptorSet();
         this->ds_manager.CreateSkeletonDescriptorSet(skeleton_buffer_infos, bone_offsets_buffer_infos);
@@ -258,12 +279,17 @@ namespace Engine
             // Model buffer
             if(this->model_buffer.GetBuffer().memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->model_buffer.GetBuffer().memory, nullptr);
             if(this->model_buffer.GetBuffer().handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, this->model_buffer.GetBuffer().handle, nullptr);
-            this->model_buffer.Reset();
+            this->model_buffer.Clear();
 
             // Work buffer
             if(this->work_buffer.GetBuffer().memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->work_buffer.GetBuffer().memory, nullptr);
             if(this->work_buffer.GetBuffer().handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, this->work_buffer.GetBuffer().handle, nullptr);
-            this->work_buffer.Reset();
+            this->work_buffer.Clear();
+
+            // Storage buffer
+            if(this->storage_buffer.GetBuffer().memory != VK_NULL_HANDLE) vkFreeMemory(this->device, this->storage_buffer.GetBuffer().memory, nullptr);
+            if(this->storage_buffer.GetBuffer().handle != VK_NULL_HANDLE) vkDestroyBuffer(this->device, this->storage_buffer.GetBuffer().handle, nullptr);
+            this->storage_buffer.Clear();
 
             // Générateurs de rendu
             this->renderers.clear();
@@ -300,25 +326,42 @@ namespace Engine
         // Le squelette n'est pas chargé dans le gestionnaire de models
         if(!this->model_manager.skeletons.count(skeleton)) return false;
 
-        // Construction du buffer
-        std::vector<char> skeleton_ubo, offsets_ubo;
-        std::map<std::string, uint32_t> mesh_ubo_offsets;
-        uint32_t alignment = static_cast<uint32_t>(Vulkan::GetDeviceLimits().minUniformBufferOffsetAlignment);
-        this->model_manager.skeletons[skeleton]->BuildUBO(skeleton_ubo, offsets_ubo, mesh_ubo_offsets, alignment);
+        //////////////////////////
+        // UBO des bone offsets //
+        //////////////////////////
 
-        // Réservation d'un chunk sur le buffer du squelette
-        if(!this->work_buffer.ReserveChunk(this->skeletons[skeleton], skeleton_ubo.size(), SUB_BUFFER_TYPE::SKELETON_UBO)) return false;
-        this->work_buffer.WriteData(skeleton_ubo.data(), skeleton_ubo.size(), this->skeletons[skeleton], SUB_BUFFER_TYPE::SKELETON_UBO);
+        // Construction du buffer
+        std::vector<char> offsets_ubo;
+        std::map<std::string, uint32_t> mesh_ubo_offsets;
+        uint32_t ubo_alignment = static_cast<uint32_t>(Vulkan::GetDeviceLimits().minUniformBufferOffsetAlignment);
+        this->model_manager.skeletons[skeleton]->BuildBoneOffsetsUBO(offsets_ubo, mesh_ubo_offsets, ubo_alignment);
 
         // Réservation d'un chunk sur le buffer des offsets
         uint32_t mesh_ubo_base_offset;
-        if(!this->work_buffer.ReserveChunk(mesh_ubo_base_offset, offsets_ubo.size(), SUB_BUFFER_TYPE::MESH_UBO)) return false;
-        this->work_buffer.WriteData(offsets_ubo.data(), offsets_ubo.size(), mesh_ubo_base_offset, SUB_BUFFER_TYPE::MESH_UBO);
+        if(!this->work_buffer.ReserveChunk(mesh_ubo_base_offset, offsets_ubo.size(), SUB_BUFFER_TYPE::BONE_OFFSETS_UBO)) return false;
+        this->work_buffer.WriteData(offsets_ubo.data(), offsets_ubo.size(), mesh_ubo_base_offset, SUB_BUFFER_TYPE::BONE_OFFSETS_UBO);
 
         // On positionne tous les skeleton_buffer_offset des mesh
         for(auto& mesh : mesh_ubo_offsets)
             if(this->model_manager.models.count(mesh.first))
                 this->model_manager.models[mesh.first]->skeleton_buffer_offset = mesh_ubo_base_offset + mesh.second;
+
+        //////////////////////
+        // SBO du squelette //
+        //////////////////////
+
+        // Construction du buffer
+        std::vector<char> skeleton_sbo;
+        SKELETAL_ANIMATION_SBO animation_sbo;
+        this->model_manager.skeletons[skeleton]->BuildAnimationSBO(skeleton_sbo, "metarig|stand", animation_sbo.frame_count, animation_sbo.bone_per_frame, 30);
+
+        // Réservation d'un chunk sur le buffer du squelette
+        VkDeviceSize skeleton_offset;
+        if(!this->storage_buffer.ReserveChunk(skeleton_offset, skeleton_sbo.size())) return false;
+        this->storage_buffer.WriteData(skeleton_sbo.data(), skeleton_sbo.size(), skeleton_offset);
+        animation_sbo.offset = static_cast<uint32_t>(skeleton_offset);
+        this->skeletons[skeleton] = animation_sbo;
+        this->storage_buffer.Flush();
 
         // Succès
         return true;
@@ -385,6 +428,8 @@ namespace Engine
                         #endif
                         return false;
                     }
+                    std::shared_ptr<SkeletonEntity> skeleton_entity = std::dynamic_pointer_cast<SkeletonEntity>(entity);
+                    if(skeleton_entity.get() != nullptr) skeleton_entity->bones_per_frame = this->skeletons[entity_mesh->skeleton].bone_per_frame;
                 }
                 
                 VkDeviceSize vbo_size;
@@ -540,7 +585,7 @@ namespace Engine
                     // Si ce modèle a un squelette, on ajoute son descriptor set
                     if(!model->skeleton.empty()) {
                         bind_descriptor_sets.push_back(this->ds_manager.GetSkeletonDescriptorSet());
-                        dynamic_offsets.push_back(this->skeletons[model->skeleton]);
+                        // dynamic_offsets.push_back(this->skeletons[model->skeleton].offset + 30 * this->skeletons[model->skeleton].size_per_frame);
                         dynamic_offsets.push_back(model->skeleton_buffer_offset);
                         if(model->render_mask & Renderer::SINGLE_BONE)
                             vkCmdPushConstants(command_buffer, renderer.GetPipeline().layout, VK_SHADER_STAGE_VERTEX_BIT,
@@ -549,7 +594,6 @@ namespace Engine
 
                     // On associe le vertex buffer
                     vkCmdBindVertexBuffers(command_buffer, 0, 1, &this->model_buffer.GetBuffer().handle, &model->vertex_buffer_offset);
-
                     
                     if(model->index_buffer_offset > 0) {
 
@@ -624,7 +668,7 @@ namespace Engine
         // -> uniquement disponible en mode debug //
         ////////////////////////////////////////////
 
-        #if defined(DISPLAY_LOGS)
+        /*#if defined(DISPLAY_LOGS)
         if(this->normal_debug.GetPipeline().handle != nullptr) {
             vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->normal_debug.GetPipeline().handle);
             for(auto& entity : this->entities) {
@@ -644,7 +688,7 @@ namespace Engine
 
                     if(!model->skeleton.empty()) {
                         bind_descriptor_sets.push_back(this->ds_manager.GetSkeletonDescriptorSet());
-                        dynamic_offsets.push_back(this->skeletons[model->skeleton]);
+                        dynamic_offsets.push_back(this->skeletons[model->skeleton].offset);
                         dynamic_offsets.push_back(model->skeleton_buffer_offset);
                     }
                     
@@ -658,7 +702,7 @@ namespace Engine
                 }
             }
         }
-        #endif
+        #endif*/
 
         // Fin de la render pass
         vkCmdEndRenderPass(command_buffer);

@@ -96,6 +96,22 @@ namespace Engine
     }
 
     /**
+     * Calcule la valeurs du vecteur allant de la source à la destination,
+     * en utilisant le ratio comme point de progression.
+     */
+    Vector3 Vector3::Interpolate(Vector3 const& source, Vector3 const& dest, float ratio)
+    {
+        Vector3 result;
+
+        for(uint8_t i=0; i<3; i++) {
+            if(source[i] <= dest[i]) result[i] = source[i] + std::abs(dest[i] - source[i]) * ratio;
+            else result[i] = source[i] - std::abs(dest[i] - source[i]) * ratio;
+        }
+
+        return result;
+    }
+
+    /**
      * Désérialization
      */
     size_t Vector3::Deserialize(const char* data)

@@ -12,7 +12,7 @@ namespace Engine
     class Keyboard : public EventEmitter<IKeyboardListener>
     {
         public:
-            static Keyboard* GetInstance();
+            static inline Keyboard* GetInstance() { return Keyboard::Instance; }
             bool IsPressed(const unsigned char Key);
             void PressKey(const unsigned char Key);
             void ReleaseKey(const unsigned char Key);

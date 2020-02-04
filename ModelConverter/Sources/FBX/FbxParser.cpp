@@ -281,9 +281,9 @@ void FbxParser::ComputeAnimations()
         for(auto& node : layer.animation_nodes) {
 
             if(node.second.curve_nodes.size() == 0) continue;
-
+            
             std::vector<Engine::KEYFRAME> translations, rotations, scalings;
-
+            
             if(node.second.curve_nodes.count("T")) translations = this->ParseCurveNode(node.second.curve_nodes["T"]);
             if(node.second.curve_nodes.count("R")) rotations = this->ParseCurveNode(node.second.curve_nodes["R"]);
             if(node.second.curve_nodes.count("S")) scalings = this->ParseCurveNode(node.second.curve_nodes["S"]);

@@ -22,12 +22,12 @@ layout (set=0, binding=1) uniform Entity
 {
 	mat4 model;
 	uint frame_id;
+	uint bones_per_frame;
 } entity;
 
 layout (set=2, binding=0) buffer Skeleton
 {
-	mat4 bones[MAX_BONES];
-	uint bones_per_frame;
+	mat4 bones[];
 } skeleton;
 
 layout (set=2, binding=1) uniform BoneOffsets
@@ -51,8 +51,8 @@ void main()
 {
 	outUV = inUV;
 	
-	mat4 boneTransform = skeleton.bones[bone_id] * offsets[offset_ids[bone_id]];
-	// mat4 boneTransform = skeleton.bones[bone_id] * offsets[0];
+	// mat4 boneTransform = skeleton.bones[bone_id] * offsets[offset_ids[bone_id]];
+	mat4 boneTransform = skeleton.bones[entity.bones_per_frame * entity.frame_id + bone_id] * offsets[offset_ids[bone_id]];
 	vec3 transformed_vertex = MatrixMultT(boneTransform, inPos);
 	gl_Position = camera.projection * camera.view * entity.model * vec4(transformed_vertex, 1.0);
 }

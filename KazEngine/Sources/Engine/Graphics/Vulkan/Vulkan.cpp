@@ -664,7 +664,10 @@ namespace Engine
 
         // Activation du Geometry Shader
         VkPhysicalDeviceFeatures features = {};
+        features.vertexPipelineStoresAndAtomics = VK_TRUE;
+        #if defined(DISPLAY_LOGS)
         features.geometryShader = VK_TRUE;
+        #endif
 
         // Activation de l'extension SwapChain
         std::vector<const char*> device_extension_name = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};

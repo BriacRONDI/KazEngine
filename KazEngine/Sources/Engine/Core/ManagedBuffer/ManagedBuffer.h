@@ -10,9 +10,10 @@ namespace Engine
     {
         public :
 
-            inline ~ManagedBuffer() { this->Reset(); }
-            void Reset();
+            inline ~ManagedBuffer() { this->Clear(); }
+            void Clear();
             inline Vulkan::DATA_BUFFER& GetBuffer() { return this->buffer; }
+            inline VkDescriptorBufferInfo GetBufferInfos() { return {this->buffer.handle, 0, this->buffer.size}; }
             void SetBuffer(Vulkan::DATA_BUFFER& buffer);
             inline VkDescriptorBufferInfo CreateSubBuffer(uint8_t id, VkDeviceSize offset, VkDeviceSize range) { this->sub_buffer[id] = {offset, range}; return this->GetSubBuffer(id); }
             void WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize global_offset);

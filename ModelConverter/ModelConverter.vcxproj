@@ -144,6 +144,7 @@
     <ClCompile Include="..\KazEngine\Sources\Engine\Graphics\Mesh\Mesh.cpp" />
     <ClCompile Include="..\KazEngine\Sources\Engine\Graphics\Skeleton\Deformer.cpp" />
     <ClCompile Include="..\KazEngine\Sources\Engine\Graphics\Vulkan\Vulkan.cpp" />
+    <ClCompile Include="..\KazEngine\Sources\Engine\Platform\Inputs\Keyboard\Keyboard.cpp" />
     <ClCompile Include="..\KazEngine\Sources\Engine\Platform\Inputs\Mouse\Mouse.cpp" />
     <ClCompile Include="..\KazEngine\Sources\Engine\Platform\Win32\Window\Window.cpp" />
     <ClCompile Include="Sources\FBX\FbxParser.cpp" />

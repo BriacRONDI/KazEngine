@@ -6,6 +6,7 @@
 #include "../Graphics/Mesh/Mesh.h"
 #include "../Graphics/Camera/Camera.h"
 #include "./Entity/Entity.h"
+#include "./Entity/SkeletonEntity/SkeletonEntity.h"
 #include "./ManagedBuffer/ManagedBuffer.h"
 #include "../Graphics/Renderer/Renderer.h"
 #include "./ModelManager/ModelManager.h"
@@ -20,14 +21,14 @@ namespace Engine {
         public:
 
             static constexpr uint32_t MODEL_BUFFER_SIZE = 1024 * 1024 * 10;
-            static constexpr uint32_t WORK_BUFFER_SIZE = 1024 * 1024 * 10;
+            static constexpr uint32_t WORK_BUFFER_SIZE = 1024 * 1024 * 1;
+            static constexpr uint32_t STORAGE_BUFFER_SIZE = 1024 * 1024 * 10;
 
             enum SUB_BUFFER_TYPE : uint8_t {
-                CAMERA_UBO      = 0,
-                ENTITY_UBO      = 1,
-                LIGHT_UBO       = 2,
-                SKELETON_UBO    = 3,
-                MESH_UBO        = 4
+                CAMERA_UBO          = 0,
+                ENTITY_UBO          = 1,
+                LIGHT_UBO           = 2,
+                BONE_OFFSETS_UBO    = 3
             };
 
             // Camera
@@ -42,6 +43,7 @@ namespace Engine {
             // Buffers
             ManagedBuffer model_buffer;
             ManagedBuffer work_buffer;
+            ManagedBuffer storage_buffer;
 
             Core();
             ~Core();
@@ -58,6 +60,12 @@ namespace Engine {
                 VkImageSubresourceRange image_subresource_range;
                 uint32_t present_queue_family_index;
                 uint32_t graphics_queue_family_index;
+            };
+
+            struct SKELETAL_ANIMATION_SBO {
+                uint32_t offset;
+                uint16_t frame_count;
+                uint32_t bone_per_frame;
             };
 
             // Device vulkan
@@ -82,7 +90,7 @@ namespace Engine {
             std::vector<std::shared_ptr<Mesh>> meshes;
 
             // Skeletons
-            std::map<std::string, uint32_t> skeletons;
+            std::map<std::string, SKELETAL_ANIMATION_SBO> skeletons;
 
             // Textures chargées en mémoire graphique
             std::map<std::string, Vulkan::IMAGE_BUFFER> textures;

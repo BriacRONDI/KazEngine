@@ -13,10 +13,36 @@
 // Mode debug
 #if defined(DISPLAY_LOGS)
 #include "Engine/Platform/Win32/Console/Console.h"
+#include "Engine/Platform/Inputs/Keyboard/IKeyboardListener.h"
+class DebugMe : public Engine::IKeyboardListener
+{
+    public:
+        DebugMe() { Engine::Keyboard::GetInstance()->AddListener(this); };
+        ~DebugMe()  { Engine::Keyboard::GetInstance()->RemoveListener(this); };
+
+        uint32_t* frame_index;
+
+        virtual void KeyDown(unsigned char Key)
+        {
+            if(Key != 32) return;
+            /*if(*frame_index < 4 || *frame_index >= 58) (*frame_index)++;
+            if(*frame_index >= 4 && *frame_index < 58) *frame_index = 58;
+            if(*frame_index > 60) *frame_index = 0;*/
+            (*frame_index)++;
+            if(*frame_index < 4) *frame_index = 4;
+            if(*frame_index >= 58) *frame_index = 4;
+            std::cout << "Frame index : " << *frame_index << std::endl;
+        }
+
+        virtual void KeyUp(unsigned char Key)
+        {
+        }
+};
+DebugMe debug_me;
 #endif
 
 // Debug via RenderDoc
-#define USE_RENDERDOC
+// #define USE_RENDERDOC
 
 
 int main(int argc, char** argv)
@@ -78,7 +104,7 @@ int main(int argc, char** argv)
 
     engine.model_manager.LoadFile("./Assets/hellscream.kea");
     std::shared_ptr<Engine::SkeletonEntity> hellscream(new Engine::SkeletonEntity);
-    hellscream->AttachMesh(engine.model_manager.models["shackle"]);
+    /*hellscream->AttachMesh(engine.model_manager.models["shackle"]);
     hellscream->AttachMesh(engine.model_manager.models["eyes"]);
     hellscream->AttachMesh(engine.model_manager.models["earring"]);
     hellscream->AttachMesh(engine.model_manager.models["cloth"]);
@@ -90,18 +116,21 @@ int main(int argc, char** argv)
     hellscream->AttachMesh(engine.model_manager.models["chain"]);
     hellscream->AttachMesh(engine.model_manager.models["banner"]);
     hellscream->AttachMesh(engine.model_manager.models["amulet"]);
-    hellscream->AttachMesh(engine.model_manager.models["axe"]);
     hellscream->AttachMesh(engine.model_manager.models["rope"]);
-    hellscream->AttachMesh(engine.model_manager.models["body"]);
+    hellscream->AttachMesh(engine.model_manager.models["body"]);*/
+    hellscream->AttachMesh(engine.model_manager.models["axe"]);
 
     engine.AddEntity(hellscream);
+    debug_me.frame_index = &hellscream->frame_index;
 
     engine.camera.SetPosition({0.0f, 3.5f, -7.5f});
     engine.camera.Rotate({0.0f, 30.0f, 0.0f});
 
-    auto animation_start = std::chrono::system_clock::now();
-    auto framerate_start = animation_start;
-    auto animation_total_duration = std::chrono::milliseconds(10000);
+    auto rotation_start = std::chrono::system_clock::now();
+    auto framerate_start = rotation_start;
+    auto hellscream_start = rotation_start;
+    auto rotation_total_duration = std::chrono::milliseconds(10000);
+    auto hellscream_total_duration = std::chrono::milliseconds(2000);
     uint64_t frame_count = 0;
 
     // Boucle principale
@@ -109,9 +138,14 @@ int main(int argc, char** argv)
     {
         auto now = std::chrono::system_clock::now();
 
-        auto animation_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - animation_start);
-        float ratio = static_cast<float>(animation_current_duration.count()) / static_cast<float>(animation_total_duration.count());
-        if(animation_current_duration > animation_total_duration) animation_start = now;
+        auto animation_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - rotation_start);
+        float rotation_ratio = static_cast<float>(animation_current_duration.count()) / static_cast<float>(rotation_total_duration.count());
+        if(animation_current_duration > rotation_total_duration) rotation_start = now;
+
+        auto hellscream_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - hellscream_start);
+        float hellscream_ratio = static_cast<float>(hellscream_current_duration.count()) / static_cast<float>(hellscream_total_duration.count());
+        // hellscream->frame_index = static_cast<uint32_t>(61 * hellscream_ratio);
+        if(hellscream_current_duration > hellscream_total_duration) hellscream_start = now;
 
         auto framerate_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - framerate_start);
         if(framerate_current_duration > std::chrono::milliseconds(100)) {
@@ -122,7 +156,7 @@ int main(int argc, char** argv)
             frame_count++;
         }
 
-        float angle = 360.0f * ratio;
+        float angle = 360.0f * rotation_ratio;
 
         Engine::Matrix4x4 translation = Engine::Matrix4x4::TranslationMatrix({-2.0f, 0.0f, 0.0f});
         Engine::Matrix4x4 rotation = Engine::Matrix4x4::RotationMatrix(angle, {0.0f, 1.0f, 0.0f});

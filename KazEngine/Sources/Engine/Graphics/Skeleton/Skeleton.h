@@ -41,16 +41,23 @@ namespace Engine
             uint32_t Deserialize(const char* data);
             uint32_t SerializedSize() const;
             uint32_t Count() const;
+
+            // TODO : Écrire directement dans le UBO final plutôt que de passer par un buffer temporaire
             void BuildUBO(std::vector<char>& skeleton, std::vector<char>& offsets, std::map<std::string, uint32_t>& mesh_indices, uint32_t alignment);
-            void BuildAnimationUBO(std::vector<char>& skeleton, std::vector<char>& offsets, std::string const& animation,
-                                   std::map<std::string, uint32_t>& mesh_indices, uint32_t alignment, uint8_t frames_per_second);
+            void BuildBoneOffsetsUBO(std::vector<char>& offsets, std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment);
+            void BuildAnimationSBO(std::vector<char>& skeleton, std::string const& animation, uint16_t& frame_count,
+                                   uint32_t& bone_per_frame, uint8_t frames_per_second = 30);
 
         private :
 
-            void BuildSkeletonUBO(std::vector<char>& skeleton, Matrix4x4 const& parent_transformation, uint8_t max_count);
+            void BuildSkeletonSBO(std::vector<char>& skeleton, Matrix4x4 const& parent_transformation, uint8_t max_count);
+            void BuildSkeletonSBO(std::vector<char>& skeleton, Matrix4x4 const& parent_transformation, uint8_t max_count,
+                                  std::chrono::milliseconds const& time, std::string const& animation, uint32_t base_offset);
             void BuildOffsetsUBO(std::vector<char>& offsets, std::map<std::string, std::map<uint8_t, Matrix4x4*>> const& prepared_bone_offsets_ubo,
                                  std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment);
             void PrepareOffsetUbo(uint8_t max_count, std::map<std::string, std::map<uint8_t, Matrix4x4*>>& prepared_ubo);
+            Vector3 EvalInterpolation(std::vector<KEYFRAME> const& keyframes, std::chrono::milliseconds const& time, KEYFRAME const& base = {});
+            std::chrono::milliseconds GetAnimationTotalDuration(std::string const& animation) const;
     };
 
     /**

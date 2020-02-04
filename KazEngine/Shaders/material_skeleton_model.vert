@@ -20,10 +20,9 @@ layout (set=0, binding=1) uniform Entity
 	uint frame_id;
 } entity;
 
-layout (set=1, binding=0) uniform Skeleton
+layout (set=1, binding=0) buffer Skeleton
 {
-	mat4 bones[MAX_BONES];
-	uint bones_per_frame;
+	mat4 bones[];
 } skeleton;
 
 layout (set=1, binding=1) uniform BoneOffsets

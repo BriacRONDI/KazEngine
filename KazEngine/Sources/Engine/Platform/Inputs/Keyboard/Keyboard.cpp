@@ -22,14 +22,6 @@ namespace Engine
     }
 
     /**
-     * Récupération de l'instance du singleton
-     */
-    Keyboard* Keyboard::GetInstance()
-    {
-        return Keyboard::Instance;
-    }
-
-    /**
      * Permet de savoir si une touche est enfoncée
      */
     bool Keyboard::IsPressed(const unsigned char Key)
