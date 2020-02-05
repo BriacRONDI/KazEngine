@@ -3,24 +3,10 @@
 namespace Engine
 {
     /**
-     * Constructeur
+     * Initialisation du moteur
+     * @param start_entity_limit Nombre d'entités que peut géréer le moteur à son lancement
      */
-    Core::Core()
-    {
-    }
-
-    /**
-     * Destructeur, libération des ressources
-     */
-    Core::~Core()
-    {
-        this->Clear();
-    }
-
-    /**
-     * Allocation des resources de la boucle principale
-     */
-    bool Core::Initialize()
+    bool Core::Initialize(uint32_t start_entity_limit)
     {
         this->device = Vulkan::GetDevice();
         this->current_frame_index = Vulkan::GetConcurrentFrameCount() - 1;
@@ -63,8 +49,16 @@ namespace Engine
         // Uniform Buffer //
         ////////////////////
 
+        VkDeviceSize work_buffer_size = Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(Camera::CAMERA_UBO))
+                                      + Vulkan::GetInstance().ComputeUniformBufferAlignment(Entity::MAX_UBO_SIZE) * start_entity_limit
+                                      + Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(uint32_t) * 10)
+                                      + Vulkan::GetDeviceLimits().maxUniformBufferRange;
+
+        // Le staging buffer de vulkan doit pouvoir accueillir toutes les données, on le dimensionne en conséquence
+        Vulkan::GetInstance().ResizeStagingBuffer(work_buffer_size);
+
         Vulkan::GetInstance().CreateDataBuffer(
-                buffer, WORK_BUFFER_SIZE,
+                buffer, work_buffer_size,
                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         this->work_buffer.SetBuffer(buffer);
@@ -77,7 +71,7 @@ namespace Engine
         VkDescriptorBufferInfo entity_buffer_infos = this->work_buffer.CreateSubBuffer(
             SUB_BUFFER_TYPE::ENTITY_UBO,
             camera_buffer_infos.offset + camera_buffer_infos.range,
-            Vulkan::GetInstance().ComputeUniformBufferAlignment(Entity::MAX_UBO_SIZE * 10));
+            Vulkan::GetInstance().ComputeUniformBufferAlignment(Entity::MAX_UBO_SIZE) * start_entity_limit);
 
         VkDescriptorBufferInfo meta_skeleton_buffer_infos = this->work_buffer.CreateSubBuffer(
             SUB_BUFFER_TYPE::META_SKELETON_UBO,
@@ -382,7 +376,7 @@ namespace Engine
     /**
      * Ajout d'une entité à la scène
      */
-    bool Core::AddEntity(std::shared_ptr<Entity> entity)
+    bool Core::AddEntity(std::shared_ptr<Entity> entity, bool buld_comand_buffers)
     {
         for(auto& entity_mesh : entity->GetMeshes()) {
 
@@ -440,8 +434,6 @@ namespace Engine
                         #endif
                         return false;
                     }
-                    // std::shared_ptr<SkeletonEntity> skeleton_entity = std::dynamic_pointer_cast<SkeletonEntity>(entity);
-                    // if(skeleton_entity.get() != nullptr) skeleton_entity->bones_per_frame = this->skeletons[entity_mesh->skeleton].bone_per_frame;
                 }
                 
                 VkDeviceSize vbo_size;
@@ -472,11 +464,8 @@ namespace Engine
         this->entities.push_back(entity);
 
         // Reconstruction des command buffers
-        if(!this->RebuildCommandBuffers()) return false;
+        if(buld_comand_buffers && !this->RebuildCommandBuffers()) return false;
 
-        #if defined(DISPLAY_LOGS)
-        std::cout << "AddEntity : Success" << std::endl;
-        #endif
         return true;
     }
 
@@ -597,7 +586,6 @@ namespace Engine
                     // Si ce modèle a un squelette, on ajoute son descriptor set
                     if(!model->skeleton.empty()) {
                         bind_descriptor_sets.push_back(this->ds_manager.GetSkeletonDescriptorSet());
-                        // dynamic_offsets.push_back(this->skeletons[model->skeleton].offset + 30 * this->skeletons[model->skeleton].size_per_frame);
                         dynamic_offsets.push_back(model->skeleton_buffer_offset);
                         if(model->render_mask & Renderer::SINGLE_BONE)
                             vkCmdPushConstants(command_buffer, renderer.GetPipeline().layout, VK_SHADER_STAGE_VERTEX_BIT,

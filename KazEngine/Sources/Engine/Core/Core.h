@@ -21,7 +21,6 @@ namespace Engine {
         public:
 
             static constexpr uint32_t MODEL_BUFFER_SIZE = 1024 * 1024 * 10;
-            static constexpr uint32_t WORK_BUFFER_SIZE = 1024 * 1024 * 1;
             static constexpr uint32_t STORAGE_BUFFER_SIZE = 1024 * 1024 * 10;
 
             enum SUB_BUFFER_TYPE : uint8_t {
@@ -46,14 +45,14 @@ namespace Engine {
             ManagedBuffer work_buffer;
             ManagedBuffer storage_buffer;
 
-            Core();
-            ~Core();
-            bool Initialize();
+            inline ~Core() { this->Clear(); }
+            bool Initialize(uint32_t start_entity_limit = 10000);
             void Clear();
             void DrawScene();
-            bool AddEntity(std::shared_ptr<Entity> entity);
+            bool AddEntity(std::shared_ptr<Entity> entity, bool buld_comand_buffers = true);
             bool AddTexture(Tools::IMAGE_MAP const& image, std::string const& name, Renderer& renderer);
             bool AddSkeleton(std::string const& skeleton);
+            bool RebuildCommandBuffers();
 
         private:
 
@@ -110,7 +109,6 @@ namespace Engine {
 
             // Helpers
             bool AllocateRenderingResources();
-            inline bool RebuildCommandBuffers();
             bool BuildCommandBuffer(uint32_t swap_chain_image_index);
             bool RebuildFrameBuffers();
     };

@@ -215,6 +215,9 @@ namespace Engine
                                 std::vector<VkPushConstantRange> const& push_constant_rages,
                                 PIPELINE& pipeline);
 
+            // Reconstruit le staging buffer avec une nouvelle taille
+            bool ResizeStagingBuffer(VkDeviceSize size);
+
         private:
 
             ////////////////////

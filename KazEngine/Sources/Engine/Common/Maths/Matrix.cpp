@@ -21,42 +21,6 @@ namespace Engine
         };
     }
 
-    /**
-    * Fonction alias, renvoie directement la valeur de value
-    * La valeur est renvoyée par référence et peut être modifiée depuis l'extérieur
-    */
-    /* inline float& Matrix4x4::operator[](uint32_t index)
-    {
-        return this->value[index];
-    }*/
-
-    /**
-    * Fonction alias, renvoie directement la valeur de value
-    * La valeur ne peut pas être modifiée depuis l'extérieur
-    */
-    /*inline float Matrix4x4::operator[](uint32_t index) const
-    {
-        return this->value[index];
-    }*/
-
-    /**
-    * Copie
-    */
-    /*inline Matrix4x4& Matrix4x4::operator=(Matrix4x4 const& other)
-    {
-        if(this != &other) this->value = other.value;
-        return *this;
-    }*/
-
-    /**
-    * Déplacement
-    */
-    /*inline Matrix4x4& Matrix4x4::operator=(Matrix4x4&& other)
-    {
-        if(this != &other) this->value = std::move(other.value);
-        return *this;
-    }*/
-
     Matrix4x4 Matrix4x4::operator*(Matrix4x4 const& other) const
     {
         return {
@@ -83,7 +47,7 @@ namespace Engine
     }
 
     /**
-     * Création d'une matrice de projection
+     * Création d'une matrice de projection en perspective
      */
     Matrix4x4 Matrix4x4::PerspectiveProjectionMatrix(float const aspect_ratio, float const field_of_view, float const near_clip, float const far_clip)
     {
@@ -94,6 +58,20 @@ namespace Engine
             0.0f,               f,          0.0f,                                               0.0f,
             0.0f,               0.0f,       far_clip / (near_clip - far_clip),                 -1.0f,
             0.0f,               0.0f,       (near_clip * far_clip) / (near_clip - far_clip),    0.0f
+        };
+    }
+
+    /**
+     * Création d'une matrice de projection orthogonale
+     */
+    Matrix4x4 Matrix4x4::OrthographicProjectionMatrix(float const left_plane, float const right_plane, float const top_plane,
+                                                      float const bottom_plane, float const near_plane, float const far_plane)
+    {
+        return {
+            2.0f / (right_plane - left_plane), 0.0f, 0.0f, 0.0f,
+            0.0f, 2.0f / (bottom_plane - top_plane), 0.0f, 0.0f,
+            0.0f, 0.0f, 1.0f / (near_plane - far_plane), 0.0f,
+            -(right_plane + left_plane) / (right_plane - left_plane), -(bottom_plane + top_plane) / (bottom_plane - top_plane), near_plane / (near_plane - far_plane), 1.0f
         };
     }
 

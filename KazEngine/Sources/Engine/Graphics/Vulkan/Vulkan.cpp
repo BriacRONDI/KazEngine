@@ -1593,6 +1593,24 @@ namespace Engine
     }
 
     /**
+     * Reconstruit le staging buffer avec une nouvelle taille
+     */
+    bool Vulkan::ResizeStagingBuffer(VkDeviceSize size)
+    {
+        // Destruction du staging buffer
+        this->ReleaseDataBuffer(this->staging_buffer);
+
+        // Création du staging buffer à la taille souhaitée
+        std::vector<uint32_t> queue_families = {this->graphics_queue.index};
+        if(this->graphics_queue.index != this->transfer_queue.index) queue_families.push_back(this->transfer_queue.index);
+        if(!this->CreateDataBuffer(this->staging_buffer, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, queue_families)) return false;
+
+        constexpr auto offset = 0;
+        VkResult result = vkMapMemory(this->device, this->staging_buffer.memory, offset, size, 0, &this->staging_pointer);
+        return result == VK_SUCCESS;
+    }
+
+    /**
      * Destruction d'un buffer de données
      */
     void Vulkan::ReleaseDataBuffer(DATA_BUFFER& buffer)
