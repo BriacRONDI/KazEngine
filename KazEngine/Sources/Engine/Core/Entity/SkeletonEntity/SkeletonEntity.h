@@ -8,7 +8,6 @@ namespace Engine
     {
         public :
             
-            uint32_t bones_per_frame;   // Nombre de bones pour chaque image de l'animation
             uint32_t frame_index = 0;   // Indice de progression de l'animation
             std::string animation;      // Animation en cours
 

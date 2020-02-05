@@ -28,7 +28,8 @@ namespace Engine {
                 CAMERA_UBO          = 0,
                 ENTITY_UBO          = 1,
                 LIGHT_UBO           = 2,
-                BONE_OFFSETS_UBO    = 3
+                BONE_OFFSETS_UBO    = 3,
+                META_SKELETON_UBO   = 4
             };
 
             // Camera
@@ -66,6 +67,7 @@ namespace Engine {
                 uint32_t offset;
                 uint16_t frame_count;
                 uint32_t bone_per_frame;
+                uint32_t meta_skeleton_offset;
             };
 
             // Device vulkan

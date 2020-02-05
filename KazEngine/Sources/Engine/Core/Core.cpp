@@ -79,6 +79,11 @@ namespace Engine
             camera_buffer_infos.offset + camera_buffer_infos.range,
             Vulkan::GetInstance().ComputeUniformBufferAlignment(Entity::MAX_UBO_SIZE * 10));
 
+        VkDescriptorBufferInfo meta_skeleton_buffer_infos = this->work_buffer.CreateSubBuffer(
+            SUB_BUFFER_TYPE::META_SKELETON_UBO,
+            entity_buffer_infos.offset + entity_buffer_infos.range,
+            Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(uint32_t) * 10));
+
         /*VkDescriptorBufferInfo light_buffer_infos = this->work_buffer.CreateSubBuffer(
             SUB_BUFFER_TYPE::LIGHT_UBO,
             entity_buffer_infos.offset + entity_buffer_infos.range,
@@ -86,7 +91,7 @@ namespace Engine
 
         VkDescriptorBufferInfo bone_offsets_buffer_infos = this->work_buffer.CreateSubBuffer(
             SUB_BUFFER_TYPE::BONE_OFFSETS_UBO,
-            entity_buffer_infos.offset + entity_buffer_infos.range,
+            meta_skeleton_buffer_infos.offset + meta_skeleton_buffer_infos.range,
             Vulkan::GetDeviceLimits().maxUniformBufferRange);
 
         ////////////////////////////////////
@@ -114,7 +119,7 @@ namespace Engine
 
         this->ds_manager.CreateViewDescriptorSet(camera_buffer_infos, entity_buffer_infos, enable_geometry_shader);
         this->ds_manager.CreateTextureDescriptorSet();
-        this->ds_manager.CreateSkeletonDescriptorSet(skeleton_buffer_infos, bone_offsets_buffer_infos);
+        this->ds_manager.CreateSkeletonDescriptorSet(meta_skeleton_buffer_infos, skeleton_buffer_infos, bone_offsets_buffer_infos);
         // this->ds_manager.CreateBoneOffsetsDescriptorSet(bone_offsets_buffer_infos);
 
         // On réserve un chunk pour la lumière
@@ -360,8 +365,15 @@ namespace Engine
         if(!this->storage_buffer.ReserveChunk(skeleton_offset, skeleton_sbo.size())) return false;
         this->storage_buffer.WriteData(skeleton_sbo.data(), skeleton_sbo.size(), skeleton_offset);
         animation_sbo.offset = static_cast<uint32_t>(skeleton_offset);
-        this->skeletons[skeleton] = animation_sbo;
         this->storage_buffer.Flush();
+
+        //////////////////////////////////////
+        // UBO Des métadonnées du squelette //
+        //////////////////////////////////////
+
+        if(!this->work_buffer.ReserveChunk(animation_sbo.meta_skeleton_offset, sizeof(uint32_t), SUB_BUFFER_TYPE::META_SKELETON_UBO)) return false;
+        this->work_buffer.WriteData(&animation_sbo.bone_per_frame, sizeof(uint32_t), animation_sbo.meta_skeleton_offset, SUB_BUFFER_TYPE::META_SKELETON_UBO);
+        this->skeletons[skeleton] = animation_sbo;
 
         // Succès
         return true;
@@ -428,8 +440,8 @@ namespace Engine
                         #endif
                         return false;
                     }
-                    std::shared_ptr<SkeletonEntity> skeleton_entity = std::dynamic_pointer_cast<SkeletonEntity>(entity);
-                    if(skeleton_entity.get() != nullptr) skeleton_entity->bones_per_frame = this->skeletons[entity_mesh->skeleton].bone_per_frame;
+                    // std::shared_ptr<SkeletonEntity> skeleton_entity = std::dynamic_pointer_cast<SkeletonEntity>(entity);
+                    // if(skeleton_entity.get() != nullptr) skeleton_entity->bones_per_frame = this->skeletons[entity_mesh->skeleton].bone_per_frame;
                 }
                 
                 VkDeviceSize vbo_size;

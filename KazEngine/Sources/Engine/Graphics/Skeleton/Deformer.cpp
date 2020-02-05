@@ -10,9 +10,14 @@ namespace Engine
         uint32_t serialized_size = static_cast<uint32_t>(sizeof(char) + this->name.size() + sizeof(uint32_t) + sizeof(Matrix4x4) + sizeof(uint16_t) * 3);
 
         // Taille des animations
-        for(auto const& anim : this->animations)
-            serialized_size += static_cast<uint32_t>(sizeof(uint8_t) + anim.first.size() + sizeof(uint32_t) * 3
-                            + (anim.second.rotations.size() + anim.second.scalings.size() + anim.second.translations.size()) * (sizeof(uint64_t) + sizeof(Vector3)));
+        for(auto const& anim : this->animations) {
+            serialized_size += static_cast<uint32_t>(sizeof(uint8_t) + anim.first.size() + sizeof(uint32_t) * 9);
+            for(uint8_t i=0; i<3; i++) {
+                serialized_size += static_cast<uint32_t>(anim.second.translations[i].size() * (sizeof(uint64_t) + sizeof(float)));
+                serialized_size += static_cast<uint32_t>(anim.second.rotations[i].size() * (sizeof(uint64_t) + sizeof(float)));
+                serialized_size += static_cast<uint32_t>(anim.second.scalings[i].size() * (sizeof(uint64_t) + sizeof(float)));
+            }
+        }
 
         // Taille des offsets
         for(auto const& offset : this->offsets)
@@ -64,33 +69,39 @@ namespace Engine
             offset += static_cast<uint32_t>(animation.first.size());
 
             // Translations
-            *reinterpret_cast<uint32_t*>(output.data() + offset) = static_cast<uint32_t>(animation.second.translations.size());
-            offset += sizeof(uint32_t);
-            for(auto const& keyframe : animation.second.translations) {
-                *reinterpret_cast<uint64_t*>(output.data() + offset) = keyframe.time.count();
-                offset += sizeof(uint64_t);
-                *reinterpret_cast<Vector3*>(output.data() + offset) = keyframe.value;
-                offset += sizeof(Vector3);
+            for(uint8_t i=0; i<3; i++) {
+                *reinterpret_cast<uint32_t*>(output.data() + offset) = static_cast<uint32_t>(animation.second.translations[i].size());
+                offset += sizeof(uint32_t);
+                for(auto const& keyframe : animation.second.translations[i]) {
+                    *reinterpret_cast<uint64_t*>(output.data() + offset) = keyframe.time.count();
+                    offset += sizeof(uint64_t);
+                    *reinterpret_cast<float*>(output.data() + offset) = keyframe.value;
+                    offset += sizeof(float);
+                }
             }
 
             //Rotations
-            *reinterpret_cast<uint32_t*>(output.data() + offset) = static_cast<uint32_t>(animation.second.rotations.size());
-            offset += sizeof(uint32_t);
-            for(auto const& keyframe : animation.second.rotations) {
-                *reinterpret_cast<uint64_t*>(output.data() + offset) = keyframe.time.count();
-                offset += sizeof(uint64_t);
-                *reinterpret_cast<Vector3*>(output.data() + offset) = keyframe.value;
-                offset += sizeof(Vector3);
+            for(uint8_t i=0; i<3; i++) {
+                *reinterpret_cast<uint32_t*>(output.data() + offset) = static_cast<uint32_t>(animation.second.rotations[i].size());
+                offset += sizeof(uint32_t);
+                for(auto const& keyframe : animation.second.rotations[i]) {
+                    *reinterpret_cast<uint64_t*>(output.data() + offset) = keyframe.time.count();
+                    offset += sizeof(uint64_t);
+                    *reinterpret_cast<float*>(output.data() + offset) = keyframe.value;
+                    offset += sizeof(float);
+                }
             }
 
             //Scalings
-            *reinterpret_cast<uint32_t*>(output.data() + offset) = static_cast<uint32_t>(animation.second.scalings.size());
-            offset += sizeof(uint32_t);
-            for(auto const& keyframe : animation.second.scalings) {
-                *reinterpret_cast<uint64_t*>(output.data() + offset) = keyframe.time.count();
-                offset += sizeof(uint64_t);
-                *reinterpret_cast<Vector3*>(output.data() + offset) = keyframe.value;
-                offset += sizeof(Vector3);
+            for(uint8_t i=0; i<3; i++) {
+                *reinterpret_cast<uint32_t*>(output.data() + offset) = static_cast<uint32_t>(animation.second.scalings[i].size());
+                offset += sizeof(uint32_t);
+                for(auto const& keyframe : animation.second.scalings[i]) {
+                    *reinterpret_cast<uint64_t*>(output.data() + offset) = keyframe.time.count();
+                    offset += sizeof(uint64_t);
+                    *reinterpret_cast<float*>(output.data() + offset) = keyframe.value;
+                    offset += sizeof(float);
+                }
             }
         }
 
@@ -160,39 +171,39 @@ namespace Engine
             offset += animation_name_length;
 
             // Translations
-            uint32_t translations_count = *reinterpret_cast<const uint32_t*>(data + offset);
-            offset += sizeof(uint32_t);
-            for(uint32_t j=0; j<translations_count; j++) {
-                KEYFRAME keyframe;
-                keyframe.time = std::chrono::milliseconds(*reinterpret_cast<const uint64_t*>(data + offset));
-                offset += sizeof(uint64_t);
-                keyframe.value = *reinterpret_cast<const Vector3*>(data + offset);
-                offset += sizeof(Vector3);
-                animation.translations.push_back(keyframe);
+            for(uint8_t i=0; i<3; i++) {
+                animation.translations[i].resize(*reinterpret_cast<const uint32_t*>(data + offset));
+                offset += sizeof(uint32_t);
+                for(auto& keyframe : animation.translations[i]) {
+                    keyframe.time = std::chrono::milliseconds(*reinterpret_cast<const uint64_t*>(data + offset));
+                    offset += sizeof(uint64_t);
+                    keyframe.value = *reinterpret_cast<const float*>(data + offset);
+                    offset += sizeof(float);
+                }
             }
 
             // Rotations
-            uint32_t rotations_count = *reinterpret_cast<const uint32_t*>(data + offset);
-            offset += sizeof(uint32_t);
-            for(uint32_t j=0; j<rotations_count; j++) {
-                KEYFRAME keyframe;
-                keyframe.time = std::chrono::milliseconds(*reinterpret_cast<const uint64_t*>(data + offset));
-                offset += sizeof(uint64_t);
-                keyframe.value = *reinterpret_cast<const Vector3*>(data + offset);
-                offset += sizeof(Vector3);
-                animation.rotations.push_back(keyframe);
+            for(uint8_t i=0; i<3; i++) {
+                animation.rotations[i].resize(*reinterpret_cast<const uint32_t*>(data + offset));
+                offset += sizeof(uint32_t);
+                for(auto& keyframe : animation.rotations[i]) {
+                    keyframe.time = std::chrono::milliseconds(*reinterpret_cast<const uint64_t*>(data + offset));
+                    offset += sizeof(uint64_t);
+                    keyframe.value = *reinterpret_cast<const float*>(data + offset);
+                    offset += sizeof(float);
+                }
             }
 
             // Scalings
-            uint32_t scalings_count = *reinterpret_cast<const uint32_t*>(data + offset);
-            offset += sizeof(uint32_t);
-            for(uint32_t j=0; j<scalings_count; j++) {
-                KEYFRAME keyframe;
-                keyframe.time = std::chrono::milliseconds(*reinterpret_cast<const uint64_t*>(data + offset));
-                offset += sizeof(uint64_t);
-                keyframe.value = *reinterpret_cast<const Vector3*>(data + offset);
-                offset += sizeof(Vector3);
-                animation.scalings.push_back(keyframe);
+            for(uint8_t i=0; i<3; i++) {
+                animation.scalings[i].resize(*reinterpret_cast<const uint32_t*>(data + offset));
+                offset += sizeof(uint32_t);
+                for(auto& keyframe : animation.scalings[i]) {
+                    keyframe.time = std::chrono::milliseconds(*reinterpret_cast<const uint64_t*>(data + offset));
+                    offset += sizeof(uint64_t);
+                    keyframe.value = *reinterpret_cast<const float*>(data + offset);
+                    offset += sizeof(float);
+                }
             }
 
             this->animations[animation_name] = animation;
@@ -430,9 +441,12 @@ namespace Engine
         // Évaluation de la transformation au temps indiqué
         Matrix4x4 bone_transfromation;
         if(this->animations.count(animation)) {
-            Vector3 translation = this->EvalInterpolation(this->animations[animation].translations, time);
-            Vector3 scaling = this->EvalInterpolation(this->animations[animation].scalings, time, {std::chrono::milliseconds(0), {1,1,1}});
-            Vector3 rotation = this->EvalInterpolation(this->animations[animation].rotations, time) * DEGREES_TO_RADIANS;
+            Vector3 translation, scaling, rotation;
+            for(uint8_t i=0; i<3; i++) {
+                translation[i] = this->EvalInterpolation(this->animations[animation].translations[i], time);
+                scaling[i] = this->EvalInterpolation(this->animations[animation].scalings[i], time, {std::chrono::milliseconds(0), 1.0f});
+                rotation[i] = this->EvalInterpolation(this->animations[animation].rotations[i], time) * DEGREES_TO_RADIANS;
+            }
             Matrix4x4 anim_transformation = Matrix4x4::TranslationMatrix(translation) * Matrix4x4::EulerRotation(IDENTITY_MATRIX, rotation, Matrix4x4::EULER_ORDER::ZYX) * Matrix4x4::ScalingMatrix(scaling);
             bone_transfromation = parent_transformation * anim_transformation;
         }else{
@@ -459,9 +473,11 @@ namespace Engine
     {
         std::chrono::milliseconds total_duration(0);
         for(auto const& animation : this->animations) {
-            for(auto const& translation : animation.second.translations) if(translation.time > total_duration) total_duration = translation.time;
-            for(auto const& rotation : animation.second.rotations) if(rotation.time > total_duration) total_duration = rotation.time;
-            for(auto const& scaling : animation.second.scalings) if(scaling.time > total_duration) total_duration = scaling.time;
+            for(uint8_t i=0; i<3; i++) {
+                for(auto const& translation : animation.second.translations[i]) if(translation.time > total_duration) total_duration = translation.time;
+                for(auto const& rotation : animation.second.rotations[i]) if(rotation.time > total_duration) total_duration = rotation.time;
+                for(auto const& scaling : animation.second.scalings[i]) if(scaling.time > total_duration) total_duration = scaling.time;
+            }
         }
 
         for(auto const& child : this->children) {
@@ -477,7 +493,8 @@ namespace Engine
         std::chrono::milliseconds total_duration = this->GetAnimationTotalDuration(animation);
         std::chrono::milliseconds time_per_frame(1000 / frames_per_second);
         std::chrono::milliseconds final_duration = total_duration;
-        if(final_duration.count() % time_per_frame.count() != 0) final_duration += std::chrono::milliseconds(final_duration.count() % time_per_frame.count());
+        if(final_duration.count() % time_per_frame.count() != 0)
+            final_duration =  final_duration + time_per_frame - std::chrono::milliseconds(final_duration.count() % time_per_frame.count());
 
         this->BuildSkeletonSBO(skeleton, IDENTITY_MATRIX, Bone::MAX_BONES_PER_UBO, std::chrono::milliseconds(0), animation, 0);
         frame_count = static_cast<uint16_t>(final_duration /  time_per_frame);
@@ -492,13 +509,16 @@ namespace Engine
      * @param time Stade d'avancement de l'animation
      * @param base Stade initial de l'animation
      */
-    Vector3 Bone::EvalInterpolation(std::vector<KEYFRAME> const& keyframes, std::chrono::milliseconds const& time, KEYFRAME const& base)
+    float Bone::EvalInterpolation(std::vector<KEYFRAME> const& keyframes, std::chrono::milliseconds const& time, KEYFRAME const& base)
     {
         if(keyframes.size() == 0) return base.value;
+        if(keyframes.size() == 1) return keyframes[0].value;
+        if(time > keyframes[keyframes.size() - 1].time) return keyframes[keyframes.size() - 1].value;
 
         uint32_t source_key = UINT32_MAX;
         uint32_t dest_key = UINT32_MAX;
 
+        // TODO : Amélioration => Recherche dichotomique
         for(uint32_t i=0; i<keyframes.size(); i++) {
             auto& keyframe = keyframes[i];
             if(keyframe.time <= time) {
@@ -509,32 +529,13 @@ namespace Engine
             }
         }
 
-        if(dest_key == UINT32_MAX) {
+        KEYFRAME const& source_keyframe = (source_key == UINT32_MAX) ? base : keyframes[source_key];
+        KEYFRAME const& dest_keyframe = keyframes[dest_key];
 
-            KEYFRAME const& last_keyframe = keyframes[keyframes.size() - 1];
-            return last_keyframe.value;
+        std::chrono::milliseconds current_key_duration = dest_keyframe.time - source_keyframe.time;
+        std::chrono::milliseconds key_progression = time - source_keyframe.time;
+        float ratio = static_cast<float>(key_progression.count()) / static_cast<float>(current_key_duration.count());
 
-        }else{
-
-            KEYFRAME const& source_keyframe = (source_key == UINT32_MAX) ? base : keyframes[source_key];
-            KEYFRAME const& dest_keyframe = keyframes[dest_key];
-
-            std::chrono::milliseconds current_key_duration = dest_keyframe.time - source_keyframe.time;
-            std::chrono::milliseconds key_progression = time - source_keyframe.time;
-            float ratio = static_cast<float>(key_progression.count()) / static_cast<float>(current_key_duration.count());
-
-            return Vector3::Interpolate(source_keyframe.value, dest_keyframe.value, ratio);
-        }
+        return Maths::Interpolate(source_keyframe.value, dest_keyframe.value, ratio);
     }
-
-    /*void Vulkan::UpdateSkeleton(uint32_t mesh_id, std::chrono::milliseconds& time, std::string const& animation)
-    {
-        MESH& mesh = this->meshes[mesh_id];
-        Matrix4x4 identity = IDENTITY_MATRIX;
-
-        for(auto& resource : this->shared) {
-            ENTITY& entity = resource.entities[mesh_id];
-            this->EvalBones(entity.ubo, this->bone_trees[mesh.bone_tree_id], mesh.vertex_buffer_id, identity, time, animation);
-        }
-    }*/
 }

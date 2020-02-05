@@ -25,12 +25,8 @@ class DebugMe : public Engine::IKeyboardListener
         virtual void KeyDown(unsigned char Key)
         {
             if(Key != 32) return;
-            /*if(*frame_index < 4 || *frame_index >= 58) (*frame_index)++;
-            if(*frame_index >= 4 && *frame_index < 58) *frame_index = 58;
-            if(*frame_index > 60) *frame_index = 0;*/
             (*frame_index)++;
-            if(*frame_index < 4) *frame_index = 4;
-            if(*frame_index >= 58) *frame_index = 4;
+            if(*frame_index > 60) *frame_index = 0;
             std::cout << "Frame index : " << *frame_index << std::endl;
         }
 
@@ -104,7 +100,7 @@ int main(int argc, char** argv)
 
     engine.model_manager.LoadFile("./Assets/hellscream.kea");
     std::shared_ptr<Engine::SkeletonEntity> hellscream(new Engine::SkeletonEntity);
-    /*hellscream->AttachMesh(engine.model_manager.models["shackle"]);
+    hellscream->AttachMesh(engine.model_manager.models["shackle"]);
     hellscream->AttachMesh(engine.model_manager.models["eyes"]);
     hellscream->AttachMesh(engine.model_manager.models["earring"]);
     hellscream->AttachMesh(engine.model_manager.models["cloth"]);
@@ -117,7 +113,7 @@ int main(int argc, char** argv)
     hellscream->AttachMesh(engine.model_manager.models["banner"]);
     hellscream->AttachMesh(engine.model_manager.models["amulet"]);
     hellscream->AttachMesh(engine.model_manager.models["rope"]);
-    hellscream->AttachMesh(engine.model_manager.models["body"]);*/
+    hellscream->AttachMesh(engine.model_manager.models["body"]);
     hellscream->AttachMesh(engine.model_manager.models["axe"]);
 
     engine.AddEntity(hellscream);
@@ -144,7 +140,7 @@ int main(int argc, char** argv)
 
         auto hellscream_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - hellscream_start);
         float hellscream_ratio = static_cast<float>(hellscream_current_duration.count()) / static_cast<float>(hellscream_total_duration.count());
-        // hellscream->frame_index = static_cast<uint32_t>(61 * hellscream_ratio);
+        hellscream->frame_index = static_cast<uint32_t>(60 * hellscream_ratio);
         if(hellscream_current_duration > hellscream_total_duration) hellscream_start = now;
 
         auto framerate_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - framerate_start);

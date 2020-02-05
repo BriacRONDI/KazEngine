@@ -275,7 +275,7 @@ class FbxParser
         void ParseAnimationLayer(std::vector<FBX_NODE> const& nodes);
         void ParseAnimationStack(std::vector<FBX_NODE> const& nodes);
         void ParseLimb(std::vector<FBX_NODE> const& nodes);
-        std::vector<Engine::KEYFRAME> ParseCurveNode(FBX_CURVE_NODE const& curve_node);
+        std::array<std::vector<Engine::KEYFRAME>, 3> ParseCurveNode(FBX_CURVE_NODE const& curve_node);
         void ComputeAnimations();
         FbxParser::FBX_NODE GetRootModel(FBX_NODE const& node, std::vector<FBX_NODE> const& models);
         Engine::Bone GetBoneTree(FBX_NODE const& node, Engine::Bone const& parent, std::vector<FBX_NODE> const& models);

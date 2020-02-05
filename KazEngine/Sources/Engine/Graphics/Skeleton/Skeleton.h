@@ -7,7 +7,7 @@
 
 namespace Engine
 {
-    struct KEYFRAME {
+    /*struct KEYFRAME {
         std::chrono::milliseconds time;
         Vector3 value;
 
@@ -16,12 +16,40 @@ namespace Engine
         KEYFRAME(KEYFRAME const& key) : time(key.time), value(key.value) {}
         bool operator==(KEYFRAME const& other) const { return other.time == this->time && other.value == this->value; }
         void operator=(KEYFRAME const& other) { this->time = other.time; this->value = other.value; }
+    };*/
+
+    /*struct KEYFRAME {
+
+        enum COMPONENT : uint8_t {
+            X   = 0b0001,
+            Y   = 0b0010,
+            Z   = 0b0100
+        };
+        
+        std::chrono::milliseconds time;
+        uint8_t components;
+        std::vector<float> values;
+
+        KEYFRAME() : components(0) {}
+        inline bool operator==(KEYFRAME const& other) const { return other.time == this->time && other.components == this->components && other.values == this->values; }
+        float GetComponent(COMPONENT c) const;
+    };*/
+
+    struct KEYFRAME {
+        std::chrono::milliseconds time;
+        float value;
+
+        KEYFRAME() : time(std::chrono::milliseconds()), value(0.0f) {}
+        KEYFRAME(std::chrono::milliseconds t, float v) : time(t), value(v) {}
+        KEYFRAME(KEYFRAME const& other) : time(other.time), value(other.value) {}
+        bool operator==(KEYFRAME const& other) const { return other.time == this->time && other.value == this->value; }
+        void operator=(KEYFRAME const& other) { this->time = other.time; this->value = other.value; }
     };
 
     struct ANIM_TRANSFORM {
-        std::vector<KEYFRAME> translations;
-        std::vector<KEYFRAME> rotations;
-        std::vector<KEYFRAME> scalings;
+        std::array<std::vector<KEYFRAME>, 3> translations;
+        std::array<std::vector<KEYFRAME>, 3> rotations;
+        std::array<std::vector<KEYFRAME>, 3> scalings;
     };
 
     class Bone
@@ -56,7 +84,7 @@ namespace Engine
             void BuildOffsetsUBO(std::vector<char>& offsets, std::map<std::string, std::map<uint8_t, Matrix4x4*>> const& prepared_bone_offsets_ubo,
                                  std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment);
             void PrepareOffsetUbo(uint8_t max_count, std::map<std::string, std::map<uint8_t, Matrix4x4*>>& prepared_ubo);
-            Vector3 EvalInterpolation(std::vector<KEYFRAME> const& keyframes, std::chrono::milliseconds const& time, KEYFRAME const& base = {});
+            float EvalInterpolation(std::vector<KEYFRAME> const& keyframes, std::chrono::milliseconds const& time, KEYFRAME const& base = {});
             std::chrono::milliseconds GetAnimationTotalDuration(std::string const& animation) const;
     };
 

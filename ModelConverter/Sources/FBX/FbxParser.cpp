@@ -282,7 +282,7 @@ void FbxParser::ComputeAnimations()
 
             if(node.second.curve_nodes.size() == 0) continue;
             
-            std::vector<Engine::KEYFRAME> translations, rotations, scalings;
+            std::array<std::vector<Engine::KEYFRAME>, 3> translations, rotations, scalings;
             
             if(node.second.curve_nodes.count("T")) translations = this->ParseCurveNode(node.second.curve_nodes["T"]);
             if(node.second.curve_nodes.count("R")) rotations = this->ParseCurveNode(node.second.curve_nodes["R"]);
@@ -306,34 +306,36 @@ void FbxParser::ComputeAnimations()
     }
 }
 
-std::vector<Engine::KEYFRAME> FbxParser::ParseCurveNode(FBX_CURVE_NODE const& curve_node)
+std::array<std::vector<Engine::KEYFRAME>, 3> FbxParser::ParseCurveNode(FBX_CURVE_NODE const& curve_node)
 {
     std::set<fbx_duration> key_times;
-    std::vector<Engine::KEYFRAME> result;
+    std::array<std::vector<Engine::KEYFRAME>, 3> keyframes;
 
     for(auto& curve : curve_node.curves)
         for(auto& key_time : curve.second.key_time)
             key_times.insert(key_time);
 
     for(auto& time : key_times) {
-        std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(time);
-        Engine::Vector3 vector;
+        std::chrono::milliseconds keyframe_time = std::chrono::duration_cast<std::chrono::milliseconds>(time);
         for(auto& curve : curve_node.curves) {
             for(uint32_t i=0; i<curve.second.key_time.size(); i++) {
                 auto key_time = curve.second.key_time[i];
                 auto key_value = curve.second.key_value[i];
                 if(key_time == time) {
-                    if(curve.first == "d|X") vector[0] = key_value;
-                    if(curve.first == "d|Y") vector[1] = key_value;
-                    if(curve.first == "d|Z") vector[2] = key_value;
+                    if(curve.first == "d|X") keyframes[0].push_back({keyframe_time, key_value});
+                    if(curve.first == "d|Y") keyframes[1].push_back({keyframe_time, key_value});
+                    if(curve.first == "d|Z") keyframes[2].push_back({keyframe_time, key_value});
                     break;
                 }
             }
         }
-        result.push_back({ms, vector});
     }
 
-    return result;
+    for(auto& keycompnent : keyframes)
+        if(keycompnent.size() == 2 && keycompnent[0].value == keycompnent[1].value)
+            keycompnent.resize(1);
+
+    return keyframes;
 }
 
 void FbxParser::ParseAnimationStack(std::vector<FBX_NODE> const& nodes)

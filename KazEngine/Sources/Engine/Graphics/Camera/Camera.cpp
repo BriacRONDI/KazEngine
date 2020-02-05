@@ -14,7 +14,8 @@ namespace Engine
         this->rotation              = Matrix4x4::RotationMatrix(this->vertical_angle, {1.0f, 0.0f, 0.0f}) * Matrix4x4::RotationMatrix(this->horizontal_angle, {0.0f, 1.0f, 0.0f});
         this->translation           = Matrix4x4::TranslationMatrix(this->position);
         this->camera.view           = this->rotation * this->translation;
-        this->camera.projection     = Matrix4x4::PerspectiveProjectionMatrix(4.0f/3.0f, 60.0f, 0.1f, 100.0f);
+        // this->camera.projection     = Matrix4x4::PerspectiveProjectionMatrix(4.0f/3.0f, 60.0f, 0.1f, 100.0f);
+        // this->camera.projection     = Matrix4x4::
 
         this->camera.position       = {0.0f, 0.0f, 0.0f};
 

@@ -10,3 +10,15 @@
 #include "Vector3.h"
 #include "Vector4.h"
 #include "Matrix.h"
+
+namespace Engine
+{
+    namespace Maths
+    {
+        inline float Interpolate(float source, float dest, float ratio)
+        {
+            if(source <= dest) return source + std::abs(dest - source) * ratio;
+            else return source - std::abs(dest - source) * ratio;
+        }
+    }
+}

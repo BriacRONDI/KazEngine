@@ -18,14 +18,20 @@ layout (set=0, binding=1) uniform Entity
 {
 	mat4 model;
 	uint frame_id;
+	uint bones_per_frame;
 } entity;
 
-layout (set=1, binding=0) buffer Skeleton
+layout (set=1, binding=0) uniform Skeleton
+{
+	uint bones_per_frame;
+} meta;
+
+layout (set=1, binding=1) buffer Skeleton
 {
 	mat4 bones[];
 } skeleton;
 
-layout (set=1, binding=1) uniform BoneOffsets
+layout (set=1, binding=2) uniform BoneOffsets
 {
 	uint offset_ids[MAX_BONES];
 	mat4 offsets[MAX_BONE_OFFSETS];
@@ -49,9 +55,7 @@ void main()
 	
 	for(int i=0; i<MAX_BONE_PER_VERTEX; i++) {
 		if(inBoneWeights[i] == 0) break;
-		// boneTransform += skeleton.bones[inBoneIDs[i] * skeleton.bones_per_frame * entity.frame_id] * mesh.offsets[inBoneIDs[i]] * inBoneWeights[i];
-		// boneTransform += skeleton.bones[inBoneIDs[i]] * mesh.offsets[inBoneIDs[i]] * inBoneWeights[i];
-		boneTransform += skeleton.bones[inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
+		boneTransform += skeleton.bones[meta.bones_per_frame * entity.frame_id + inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
 		total_weight += inBoneWeights[i];
 		has_bone = true;
 	}
