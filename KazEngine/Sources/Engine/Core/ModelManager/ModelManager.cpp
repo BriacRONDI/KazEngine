@@ -2,6 +2,16 @@
 
 namespace Engine
 {
+    // Instance du singleton
+    ModelManager* ModelManager::instance = nullptr;
+
+    void ModelManager::DestroyInstance()
+    {
+        if(ModelManager::instance == nullptr) return;
+        delete ModelManager::instance;
+        ModelManager::instance = nullptr;
+    }
+
     /**
      * Nettoyage des ressources
      */

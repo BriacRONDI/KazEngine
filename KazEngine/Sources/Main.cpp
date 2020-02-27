@@ -62,79 +62,23 @@ int main(int argc, char** argv)
     vulkan.Initialize(main_window, VK_MAKE_VERSION(0, 0, 1), "KazEngine", false);
 
     // Initilisation du moteur
-    Engine::Core engine;
+    Engine::Core& engine = Engine::Core::GetInstance();
     engine.Initialize();
 
-    /*engine.model_manager.LoadFile("./Assets/base_cube.kea");
-    std::shared_ptr<Engine::DefaultColorEntity> light(new Engine::DefaultColorEntity);
-    light->AttachMesh(engine.model_manager.models["SimplestCube"]);
-    light->default_color = {1.0f, 1.0f, 1.0f};
-    engine.AddEntity(light);*/
-
-    /*engine.model_manager.LoadFile("./Assets/base_sphere.kea");
-    std::shared_ptr<Engine::DefaultColorEntity> sphere(new Engine::DefaultColorEntity);
-    sphere->AttachMesh(engine.model_manager.models["Sphere"]);
-    sphere->default_color = {0.0f, 1.0f, 0.0f};
-    engine.AddEntity(sphere);*/
-
-    /*engine.model_manager.LoadFile("./Assets/chevalier.kea");
-    std::shared_ptr<Engine::DefaultColorEntity> chevalier(new Engine::DefaultColorEntity);
-    chevalier->AttachMesh(engine.model_manager.models["18489_Knight_V1_"]);
-    chevalier->default_color = {76.0f/255, 14.0f/255, 138.0f/255};
-    engine.AddEntity(chevalier);
-
-    engine.model_manager.LoadFile("./Assets/multi_textured_cube.kea");
-    std::shared_ptr<Engine::Entity> multi_textured_cube(new Engine::Entity);
-    multi_textured_cube->AttachMesh(engine.model_manager.models["Cube"]);
-    engine.AddEntity(multi_textured_cube);
-
-    engine.model_manager.LoadFile("./Assets/mono_textured_cube.kea");
-    std::shared_ptr<Engine::Entity> mono_textured_cube(new Engine::Entity);
-    mono_textured_cube->AttachMesh(engine.model_manager.models["MT_Cube"]);
-    engine.AddEntity(mono_textured_cube);
-
-    engine.model_manager.LoadFile("./Assets/multi_material_cube.kea");
-    std::shared_ptr<Engine::Entity> multi_material_cube(new Engine::Entity);
-    multi_material_cube->AttachMesh(engine.model_manager.models["MM_Cube"]);
-    engine.AddEntity(multi_material_cube);*/
-
-    engine.model_manager.LoadFile("./Assets/hellscream.kea");
-
-    std::vector<std::shared_ptr<Engine::SkeletonEntity>> entities;
-
-    uint32_t entity_size = 200;
-    for(uint32_t i=0; i<entity_size*entity_size; i++) {
-        std::shared_ptr<Engine::SkeletonEntity> entity(new Engine::SkeletonEntity);
-        entity->AttachMesh(engine.model_manager.models["shackle"]);
-        entity->AttachMesh(engine.model_manager.models["eyes"]);
-        entity->AttachMesh(engine.model_manager.models["earring"]);
-        entity->AttachMesh(engine.model_manager.models["cloth"]);
-        entity->AttachMesh(engine.model_manager.models["chain_base.003"]);
-        entity->AttachMesh(engine.model_manager.models["chain_base.002"]);
-        entity->AttachMesh(engine.model_manager.models["chain_base"]);
-        entity->AttachMesh(engine.model_manager.models["chain.002"]);
-        entity->AttachMesh(engine.model_manager.models["chain.001"]);
-        entity->AttachMesh(engine.model_manager.models["chain"]);
-        entity->AttachMesh(engine.model_manager.models["banner"]);
-        entity->AttachMesh(engine.model_manager.models["amulet"]);
-        entity->AttachMesh(engine.model_manager.models["rope"]);
-        entity->AttachMesh(engine.model_manager.models["body"]);
-        entity->AttachMesh(engine.model_manager.models["axe"]);
-        engine.AddEntity(entity, false);
-        entities.push_back(entity);
-    }
-    //debug_me.frame_index = &hellscream->frame_index;
+    Engine::ModelManager::GetInstance().LoadFile("./Assets/SimpleGuy.kea");
+    std::shared_ptr<Engine::SkeletonEntity> simple_guy(new Engine::SkeletonEntity);
+    simple_guy->AttachMesh(Engine::ModelManager::GetInstance().models["Body"]);
+    engine.AddEntity(simple_guy, false);
+    simple_guy->SetAnimation("Armature|Walk");
 
     engine.RebuildCommandBuffers();
 
-    engine.camera.SetPosition({-100.0f, 10.0f, -210.0f});
-    engine.camera.Rotate({0.0f, 25.0f, 0.0f});
+    Engine::Camera::GetInstance().SetPosition({0.0f, 3.0f, -5.0f});
+    Engine::Camera::GetInstance().Rotate({0.0f, 30.0f, 0.0f});
 
-    //auto rotation_start = std::chrono::system_clock::now();
+    auto animation_start = std::chrono::system_clock::now();
     auto framerate_start = std::chrono::system_clock::now();
-    auto hellscream_start = std::chrono::system_clock::now();
-    auto rotation_total_duration = std::chrono::milliseconds(10000);
-    auto hellscream_total_duration = std::chrono::milliseconds(2000);
+    auto animation_total_duration = std::chrono::milliseconds(1000);
     uint64_t frame_count = 0;
 
     // Boucle principale
@@ -142,14 +86,10 @@ int main(int argc, char** argv)
     {
         auto now = std::chrono::system_clock::now();
 
-        /*auto animation_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - rotation_start);
-        float rotation_ratio = static_cast<float>(animation_current_duration.count()) / static_cast<float>(rotation_total_duration.count());
-        if(animation_current_duration > rotation_total_duration) rotation_start = now;*/
-
-        auto hellscream_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - hellscream_start);
-        float hellscream_ratio = static_cast<float>(hellscream_current_duration.count()) / static_cast<float>(hellscream_total_duration.count());
-        if(hellscream_current_duration > hellscream_total_duration) hellscream_start = now;
-        uint32_t hellscream_frame_index = static_cast<uint32_t>(60 * hellscream_ratio);
+        auto animation_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - animation_start);
+        float animation_ratio = static_cast<float>(animation_current_duration.count()) / static_cast<float>(animation_total_duration.count());
+        if(animation_current_duration > animation_total_duration) animation_start = now;
+        simple_guy->frame_index = static_cast<uint32_t>(animation_ratio * 30);
 
         auto framerate_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - framerate_start);
         if(framerate_current_duration > std::chrono::milliseconds(1000)) {
@@ -160,62 +100,16 @@ int main(int argc, char** argv)
             frame_count++;
         }
 
-        // float angle = 360.0f * rotation_ratio;
-
-        /*Engine::Matrix4x4 translation = Engine::Matrix4x4::TranslationMatrix({-2.0f, 0.0f, 0.0f});
-        Engine::Matrix4x4 rotation = Engine::Matrix4x4::RotationMatrix(angle, {0.0f, 1.0f, 0.0f});
-        multi_textured_cube->matrix = translation * rotation;
-
-        translation = Engine::Matrix4x4::TranslationMatrix({-2.0f, 0.0f, -3.5f});
-        rotation = Engine::Matrix4x4::RotationMatrix(angle, {0.0f, -1.0f, 0.0f});
-        mono_textured_cube->matrix = translation * rotation;
-
-        
-        // light->matrix = Engine::Matrix4x4::TranslationMatrix({-1.0f, -2.0f, 0.0f}) * Engine::Matrix4x4::ScalingMatrix({0.1f, 0.1f, 0.1f});
-        translation = Engine::Matrix4x4::TranslationMatrix({1.5f, 1.0f, 0.0f});
-        translation = Engine::Matrix4x4::TranslationMatrix({0.0f, 0.0f, 0.0f});
-        rotation = Engine::Matrix4x4::RotationMatrix(-90.0f, {1.0f, 0.0f, 0.0f});
-        rotation = rotation * Engine::Matrix4x4::RotationMatrix(angle + 180.0f, {0.0f, 0.0f, 1.0f});
-        Engine::Matrix4x4 scale = Engine::Matrix4x4::ScalingMatrix({0.18f, 0.18f, 0.18f});
-        chevalier->matrix = translation * rotation * scale;*/
-
-        // light->matrix = Engine::Matrix4x4::TranslationMatrix({1.0f, 3.0f, 0.0f}) * Engine::Matrix4x4::ScalingMatrix({0.1f, 0.1f, 0.1f});
-        // sphere->matrix = Engine::Matrix4x4::TranslationMatrix({1.0f, 2.0f, 1.0f});
-        
-        // light->matrix = Engine::Matrix4x4::TranslationMatrix({0.0f, -3.5f, 15.0f}) * Engine::Matrix4x4::ScalingMatrix({0.1f, 0.1f, 0.1f});
-        // rotation = Engine::Matrix4x4::RotationMatrix(angle + 180.0f, {0.0f, 0.0f, 1.0f});
-        // chevalier->matrix = rotation;
-
-        /*Engine::Matrix4x4::translation = Engine::Matrix4x4::TranslationMatrix({2.0f, 0.0f, -3.5f});
-        Engine::Matrix4x4::rotation = Engine::Matrix4x4::RotationMatrix(angle, {0.0f, 1.0f, 0.0f});
-        multi_material_cube->matrix = translation * rotation;*/
-        
-        
-        auto rotation = Engine::Matrix4x4::RotationMatrix(180.0, {0.0f, 0.0f, 1.0f});
-        auto scale = Engine::Matrix4x4::ScalingMatrix({0.01f, 0.01f, 0.01f});
-
-        for(uint32_t y=0; y<entity_size; y++) {
-            for(uint32_t x=0; x<entity_size; x++) {
-                auto translation = Engine::Matrix4x4::TranslationMatrix({x * 2.0f, 1.0f, y * 2.0f});
-                entities[entity_size * y + x]->frame_index = (hellscream_frame_index + 3 * y + x) % 61;
-                entities[entity_size * y + x]->matrix = translation * rotation * scale;
-            }
-        }
 
         engine.DrawScene();
     }
 
     // Libération des resources
-    engine.Clear();
+    engine.DestroyInstance();
     vulkan.DestroyInstance();
     delete main_window;
 
-    /*mono_textured_cube->Clear();
-    multi_textured_cube->Clear();
-    chevalier->Clear();
-    multi_material_cube->Clear();
-    hellscream->Clear();*/
-    for(uint32_t i=0; i<entities.size(); i++) entities[i]->Clear();
+    simple_guy->Clear();
 
     #if defined(DISPLAY_LOGS)
     system("PAUSE");

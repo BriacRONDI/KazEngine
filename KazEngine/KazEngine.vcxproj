@@ -141,6 +141,7 @@
     <ClCompile Include="Sources\Engine\Core\ManagedBuffer\ManagedBuffer.cpp" />
     <ClCompile Include="Sources\Engine\Core\Core.cpp" />
     <ClCompile Include="Sources\Engine\Core\Entity\Entity.cpp" />
+    <ClCompile Include="Sources\Engine\Core\Map\Map.cpp" />
     <ClCompile Include="Sources\Engine\Core\ModelManager\ModelManager.cpp" />
     <ClCompile Include="Sources\Engine\Graphics\Camera\Camera.cpp" />
     <ClCompile Include="Sources\Engine\Graphics\Lighting\Lighting.cpp" />
@@ -172,6 +173,7 @@
     <ClInclude Include="Sources\Engine\Core\ManagedBuffer\ManagedBuffer.h" />
     <ClInclude Include="Sources\Engine\Core\Core.h" />
     <ClInclude Include="Sources\Engine\Core\Entity\Entity.h" />
+    <ClInclude Include="Sources\Engine\Core\Map\Map.h" />
     <ClInclude Include="Sources\Engine\Core\ModelManager\ModelManager.h" />
     <ClInclude Include="Sources\Engine\Engine.h" />
     <ClInclude Include="Sources\Engine\Graphics\Camera\Camera.h" />

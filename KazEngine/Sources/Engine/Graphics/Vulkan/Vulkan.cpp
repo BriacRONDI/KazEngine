@@ -1430,7 +1430,7 @@ namespace Engine
     /**
      * Création d'une liste de command buffers avec leur fence
      */
-    bool Vulkan::CreateCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers, VkCommandBufferLevel level)
+    bool Vulkan::CreateCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers, VkCommandBufferLevel level, bool create_fence)
     {
         // Allocation des command buffers
         std::vector<VkCommandBuffer> output_buffers(command_buffers.size());
@@ -1443,19 +1443,21 @@ namespace Engine
         for(uint8_t i=0; i<command_buffers.size(); i++) command_buffers[i].handle = output_buffers[i];
 
         // Création des fences
-        VkFenceCreateInfo fence_create_info = {};
-        fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fence_create_info.pNext = nullptr;
-        fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        if(create_fence) {
+            VkFenceCreateInfo fence_create_info = {};
+            fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+            fence_create_info.pNext = nullptr;
+            fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-        for(size_t i=0; i<command_buffers.size(); i++) {
+            for(size_t i=0; i<command_buffers.size(); i++) {
 
-            VkResult result = vkCreateFence(this->device, &fence_create_info, nullptr, &command_buffers[i].fence);
-            if(result != VK_SUCCESS) {
-                #if defined(DISPLAY_LOGS)
-                std::cout << "CreateCommandBuffer => vkCreateFence : Failed" << std::endl;
-                #endif
-                return false;
+                VkResult result = vkCreateFence(this->device, &fence_create_info, nullptr, &command_buffers[i].fence);
+                if(result != VK_SUCCESS) {
+                    #if defined(DISPLAY_LOGS)
+                    std::cout << "CreateCommandBuffer => vkCreateFence : Failed" << std::endl;
+                    #endif
+                    return false;
+                }
             }
         }
 

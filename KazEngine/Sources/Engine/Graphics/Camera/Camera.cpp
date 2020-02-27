@@ -2,6 +2,16 @@
 
 namespace Engine
 {
+    // Instance du singleton
+    Camera* Camera::instance = nullptr;
+
+    void Camera::DestroyInstance()
+    {
+        if(Camera::instance == nullptr) return;
+        delete Camera::instance;
+        Camera::instance = nullptr;
+    }
+
     /**
      * Constructeur
      */

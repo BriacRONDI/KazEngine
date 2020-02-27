@@ -57,6 +57,11 @@ namespace Engine
         public :
             static constexpr uint8_t MAX_BONES_PER_UBO  = 100;
 
+            struct ANIMATION {
+                std::string name;
+                std::chrono::milliseconds duration;
+            };
+
             uint32_t index;
             std::string name;
             Matrix4x4 transformation;
@@ -71,6 +76,7 @@ namespace Engine
             uint32_t Count() const;
 
             // TODO : Écrire directement dans le UBO final plutôt que de passer par un buffer temporaire
+            std::vector<ANIMATION> ListAnimations() const;
             void BuildUBO(std::vector<char>& skeleton, std::vector<char>& offsets, std::map<std::string, uint32_t>& mesh_indices, uint32_t alignment);
             void BuildBoneOffsetsUBO(std::vector<char>& offsets, std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment);
             void BuildAnimationSBO(std::vector<char>& skeleton, std::string const& animation, uint16_t& frame_count,

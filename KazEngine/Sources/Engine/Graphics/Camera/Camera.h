@@ -20,8 +20,8 @@ namespace Engine
                 Vector3 position;
             };
 
-            Camera();
-            virtual ~Camera();
+            void DestroyInstance();
+            static inline Camera& GetInstance() { if(Camera::instance == nullptr) Camera::instance = new Camera; return *Camera::instance; }
             inline CAMERA_UBO& GetUniformBuffer() { return this->camera; }  // Récupère la transformation finale
             void SetPosition(Vector3 const& position);                      // Modifie la position
             void Rotate(Vector3 const& rotation);                           // Rotation de la camera
@@ -38,6 +38,8 @@ namespace Engine
 
         private:
 
+            static Camera* instance;
+
             CAMERA_UBO camera;                      // Uniform buffer de la caméra
             Mouse::MOUSE_POSITION mouse_origin;     // Position de la souris au moment du click
 
@@ -47,5 +49,8 @@ namespace Engine
             Matrix4x4 rotation;                     // Matrice de rotation
             Matrix4x4 translation;                  // Matrice de translation
             Vector3 position;                       // Position de la caméra
+
+            Camera();
+            virtual ~Camera();
     };
 }

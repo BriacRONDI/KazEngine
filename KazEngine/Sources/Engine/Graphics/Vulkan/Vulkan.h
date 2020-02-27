@@ -182,7 +182,7 @@ namespace Engine
             bool CreateSemaphore(VkSemaphore &semaphore);
 
             // Création d'un command buffer
-            bool CreateCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+            bool CreateCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY, bool create_fence = true);
 
             // Envoi de données vers un data buffer
             size_t SendToBuffer(DATA_BUFFER& buffer, const void* data, VkDeviceSize data_size, VkDeviceSize destination_offset);

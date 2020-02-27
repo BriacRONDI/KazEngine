@@ -31,28 +31,23 @@ namespace Engine {
                 META_SKELETON_UBO   = 4
             };
 
-            // Camera
-            Camera camera;
-
-            // Lumières
-            // Lighting lighting;
-
             // Gestionnaire de models
-            ModelManager model_manager;
+            // ModelManager model_manager;
 
             // Buffers
             ManagedBuffer model_buffer;
             ManagedBuffer work_buffer;
             ManagedBuffer storage_buffer;
 
-            inline ~Core() { this->Clear(); }
+            static Core& GetInstance();
+            void DestroyInstance();
             bool Initialize(uint32_t start_entity_limit = 10000);
-            void Clear();
             void DrawScene();
             bool AddEntity(std::shared_ptr<Entity> entity, bool buld_comand_buffers = true);
-            bool AddTexture(Tools::IMAGE_MAP const& image, std::string const& name, Renderer& renderer);
+            // bool AddTexture(Tools::IMAGE_MAP const& image, std::string const& name, Renderer& renderer);
             bool AddSkeleton(std::string const& skeleton);
             bool RebuildCommandBuffers();
+            inline uint32_t GetAnimationOffset(std::string const& skeleton, std::string const& animation) { return this->animations[skeleton][animation].offset; }
 
         private:
 
@@ -69,11 +64,14 @@ namespace Engine {
                 uint32_t meta_skeleton_offset;
             };
 
+            // Instance de singleton
+            static Core* instance;
+
             // Device vulkan
             VkDevice device;
 
             // Gestion des descriptor sets
-            DescriptorSetManager ds_manager;
+            // DescriptorSetManager ds_manager;
 
             // Générateurs de rendu (pipelines)
             std::vector<Renderer> renderers;
@@ -90,26 +88,28 @@ namespace Engine {
             // Models chargés dans le vertex buffer
             std::vector<std::shared_ptr<Mesh>> meshes;
 
-            // Skeletons
-            std::map<std::string, SKELETAL_ANIMATION_SBO> skeletons;
+            // Animations
+            std::map<std::string, std::map<std::string, SKELETAL_ANIMATION_SBO>> animations;
 
             // Textures chargées en mémoire graphique
-            std::map<std::string, Vulkan::IMAGE_BUFFER> textures;
+            // std::map<std::string, Vulkan::IMAGE_BUFFER> textures;
 
             // Ressources nécessaires au fonctionnement de la boucle principale
             std::vector<Vulkan::RENDERING_RESOURCES> resources;
             MAIN_LOOP_RESOURCES loop_resources;
+            std::vector<VkCommandBuffer> main_render_pass_command_buffers;
 
             // Indice de l'image en cours de construction
             uint8_t current_frame_index;
 
-            // Buffers
-            /*ManagedBuffer model_buffer;
-            ManagedBuffer work_buffer;*/
+            // Singleton
+            Core() = default;
+            ~Core();
 
             // Helpers
             bool AllocateRenderingResources();
             bool BuildCommandBuffer(uint32_t swap_chain_image_index);
             bool RebuildFrameBuffers();
+            bool BuildMainRenderPass(uint32_t swap_chain_image_index);
     };
 }

@@ -2,6 +2,16 @@
 
 namespace Engine
 {
+    // Instance du singleton
+    DescriptorSetManager* DescriptorSetManager::instance = nullptr;
+
+    void DescriptorSetManager::DestroyInstance()
+    {
+        if(DescriptorSetManager::instance == nullptr) return;
+        delete DescriptorSetManager::instance;
+        DescriptorSetManager::instance = nullptr;
+    }
+
     /**
      * Initialisation
      */
@@ -15,9 +25,6 @@ namespace Engine
         this->skeleton_set      = nullptr;
         this->texture_pool      = nullptr;
         this->texture_layout    = nullptr;
-        /*this->light_pool        = nullptr;
-        this->light_layout      = nullptr;
-        this->light_set         = nullptr;*/
     }
 
     /**
@@ -25,14 +32,27 @@ namespace Engine
      */
     void DescriptorSetManager::Clear()
     {
-        if(this->sampler != nullptr) vkDestroySampler(Vulkan::GetDevice(), this->sampler, nullptr);
-        if(this->view_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->view_layout, nullptr);
-        if(this->skeleton_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->skeleton_layout, nullptr);
-        if(this->texture_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->texture_layout, nullptr);
-        if(this->view_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->view_pool, nullptr);
-        if(this->skeleton_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->skeleton_pool, nullptr);
-        if(this->texture_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->texture_pool, nullptr);
+        if(Vulkan::HasInstance()) {
 
+            // On attend que le GPU arrête de travailler
+            vkDeviceWaitIdle(Vulkan::GetDevice());
+
+            for(auto& set : this->texture_sets) {
+                if(set.second.buffer.view != VK_NULL_HANDLE) vkDestroyImageView(Vulkan::GetDevice(), set.second.buffer.view, nullptr);
+                if(set.second.buffer.handle != VK_NULL_HANDLE) vkDestroyImage(Vulkan::GetDevice(), set.second.buffer.handle, nullptr);
+                if(set.second.buffer.memory != VK_NULL_HANDLE) vkFreeMemory(Vulkan::GetDevice(), set.second.buffer.memory, nullptr);
+            }
+
+            if(this->sampler != nullptr) vkDestroySampler(Vulkan::GetDevice(), this->sampler, nullptr);
+            if(this->view_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->view_layout, nullptr);
+            if(this->skeleton_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->skeleton_layout, nullptr);
+            if(this->texture_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->texture_layout, nullptr);
+            if(this->view_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->view_pool, nullptr);
+            if(this->skeleton_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->skeleton_pool, nullptr);
+            if(this->texture_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->texture_pool, nullptr);
+        }
+
+        this->texture_sets.clear();
         this->view_pool             = nullptr;
         this->view_layout           = nullptr;
         this->view_set              = nullptr;
@@ -52,101 +72,6 @@ namespace Engine
 
         return output;
     }
-
-    /*bool DescriptorSetManager::CreateLightDescriptorSet(VkDescriptorBufferInfo& light_buffer)
-    {
-        ////////////////////////
-        // Création du layout //
-        ////////////////////////
-
-        VkDescriptorSetLayoutBinding descriptor_set_binding;
-        descriptor_set_binding.binding             = 0;
-        descriptor_set_binding.descriptorType      = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptor_set_binding.descriptorCount     = 1;
-        descriptor_set_binding.stageFlags          = VK_SHADER_STAGE_FRAGMENT_BIT;
-        descriptor_set_binding.pImmutableSamplers  = nullptr;
-
-        VkDescriptorSetLayoutCreateInfo descriptor_layout;
-        descriptor_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptor_layout.flags = 0;
-        descriptor_layout.pNext = nullptr;
-        descriptor_layout.bindingCount = 1;
-        descriptor_layout.pBindings = &descriptor_set_binding;
-
-        VkResult result = vkCreateDescriptorSetLayout(Vulkan::GetDevice(), &descriptor_layout, nullptr, &this->light_layout);
-        if(result != VK_SUCCESS) {
-            #if defined(DISPLAY_LOGS)
-            std::cout << "CreateLightDescriptorSet => vkCreateDescriptorSetLayout : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        //////////////////////
-        // Création du pool //
-        //////////////////////
-
-        VkDescriptorPoolSize pool_size;
-        pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		pool_size.descriptorCount = 1;
-
-		VkDescriptorPoolCreateInfo poolInfo = {};
-		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		poolInfo.poolSizeCount = 1;
-		poolInfo.pPoolSizes = &pool_size;
-        poolInfo.maxSets = 1;
-
-		result = vkCreateDescriptorPool(Vulkan::GetDevice(), &poolInfo, nullptr, &this->light_pool);
-		if(result != VK_SUCCESS) {
-            #if defined(DISPLAY_LOGS)
-            std::cout << "CreateLightDescriptorSet => vkCreateDescriptorPool : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        ///////////////////////////////////
-        // Allocation du Descriptor Sets //
-        ///////////////////////////////////
-
-        VkDescriptorSetAllocateInfo alloc_info = {};
-        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        alloc_info.pNext = nullptr;
-        alloc_info.descriptorPool = this->light_pool;
-        alloc_info.descriptorSetCount = 1;
-        alloc_info.pSetLayouts = &this->light_layout;
-
-        result = vkAllocateDescriptorSets(Vulkan::GetDevice(), &alloc_info, &this->light_set);
-        if(result != VK_SUCCESS) {
-            #if defined(DISPLAY_LOGS)
-            std::cout <<"CreateLightDescriptorSet => vkAllocateDescriptorSets : Failed" << std::endl;
-            #endif
-            return false;
-        }
-
-        ///////////////////////////////////
-        // Mise à jour du Descriptor Set //
-        ///////////////////////////////////
-
-        VkWriteDescriptorSet write;
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.pNext = nullptr;
-        write.dstBinding = 0;
-        write.dstArrayElement = 0;
-        write.descriptorCount = 1;
-        write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        write.pBufferInfo = &light_buffer;
-        write.pTexelBufferView = nullptr;
-        write.pImageInfo = nullptr;
-        write.dstSet = this->light_set;
-
-        // Mise à jour
-        vkUpdateDescriptorSets(Vulkan::GetDevice(), 1, &write, 0, nullptr);
-
-        #if defined(DISPLAY_LOGS)
-        std::cout <<"CreateLightDescriptorSet : Success" << std::endl;
-        #endif
-
-        return true;
-    }*/
 
     bool DescriptorSetManager::CreateSkeletonDescriptorSet(VkDescriptorBufferInfo const& meta_skeleton_buffer, VkDescriptorBufferInfo const& skeleton_buffer, VkDescriptorBufferInfo const& bone_offsets_buffer)
     {
@@ -279,8 +204,6 @@ namespace Engine
         // Mise à jour
         vkUpdateDescriptorSets(Vulkan::GetDevice(), 3, writes, 0, nullptr);
 
-        // this->UpdateSkeletonDescriptorSet(skeleton_buffer, bone_offsets_buffer);
-
         #if defined(DISPLAY_LOGS)
         std::cout <<"CreateSkeletonDescriptorSet : Success" << std::endl;
         #endif
@@ -288,41 +211,7 @@ namespace Engine
         return true;
     }
 
-    /*void DescriptorSetManager::UpdateSkeletonDescriptorSet(VkDescriptorBufferInfo const& skeleton_buffer, VkDescriptorBufferInfo const& bone_offsets_buffer)
-    {
-        VkWriteDescriptorSet writes[2];
-
-        writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[0].pNext = nullptr;
-        writes[0].dstBinding = 0;
-        writes[0].dstArrayElement = 0;
-        writes[0].descriptorCount = 1;
-        writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        writes[0].pBufferInfo = &skeleton_buffer;
-        writes[0].pTexelBufferView = nullptr;
-        writes[0].pImageInfo = nullptr;
-        writes[0].dstSet = this->skeleton_set;
-
-        writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[1].pNext = nullptr;
-        writes[1].dstBinding = 1;
-        writes[1].dstArrayElement = 0;
-        writes[1].descriptorCount = 1;
-        writes[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-        writes[1].pBufferInfo = &bone_offsets_buffer;
-        writes[1].pTexelBufferView = nullptr;
-        writes[1].pImageInfo = nullptr;
-        writes[1].dstSet = this->skeleton_set;
-
-        // Mise à jour
-        vkUpdateDescriptorSets(Vulkan::GetDevice(), 2, writes, 0, nullptr);
-
-        #if defined(DISPLAY_LOGS)
-        std::cout <<"CreateSkeletonDescriptorSet : Success" << std::endl;
-        #endif
-    }*/
-
-    bool DescriptorSetManager::CreateTextureDescriptorSet(VkImageView const view, std::string const& texture)
+    bool DescriptorSetManager::InitializeTextureLayout()
     {
         ////////////////////////
         // Création du layout //
@@ -346,7 +235,7 @@ namespace Engine
             VkResult result = vkCreateDescriptorSetLayout(Vulkan::GetDevice(), &descriptor_layout, nullptr, &this->texture_layout);
             if(result != VK_SUCCESS) {
                 #if defined(DISPLAY_LOGS)
-                std::cout << "CreateTextureDescriptorSet => vkCreateDescriptorSetLayout : Failed" << std::endl;
+                std::cout << "InitializeTextureLayout => vkCreateDescriptorSetLayout : Failed" << std::endl;
                 #endif
                 return false;
             }
@@ -370,22 +259,50 @@ namespace Engine
 		    VkResult result = vkCreateDescriptorPool(Vulkan::GetDevice(), &poolInfo, nullptr, &this->texture_pool);
 		    if(result != VK_SUCCESS) {
                 #if defined(DISPLAY_LOGS)
-                std::cout << "CreateTextureDescriptorSet => vkCreateDescriptorPool : Failed" << std::endl;
+                std::cout << "InitializeTextureLayout => vkCreateDescriptorPool : Failed" << std::endl;
                 #endif
                 return false;
             }
         }
 
-        ///////////////////////////////////
-        // Allocation du Descriptor Set //
-        ///////////////////////////////////
+        #if defined(DISPLAY_LOGS)
+        std::cout <<"InitializeTextureLayout : Success" << std::endl;
+        #endif
+        return true;
 
-        if(texture.empty() || view == nullptr) {
+        /*if(texture.empty() || this->texture_sets[texture].buffer.view == nullptr) {
             #if defined(DISPLAY_LOGS)
             std::cout <<"CreateTextureDescriptorSet : Success" << std::endl;
             #endif
             return true;
-        }
+        }*/
+    }
+
+    // bool DescriptorSetManager::CreateTextureDescriptorSet(VkImageView const view, std::string const& texture)
+    bool DescriptorSetManager::CreateTextureDescriptorSet(Tools::IMAGE_MAP const& image, std::string const& texture)
+    {
+        // Un descriptor set existe déjà pour cette texture
+        if(this->texture_sets.count(texture)) return true;
+
+        ////////////////////////////////////////
+        // Création du buffer pour accueillir //
+        //   l'image dans la carte graphique  //
+        ////////////////////////////////////////
+
+        // Création du buffer
+        this->texture_sets[texture].buffer = Vulkan::GetInstance().CreateImageBuffer(
+                                             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                             VK_IMAGE_ASPECT_COLOR_BIT, image.width, image.height);
+
+        // En cas d'échec, on renvoie false
+        if(this->texture_sets[texture].buffer.handle == nullptr) return false;
+
+        // Envoi de l'image dans la carte graphique
+        if(!Vulkan::GetInstance().SendToBuffer(this->texture_sets[texture].buffer, image.data.data(), image.data.size(), image.width, image.height)) return false;
+
+        ///////////////////////////////////
+        // Allocation du Descriptor Set //
+        ///////////////////////////////////
 
         VkDescriptorSetAllocateInfo alloc_info = {};
         alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -394,7 +311,7 @@ namespace Engine
         alloc_info.descriptorSetCount = 1;
         alloc_info.pSetLayouts = &this->texture_layout;
 
-        VkResult result = vkAllocateDescriptorSets(Vulkan::GetDevice(), &alloc_info, &this->texture_sets[texture]);
+        VkResult result = vkAllocateDescriptorSets(Vulkan::GetDevice(), &alloc_info, &this->texture_sets[texture].descriptor);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             std::cout << "CreateTextureDescriptorSet => vkAllocateDescriptorSets : Failed [";
@@ -424,7 +341,7 @@ namespace Engine
 
         VkDescriptorImageInfo descriptor_image_info;
         descriptor_image_info.sampler = this->sampler;
-        descriptor_image_info.imageView = view;
+        descriptor_image_info.imageView = this->texture_sets[texture].buffer.view;
         descriptor_image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
         VkWriteDescriptorSet write;
@@ -437,7 +354,7 @@ namespace Engine
         write.pBufferInfo = nullptr;
         write.pTexelBufferView = nullptr;
         write.pImageInfo = &descriptor_image_info;
-        write.dstSet = this->texture_sets[texture];
+        write.dstSet = this->texture_sets[texture].descriptor;
 
         // Mise à jour
         vkUpdateDescriptorSets(Vulkan::GetDevice(), 1, &write, 0, nullptr);
@@ -473,13 +390,6 @@ namespace Engine
         descriptor_set_bindings[1].pImmutableSamplers  = nullptr;
         if(enable_geometry_shader) descriptor_set_bindings[1].stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
 
-        // Light
-        /*descriptor_set_bindings[2].binding             = 2;
-        descriptor_set_bindings[2].descriptorType      = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptor_set_bindings[2].descriptorCount     = 1;
-        descriptor_set_bindings[2].stageFlags          = VK_SHADER_STAGE_FRAGMENT_BIT;
-        descriptor_set_bindings[2].pImmutableSamplers  = nullptr;*/
-
         VkDescriptorSetLayoutCreateInfo descriptor_layout;
         descriptor_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         descriptor_layout.flags = 0;
@@ -508,10 +418,6 @@ namespace Engine
         // Entity
         pool_sizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 		pool_sizes[1].descriptorCount = 1;
-
-        // Light
-        /*pool_sizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		pool_sizes[2].descriptorCount = 1;*/
 
 		VkDescriptorPoolCreateInfo poolInfo = {};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -575,18 +481,6 @@ namespace Engine
         writes[1].pTexelBufferView = nullptr;
         writes[1].pImageInfo = nullptr;
         writes[1].dstSet = this->view_set;
-
-        // Light
-        /*writes[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[2].pNext = nullptr;
-        writes[2].dstBinding = 2;
-        writes[2].dstArrayElement = 0;
-        writes[2].descriptorCount = 1;
-        writes[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        writes[2].pBufferInfo = &lights_buffer;
-        writes[2].pTexelBufferView = nullptr;
-        writes[2].pImageInfo = nullptr;
-        writes[2].dstSet = this->view_set;*/
 
         // Mise à jour
         vkUpdateDescriptorSets(Vulkan::GetDevice(), 2, writes, 0, nullptr);

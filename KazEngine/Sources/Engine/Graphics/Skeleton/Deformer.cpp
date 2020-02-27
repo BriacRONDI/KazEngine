@@ -472,11 +472,14 @@ namespace Engine
     std::chrono::milliseconds Bone::GetAnimationTotalDuration(std::string const& animation) const
     {
         std::chrono::milliseconds total_duration(0);
-        for(auto const& animation : this->animations) {
-            for(uint8_t i=0; i<3; i++) {
-                for(auto const& translation : animation.second.translations[i]) if(translation.time > total_duration) total_duration = translation.time;
-                for(auto const& rotation : animation.second.rotations[i]) if(rotation.time > total_duration) total_duration = rotation.time;
-                for(auto const& scaling : animation.second.scalings[i]) if(scaling.time > total_duration) total_duration = scaling.time;
+        for(auto const& item : this->animations) {
+            if(item.first == animation) {
+                for(uint8_t i=0; i<3; i++) {
+                    for(auto const& translation : item.second.translations[i]) if(translation.time > total_duration) total_duration = translation.time;
+                    for(auto const& rotation : item.second.rotations[i]) if(rotation.time > total_duration) total_duration = rotation.time;
+                    for(auto const& scaling : item.second.scalings[i]) if(scaling.time > total_duration) total_duration = scaling.time;
+                }
+                break;
             }
         }
 
@@ -501,6 +504,43 @@ namespace Engine
         bone_per_frame = static_cast<uint32_t>(skeleton.size() / sizeof(Matrix4x4));
         for(uint16_t i=1; i<frame_count; i++)
             this->BuildSkeletonSBO(skeleton, IDENTITY_MATRIX, Bone::MAX_BONES_PER_UBO, time_per_frame * i, animation, static_cast<uint32_t>(skeleton.size()));
+    }
+
+    /**
+     * Revoie la liste des animations d'un squelette avec leur durée
+     */
+    std::vector<Bone::ANIMATION> Bone::ListAnimations() const
+    {
+        std::vector<Bone::ANIMATION> animation_list;
+
+        for(auto const& animation : this->animations) {
+            std::chrono::milliseconds total_duration(0);
+            for(uint8_t i=0; i<3; i++) {
+                for(auto const& translation : animation.second.translations[i]) if(translation.time > total_duration) total_duration = translation.time;
+                for(auto const& rotation : animation.second.rotations[i]) if(rotation.time > total_duration) total_duration = rotation.time;
+                for(auto const& scaling : animation.second.scalings[i]) if(scaling.time > total_duration) total_duration = scaling.time;
+            }
+
+            animation_list.push_back({animation.first, total_duration});
+        }
+
+        for(auto const& child : this->children) {
+            auto child_animations = child.ListAnimations();
+            for(auto const& child_animation : child_animations) {
+                bool animation_found = false;
+                for(auto& animation : animation_list) {
+                    if(child_animation.name == animation.name) {
+                        if(child_animation.duration > animation.duration)
+                            animation.duration = child_animation.duration;
+                        animation_found = true;
+                        break;
+                    }
+                }
+                if(!animation_found) animation_list.push_back(child_animation);
+            }
+        }
+
+        return animation_list;
     }
 
     /**

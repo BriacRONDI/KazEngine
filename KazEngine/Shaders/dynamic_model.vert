@@ -19,6 +19,7 @@ layout (set=0, binding=1) uniform Entity
 {
 	mat4 model;
 	uint frame_id;
+	uint animation_id;
 } entity;
 
 layout (set=2, binding=0) uniform Skeleton
@@ -59,7 +60,7 @@ void main()
 
 	for(int i=0; i<MAX_BONE_PER_VERTEX; i++) {
 		if(inBoneWeights[i] == 0) break;
-		boneTransform += skeleton.bones[meta.bones_per_frame * entity.frame_id + inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
+		boneTransform += skeleton.bones[entity.animation_id + meta.bones_per_frame * entity.frame_id + inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
 		total_weight += inBoneWeights[i];
 		has_bone = true;
 	}
