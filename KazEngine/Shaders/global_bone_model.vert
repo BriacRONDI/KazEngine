@@ -18,23 +18,23 @@ layout (set=0, binding=0) uniform Camera
 	mat4 view;
 } camera;
 
-layout (set=0, binding=1) uniform Entity
+layout (set=1, binding=0) uniform Entity
 {
 	mat4 model;
 	uint frame_id;
 } entity;
 
-layout (set=2, binding=0) uniform Skeleton
+layout (set=3, binding=0) uniform Skeleton
 {
 	uint bones_per_frame;
 } meta;
 
-layout (set=2, binding=1) buffer Skeleton
+layout (set=3, binding=1) buffer Skeleton
 {
 	mat4 bones[];
 } skeleton;
 
-layout (set=2, binding=2) uniform BoneOffsets
+layout (set=3, binding=2) uniform BoneOffsets
 {
 	uint offset_ids[MAX_BONES];
 	mat4 offsets[MAX_BONE_OFFSETS];

@@ -24,6 +24,7 @@ namespace Engine
         ModelManager::GetInstance().DestroyInstance();
         Camera::GetInstance().DestroyInstance();
         DescriptorSetManager::GetInstance().DestroyInstance();
+        Map::GetInstance().DestroyInstance();
 
         if(Vulkan::HasInstance()) {
 
@@ -183,7 +184,9 @@ namespace Engine
         entity_buffer_infos.range = Entity::MAX_UBO_SIZE;
         bone_offsets_buffer_infos.range = Bone::MAX_BONES_PER_UBO * sizeof(Matrix4x4);
 
-        DescriptorSetManager::GetInstance().CreateViewDescriptorSet(camera_buffer_infos, entity_buffer_infos, enable_geometry_shader);
+        // DescriptorSetManager::GetInstance().CreateViewDescriptorSet(camera_buffer_infos, entity_buffer_infos, enable_geometry_shader);
+        DescriptorSetManager::GetInstance().CreateCameraDescriptorSet(camera_buffer_infos, enable_geometry_shader);
+        DescriptorSetManager::GetInstance().CreateEntityDescriptorSet(entity_buffer_infos, enable_geometry_shader);
         DescriptorSetManager::GetInstance().InitializeTextureLayout();
         DescriptorSetManager::GetInstance().CreateSkeletonDescriptorSet(meta_skeleton_buffer_infos, skeleton_buffer_infos, bone_offsets_buffer_infos);
 
@@ -195,53 +198,53 @@ namespace Engine
         // Création des pipelines //
         ////////////////////////////
 
-        this->renderers.resize(6);
+        this->renderers.resize(5);
         std::array<std::string, 3> shaders;
 
-        shaders[0] = "./Shaders/basic_model.vert.spv";
+        /*shaders[0] = "./Shaders/basic_model.vert.spv";
         shaders[1] = "./Shaders/colored_model.frag.spv";
-        uint16_t schema = Renderer::POSITION_VERTEX; // 1
+        uint16_t schema = Renderer::POSITION_VERTEX | Renderer::DYNAMIC_MODEL;
         if(!this->renderers[0].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
             this->DestroyInstance();
             return false;
-        }
+        }*/
 
         shaders[0] = "./Shaders/material_basic_model.vert.spv";
         shaders[1] = "./Shaders/material_basic_model.frag.spv";
-        schema = Renderer::POSITION_VERTEX | Renderer::MATERIAL; // 33
-        if(!this->renderers[1].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
+        uint16_t schema = Renderer::POSITION_VERTEX | Renderer::MATERIAL | Renderer::DYNAMIC_MODEL;
+        if(!this->renderers[0].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
             this->DestroyInstance();
             return false;
         }
 
         shaders[0] = "./Shaders/texture_basic_model.vert.spv";
         shaders[1] = "./Shaders/textured_model.frag.spv";
-        schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE; // 101
-        if(!this->renderers[2].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
+        schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE | Renderer::DYNAMIC_MODEL;
+        if(!this->renderers[1].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
             this->DestroyInstance();
             return false;
         }
 
         shaders[0] = "./Shaders/dynamic_model.vert.spv";
         shaders[1] = "./Shaders/textured_model.frag.spv";
-        schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE | Renderer::SKELETON; // 229
-        if(!this->renderers[3].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
+        schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE | Renderer::SKELETON | Renderer::DYNAMIC_MODEL;
+        if(!this->renderers[2].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
             this->DestroyInstance();
             return false;
         }
 
         shaders[0] = "./Shaders/material_skeleton_model.vert.spv";
         shaders[1] = "./Shaders/material_basic_model.frag.spv";
-        schema = Renderer::POSITION_VERTEX | Renderer::MATERIAL | Renderer::SKELETON; // 161
-        if(!this->renderers[4].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
+        schema = Renderer::POSITION_VERTEX | Renderer::MATERIAL | Renderer::SKELETON | Renderer::DYNAMIC_MODEL;
+        if(!this->renderers[3].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
             this->DestroyInstance();
             return false;
         }
 
         shaders[0] = "./Shaders/global_bone_model.vert.spv";
         shaders[1] = "./Shaders/textured_model.frag.spv";
-        schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE | Renderer::SINGLE_BONE;
-        if(!this->renderers[5].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
+        schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE | Renderer::SINGLE_BONE | Renderer::DYNAMIC_MODEL;
+        if(!this->renderers[4].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
             this->DestroyInstance();
             return false;
         }
@@ -385,7 +388,7 @@ namespace Engine
     /**
      * Ajout d'une entité à la scène
      */
-    bool Core::AddEntity(std::shared_ptr<Entity> entity, bool buld_comand_buffers)
+    bool Core::AddEntity(std::shared_ptr<Entity> entity, bool buld_command_buffers)
     {
         for(auto& entity_mesh : entity->GetMeshes()) {
 
@@ -406,7 +409,7 @@ namespace Engine
                 // En premier lieu, on vérifie qu'il existe un générateur de rendu capable d'afficher le modèle
                 Renderer* match_renderer = nullptr;
                 for(auto& renderer : this->renderers) {
-                    if(renderer.MatchRenderMask(entity_mesh->render_mask)) {
+                    if(renderer.MatchRenderMask(entity_mesh->render_mask | Renderer::DYNAMIC_MODEL)) {
                         match_renderer = &renderer;
                         break;
                     }
@@ -482,7 +485,7 @@ namespace Engine
         this->entities.push_back(entity);
 
         // Reconstruction des command buffers
-        if(buld_comand_buffers && !this->RebuildCommandBuffers()) return false;
+        if(buld_command_buffers && !this->RebuildCommandBuffers()) return false;
 
         return true;
     }
@@ -490,14 +493,14 @@ namespace Engine
     bool Core::RebuildCommandBuffers()
     {
         for(uint32_t i=0; i<Vulkan::GetConcurrentFrameCount(); i++) {
-            if(!this->BuildMainRenderPass(i)) return false;
             if(!this->BuildCommandBuffer(i)) return false;
+            if(!this->BuildRenderPass(i)) return false;
         }
 
         return true;
     }
 
-    bool Core::BuildCommandBuffer(uint32_t swap_chain_image_index)
+    bool Core::BuildRenderPass(uint32_t swap_chain_image_index)
     {
         VkCommandBufferBeginInfo command_buffer_begin_info;
         command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -536,7 +539,12 @@ namespace Engine
         vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
         // Exécution des render passes secondaires
-        vkCmdExecuteCommands(command_buffer, 1, &this->main_render_pass_command_buffers[swap_chain_image_index]);
+        VkCommandBuffer command_buffers[2] = {
+            this->main_render_pass_command_buffers[swap_chain_image_index],
+            Map::GetInstance().BuildCommandBuffer(swap_chain_image_index, frame_buffer)
+        };
+        vkCmdExecuteCommands(command_buffer, 2, command_buffers);
+        // vkCmdExecuteCommands(command_buffer, 1, &this->main_render_pass_command_buffers[swap_chain_image_index]);
 
         // Fin de la render pass primaire
         vkCmdEndRenderPass(command_buffer);
@@ -556,7 +564,7 @@ namespace Engine
      * Création de la render pass principale,
      * permettant d'afficher tous les objets mobiles présents à l'écran
      */
-    bool Core::BuildMainRenderPass(uint32_t swap_chain_image_index)
+    bool Core::BuildCommandBuffer(uint32_t swap_chain_image_index)
     {
         VkCommandBuffer command_buffer = this->main_render_pass_command_buffers[swap_chain_image_index];
 
@@ -605,9 +613,12 @@ namespace Engine
                 for(auto& model : entity->GetMeshes()) {
 
                     // Si ce renderer n'est pas compatible avec le modèle à afficher, on passe au suivant
-                    if(!renderer.MatchRenderMask(model->render_mask)) continue;
+                    if(!renderer.MatchRenderMask(model->render_mask | Renderer::DYNAMIC_MODEL)) continue;
 
-                    std::vector<VkDescriptorSet> bind_descriptor_sets = {DescriptorSetManager::GetInstance().GetViewDescriptorSet()};
+                    std::vector<VkDescriptorSet> bind_descriptor_sets = {
+                        DescriptorSetManager::GetInstance().GetCameraDescriptorSet(),
+                        DescriptorSetManager::GetInstance().GetEntityDescriptorSet()
+                    };
                     std::vector<uint32_t> dynamic_offsets = {entity->dynamic_buffer_offset};
 
                     if(!pipeline_bound) {
@@ -735,8 +746,8 @@ namespace Engine
         uint32_t swap_chain_image_index;
         if(!Vulkan::GetInstance().AcquireNextImage(current_rendering_resource, swap_chain_image_index)) return;
 
-        // Construction du command buffer
-        this->BuildCommandBuffer(swap_chain_image_index);
+        // Construction de la render pass
+        this->BuildRenderPass(swap_chain_image_index);
 
         // Présentation de l'image
         // En cas d'échec on recréé les command buffers

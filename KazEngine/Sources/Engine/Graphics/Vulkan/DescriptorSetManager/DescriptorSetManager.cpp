@@ -17,9 +17,15 @@ namespace Engine
      */
     DescriptorSetManager::DescriptorSetManager()
     {
-        this->view_pool         = nullptr;
+        /*this->view_pool         = nullptr;
         this->view_layout       = nullptr;
-        this->view_set          = nullptr;
+        this->view_set          = nullptr;*/
+        this->camera_pool       = nullptr;
+        this->camera_layout     = nullptr;
+        this->camera_set        = nullptr;
+        this->entity_pool       = nullptr;
+        this->entity_layout     = nullptr;
+        this->entity_set        = nullptr;
         this->skeleton_pool     = nullptr;
         this->skeleton_layout   = nullptr;
         this->skeleton_set      = nullptr;
@@ -44,18 +50,28 @@ namespace Engine
             }
 
             if(this->sampler != nullptr) vkDestroySampler(Vulkan::GetDevice(), this->sampler, nullptr);
-            if(this->view_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->view_layout, nullptr);
+            // if(this->view_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->view_layout, nullptr);
+            if(this->camera_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->camera_layout, nullptr);
+            if(this->entity_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->entity_layout, nullptr);
             if(this->skeleton_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->skeleton_layout, nullptr);
             if(this->texture_layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->texture_layout, nullptr);
-            if(this->view_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->view_pool, nullptr);
+            // if(this->view_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->view_pool, nullptr);
+            if(this->camera_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->camera_pool, nullptr);
+            if(this->entity_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->entity_pool, nullptr);
             if(this->skeleton_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->skeleton_pool, nullptr);
             if(this->texture_pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->texture_pool, nullptr);
         }
 
         this->texture_sets.clear();
-        this->view_pool             = nullptr;
+        /*this->view_pool             = nullptr;
         this->view_layout           = nullptr;
-        this->view_set              = nullptr;
+        this->view_set              = nullptr;*/
+        this->camera_pool           = nullptr;
+        this->camera_layout         = nullptr;
+        this->camera_set            = nullptr;
+        this->entity_pool           = nullptr;
+        this->entity_layout         = nullptr;
+        this->entity_set            = nullptr;
         this->skeleton_pool         = nullptr;
         this->skeleton_layout       = nullptr;
         this->skeleton_set          = nullptr;
@@ -66,7 +82,9 @@ namespace Engine
 
     std::vector<VkDescriptorSetLayout> const DescriptorSetManager::GetLayoutArray(uint16_t schema)
     {
-        std::vector<VkDescriptorSetLayout> output = {this->view_layout};
+        // std::vector<VkDescriptorSetLayout> output = {this->view_layout};
+        std::vector<VkDescriptorSetLayout> output = {this->camera_layout};
+        if(schema & Renderer::DYNAMIC_MODEL) output.push_back(this->entity_layout);
         if(schema & Renderer::TEXTURE) output.push_back(this->texture_layout);
         if(schema & Renderer::SKELETON ||schema & Renderer::SINGLE_BONE) output.push_back(this->skeleton_layout);
 
@@ -269,16 +287,8 @@ namespace Engine
         std::cout <<"InitializeTextureLayout : Success" << std::endl;
         #endif
         return true;
-
-        /*if(texture.empty() || this->texture_sets[texture].buffer.view == nullptr) {
-            #if defined(DISPLAY_LOGS)
-            std::cout <<"CreateTextureDescriptorSet : Success" << std::endl;
-            #endif
-            return true;
-        }*/
     }
 
-    // bool DescriptorSetManager::CreateTextureDescriptorSet(VkImageView const view, std::string const& texture)
     bool DescriptorSetManager::CreateTextureDescriptorSet(Tools::IMAGE_MAP const& image, std::string const& texture)
     {
         // Un descriptor set existe déjà pour cette texture
@@ -366,7 +376,200 @@ namespace Engine
         return true;
     }
 
-    bool DescriptorSetManager::CreateViewDescriptorSet(VkDescriptorBufferInfo& camera_buffer, VkDescriptorBufferInfo& entity_buffer, bool enable_geometry_shader)
+    // bool DescriptorSetManager::CreateViewDescriptorSet(VkDescriptorBufferInfo& camera_buffer, VkDescriptorBufferInfo& entity_buffer, bool enable_geometry_shader)
+    bool DescriptorSetManager::CreateCameraDescriptorSet(VkDescriptorBufferInfo& camera_buffer, bool enable_geometry_shader)
+    {
+        ////////////////////////
+        // Création du layout //
+        ////////////////////////
+
+        VkDescriptorSetLayoutBinding descriptor_set_binding;
+        descriptor_set_binding.binding             = 0;
+        descriptor_set_binding.descriptorType      = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptor_set_binding.descriptorCount     = 1;
+        descriptor_set_binding.stageFlags          = VK_SHADER_STAGE_VERTEX_BIT;
+        descriptor_set_binding.pImmutableSamplers  = nullptr;
+        if(enable_geometry_shader) descriptor_set_binding.stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
+
+        VkDescriptorSetLayoutCreateInfo descriptor_layout;
+        descriptor_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptor_layout.flags = 0;
+        descriptor_layout.pNext = nullptr;
+        descriptor_layout.bindingCount = 1;
+        descriptor_layout.pBindings = &descriptor_set_binding;
+
+        VkResult result = vkCreateDescriptorSetLayout(Vulkan::GetDevice(), &descriptor_layout, nullptr, &this->camera_layout);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "CreateCameraDescriptorSet => vkCreateDescriptorSetLayout : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        //////////////////////
+        // Création du pool //
+        //////////////////////
+
+        VkDescriptorPoolSize pool_size;
+		pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		pool_size.descriptorCount = 1;
+
+		VkDescriptorPoolCreateInfo poolInfo = {};
+		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		poolInfo.poolSizeCount = 1;
+		poolInfo.pPoolSizes = &pool_size;
+        poolInfo.maxSets = 1;
+
+		result = vkCreateDescriptorPool(Vulkan::GetDevice(), &poolInfo, nullptr, &this->camera_pool);
+		if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "CreateCameraDescriptorSet => vkCreateDescriptorPool : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        //////////////////////////////////
+        // Allocation du Descriptor Set //
+        //////////////////////////////////
+
+        VkDescriptorSetAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.pNext = nullptr;
+        alloc_info.descriptorPool = this->camera_pool;
+        alloc_info.descriptorSetCount = 1;
+        alloc_info.pSetLayouts = &this->camera_layout;
+
+        result = vkAllocateDescriptorSets(Vulkan::GetDevice(), &alloc_info, &this->camera_set);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout <<"CreateCameraDescriptorSet => vkAllocateDescriptorSets : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        ///////////////////////////////////
+        // Mise à jour du Descriptor Set //
+        ///////////////////////////////////
+
+        VkWriteDescriptorSet write;
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.pNext = nullptr;
+        write.dstBinding = 0;
+        write.dstArrayElement = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        write.pBufferInfo = &camera_buffer;
+        write.pTexelBufferView = nullptr;
+        write.pImageInfo = nullptr;
+        write.dstSet = this->camera_set;
+
+        // Mise à jour
+        vkUpdateDescriptorSets(Vulkan::GetDevice(), 1, &write, 0, nullptr);
+
+        #if defined(DISPLAY_LOGS)
+        std::cout <<"CreateCameraDescriptorSet : Success" << std::endl;
+        #endif
+
+        return true;
+    }
+
+    bool DescriptorSetManager::CreateEntityDescriptorSet(VkDescriptorBufferInfo& entity_buffer, bool enable_geometry_shader)
+    {
+        ////////////////////////
+        // Création du layout //
+        ////////////////////////
+
+        VkDescriptorSetLayoutBinding descriptor_set_binding;
+        descriptor_set_binding.binding             = 0;
+        descriptor_set_binding.descriptorType      = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        descriptor_set_binding.descriptorCount     = 1;
+        descriptor_set_binding.stageFlags          = VK_SHADER_STAGE_VERTEX_BIT;
+        descriptor_set_binding.pImmutableSamplers  = nullptr;
+        if(enable_geometry_shader) descriptor_set_binding.stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
+
+        VkDescriptorSetLayoutCreateInfo descriptor_layout;
+        descriptor_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptor_layout.flags = 0;
+        descriptor_layout.pNext = nullptr;
+        descriptor_layout.bindingCount = 1;
+        descriptor_layout.pBindings = &descriptor_set_binding;
+
+        VkResult result = vkCreateDescriptorSetLayout(Vulkan::GetDevice(), &descriptor_layout, nullptr, &this->entity_layout);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "CreateEntityDescriptorSet => vkCreateDescriptorSetLayout : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        //////////////////////
+        // Création du pool //
+        //////////////////////
+
+        VkDescriptorPoolSize pool_size;
+        pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+		pool_size.descriptorCount = 1;
+
+		VkDescriptorPoolCreateInfo poolInfo = {};
+		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		poolInfo.poolSizeCount = 1;
+		poolInfo.pPoolSizes = &pool_size;
+        poolInfo.maxSets = 1;
+
+		result = vkCreateDescriptorPool(Vulkan::GetDevice(), &poolInfo, nullptr, &this->entity_pool);
+		if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "CreateEntityDescriptorSet => vkCreateDescriptorPool : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        //////////////////////////////////
+        // Allocation du Descriptor Set //
+        //////////////////////////////////
+
+        VkDescriptorSetAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.pNext = nullptr;
+        alloc_info.descriptorPool = this->entity_pool;
+        alloc_info.descriptorSetCount = 1;
+        alloc_info.pSetLayouts = &this->entity_layout;
+
+        result = vkAllocateDescriptorSets(Vulkan::GetDevice(), &alloc_info, &this->entity_set);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout <<"CreateEntityDescriptorSet => vkAllocateDescriptorSets : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        ///////////////////////////////////
+        // Mise à jour du Descriptor Set //
+        ///////////////////////////////////
+
+        VkWriteDescriptorSet write;
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.pNext = nullptr;
+        write.dstBinding = 0;
+        write.dstArrayElement = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+        write.pBufferInfo = &entity_buffer;
+        write.pTexelBufferView = nullptr;
+        write.pImageInfo = nullptr;
+        write.dstSet = this->entity_set;
+
+        // Mise à jour
+        vkUpdateDescriptorSets(Vulkan::GetDevice(), 1, &write, 0, nullptr);
+
+        #if defined(DISPLAY_LOGS)
+        std::cout <<"CreateEntityDescriptorSet : Success" << std::endl;
+        #endif
+
+        return true;
+    }
+
+    /*bool DescriptorSetManager::CreateViewDescriptorSet(VkDescriptorBufferInfo& camera_buffer, VkDescriptorBufferInfo& entity_buffer, bool enable_geometry_shader)
     {
         ////////////////////////
         // Création du layout //
@@ -490,7 +693,7 @@ namespace Engine
         #endif
 
         return true;
-    }
+    }*/
 
     /**
      * Création d'un sampler d'images

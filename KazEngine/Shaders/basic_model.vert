@@ -9,7 +9,7 @@ layout (set=0, binding=0) uniform Camera
 	vec3 position;
 } camera;
 
-layout (set=0, binding=1) uniform Entity
+layout (set=1, binding=0) uniform Entity
 {
 	mat4 model;
 	vec3 color;

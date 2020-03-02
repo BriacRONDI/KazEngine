@@ -1,6 +1,6 @@
 #version 450
 
-layout (set=2, binding=0) uniform sampler2D inTexture;
+layout (set=1, binding=0) uniform sampler2D inTexture;
 
 layout (location = 0) in vec2 inUV;
 

@@ -26,14 +26,17 @@ namespace Engine
             static inline DescriptorSetManager& GetInstance() { if(DescriptorSetManager::instance == nullptr) DescriptorSetManager::instance = new DescriptorSetManager; return *DescriptorSetManager::instance; }
             void DestroyInstance();
             void Clear();
-            bool CreateViewDescriptorSet(VkDescriptorBufferInfo& camera_buffer, VkDescriptorBufferInfo& entity_buffer, bool enable_geometry_shader = false);
+            // bool CreateViewDescriptorSet(VkDescriptorBufferInfo& camera_buffer, VkDescriptorBufferInfo& entity_buffer, bool enable_geometry_shader = false);
             bool CreateSkeletonDescriptorSet(VkDescriptorBufferInfo const& meta_skeleton_buffer, VkDescriptorBufferInfo const& skeleton_buffer, VkDescriptorBufferInfo const& bone_offsets_buffer);
-            // bool CreateTextureDescriptorSet(VkImageView const view = nullptr, std::string const& texture = {});
+            bool CreateCameraDescriptorSet(VkDescriptorBufferInfo& camera_buffer, bool enable_geometry_shader = false);
+            bool CreateEntityDescriptorSet(VkDescriptorBufferInfo& entity_buffer, bool enable_geometry_shader = false);
             bool InitializeTextureLayout();
             bool CreateTextureDescriptorSet(Tools::IMAGE_MAP const& image, std::string const& texture);
             std::vector<VkDescriptorSetLayout> const GetLayoutArray(uint16_t schema);
 
-            inline VkDescriptorSet const GetViewDescriptorSet() { return this->view_set; }
+            // inline VkDescriptorSet const GetViewDescriptorSet() { return this->view_set; }
+            inline VkDescriptorSet const GetCameraDescriptorSet() { return this->camera_set; }
+            inline VkDescriptorSet const GetEntityDescriptorSet() { return this->entity_set; }
             inline VkDescriptorSet const GetSkeletonDescriptorSet() { return this->skeleton_set; }
             inline VkDescriptorSet const GetTextureDescriptorSet(std::string const& texture) { return this->texture_sets[texture].descriptor; }
 
@@ -51,9 +54,19 @@ namespace Engine
             VkSampler sampler;
 
             // Descriptor set pointant sur le uniform buffer de la camera et des entités
-            VkDescriptorPool view_pool;
+            /*VkDescriptorPool view_pool;
             VkDescriptorSetLayout view_layout;
-            VkDescriptorSet view_set;
+            VkDescriptorSet view_set;*/
+
+            // Descriptor set pointant sur le uniform buffer de la camera
+            VkDescriptorPool camera_pool;
+            VkDescriptorSetLayout camera_layout;
+            VkDescriptorSet camera_set;
+
+            // Descriptor set pointant sur le uniform buffer des entités
+            VkDescriptorPool entity_pool;
+            VkDescriptorSetLayout entity_layout;
+            VkDescriptorSet entity_set;
 
             // Descriptor set pointant sur le uniform buffer des squelettes
             VkDescriptorPool skeleton_pool;

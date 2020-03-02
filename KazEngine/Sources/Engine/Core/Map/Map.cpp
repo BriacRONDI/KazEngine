@@ -27,28 +27,71 @@ namespace Engine
         if(!Vulkan::GetInstance().CreateCommandBuffer(Vulkan::GetCommandPool(), render_pass_buffers, VK_COMMAND_BUFFER_LEVEL_SECONDARY, false)) return;
         this->command_buffers.resize(Vulkan::GetConcurrentFrameCount());
         for(uint32_t i=0; i<Vulkan::GetConcurrentFrameCount(); i++) this->command_buffers[i] = render_pass_buffers[i].handle;
+
+        // Initialisation de la pipeline
+        std::array<std::string, 3> shaders;
+        shaders[0] = "./Shaders/textured_map.vert.spv";
+        shaders[1] = "./Shaders/textured_map.frag.spv";
+        uint16_t schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::TEXTURE;
+        if(!this->renderer.Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
+            this->DestroyInstance();
+            #if defined(DISPLAY_LOGS)
+            std::cout << "Map() => this->renderer.Initialize : Failed" << std::endl;
+            #endif
+            return;
+        }
+
+        // DEBUG DATA
+        Tools::IMAGE_MAP image = Tools::LoadImageFile("./Assets/grass_tile.png");
+        DescriptorSetManager::GetInstance().CreateTextureDescriptorSet(image, "grass");
+
+        this->need_update = {true, true, true};
     }
 
     Map::~Map()
     {
-        if(this->map_data_buffer.GetBuffer().memory != VK_NULL_HANDLE) vkFreeMemory(Vulkan::GetDevice(), this->map_data_buffer.GetBuffer().memory, nullptr);
-        if(this->map_data_buffer.GetBuffer().handle != VK_NULL_HANDLE) vkDestroyBuffer(Vulkan::GetDevice(), this->map_data_buffer.GetBuffer().handle, nullptr);
-        this->map_data_buffer.Clear();
+        if(Vulkan::HasInstance()) {
+
+            // On attend que le GPU arrête de travailler
+            vkDeviceWaitIdle(Vulkan::GetDevice());
+            if(this->map_data_buffer.GetBuffer().memory != VK_NULL_HANDLE) vkFreeMemory(Vulkan::GetDevice(), this->map_data_buffer.GetBuffer().memory, nullptr);
+            if(this->map_data_buffer.GetBuffer().handle != VK_NULL_HANDLE) vkDestroyBuffer(Vulkan::GetDevice(), this->map_data_buffer.GetBuffer().handle, nullptr);
+            this->map_data_buffer.Clear();
+        }
     }
 
     void Map::UpdateVertexBuffer()
     {
-        
+        struct SHADER_INPUT {
+            Vector3 position;
+            Vector2 uv;
+        };
+
+        std::vector<SHADER_INPUT> vertex_buffer(4);
+        vertex_buffer[0].position = { -1.0f, 0.0f, -1.0f };
+        vertex_buffer[0].uv = { 0.0f, 1.0f };
+        vertex_buffer[1].position = { -1.0f, 0.0f, 1.0f };
+        vertex_buffer[1].uv = { 0.0f, 0.0f };
+        vertex_buffer[2].position = { 1.0f, 0.0f, 1.0f };
+        vertex_buffer[2].uv = { 1.0f, 0.0f };
+        vertex_buffer[3].position = { 1.0f, 0.0f, -1.0f };
+        vertex_buffer[3].uv = { 1.0f, 1.0f };
+
+        this->index_buffer_offet = vertex_buffer.size() * sizeof(SHADER_INPUT);
+        this->map_data_buffer.WriteData(vertex_buffer.data(), this->index_buffer_offet, 0);
+
+        std::vector<uint32_t> index_buffer = {0, 2, 1, 0, 3, 2};
+        this->map_data_buffer.WriteData(index_buffer.data(), index_buffer.size() * sizeof(uint32_t), this->index_buffer_offet);
+
+        this->map_data_buffer.Flush();
     }
 
-    void Map::GetMapVisiblePlane()
-    {
-        
-    }
-
-    bool Map::BuildRenderPass(uint32_t swap_chain_image_index, VkFramebuffer frame_buffer, std::vector<Renderer> const& renderers)
+    VkCommandBuffer Map::BuildCommandBuffer(uint32_t swap_chain_image_index, VkFramebuffer frame_buffer)
     {
         VkCommandBuffer command_buffer = this->command_buffers[swap_chain_image_index];
+        if(!this->need_update[swap_chain_image_index]) return command_buffer;
+        this->need_update[swap_chain_image_index] = false;
+        this->UpdateVertexBuffer();
 
         VkCommandBufferInheritanceInfo inheritance_info = {};
         inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
@@ -67,7 +110,7 @@ namespace Engine
             #if defined(DISPLAY_LOGS)
             std::cout << "BuildRenderPass[Map] => vkBeginCommandBuffer : Failed" << std::endl;
             #endif
-            return false;
+            return nullptr;
         }
 
         auto& surface = Vulkan::GetDrawSurface();
@@ -87,17 +130,30 @@ namespace Engine
         scissor.extent.height = surface.height;
         vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-        
+        std::vector<VkDescriptorSet> bind_descriptor_sets = {
+            DescriptorSetManager::GetInstance().GetCameraDescriptorSet(),
+            DescriptorSetManager::GetInstance().GetTextureDescriptorSet("grass")
+        };
+
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->renderer.GetPipeline().handle);
+
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->renderer.GetPipeline().layout, 0,
+                                static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(), 0, nullptr);
+
+        VkDeviceSize offset = 0;
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, &this->map_data_buffer.GetBuffer().handle, &offset);
+        vkCmdBindIndexBuffer(command_buffer, this->map_data_buffer.GetBuffer().handle, this->index_buffer_offet, VK_INDEX_TYPE_UINT32);
+        vkCmdDrawIndexed(command_buffer, 6, 1, 0, 0, 0);
 
         result = vkEndCommandBuffer(command_buffer);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             std::cout << "BuildMainRenderPass[Map] => vkEndCommandBuffer : Failed" << std::endl;
             #endif
-            return false;
+            return nullptr;
         }
 
         // Succès
-        return true;
+        return command_buffer;
     }
 }

@@ -11,6 +11,7 @@
 #include "../Graphics/Renderer/Renderer.h"
 #include "./ModelManager/ModelManager.h"
 #include "../Graphics/Lighting/Lighting.h"
+#include "./Map/Map.h"
 
 namespace Engine {
 
@@ -31,9 +32,6 @@ namespace Engine {
                 META_SKELETON_UBO   = 4
             };
 
-            // Gestionnaire de models
-            // ModelManager model_manager;
-
             // Buffers
             ManagedBuffer model_buffer;
             ManagedBuffer work_buffer;
@@ -43,8 +41,7 @@ namespace Engine {
             void DestroyInstance();
             bool Initialize(uint32_t start_entity_limit = 10000);
             void DrawScene();
-            bool AddEntity(std::shared_ptr<Entity> entity, bool buld_comand_buffers = true);
-            // bool AddTexture(Tools::IMAGE_MAP const& image, std::string const& name, Renderer& renderer);
+            bool AddEntity(std::shared_ptr<Entity> entity, bool buld_command_buffers = true);
             bool AddSkeleton(std::string const& skeleton);
             bool RebuildCommandBuffers();
             inline uint32_t GetAnimationOffset(std::string const& skeleton, std::string const& animation) { return this->animations[skeleton][animation].offset; }
@@ -108,8 +105,8 @@ namespace Engine {
 
             // Helpers
             bool AllocateRenderingResources();
-            bool BuildCommandBuffer(uint32_t swap_chain_image_index);
+            bool BuildRenderPass(uint32_t swap_chain_image_index);
             bool RebuildFrameBuffers();
-            bool BuildMainRenderPass(uint32_t swap_chain_image_index);
+            bool BuildCommandBuffer(uint32_t swap_chain_image_index);
     };
 }

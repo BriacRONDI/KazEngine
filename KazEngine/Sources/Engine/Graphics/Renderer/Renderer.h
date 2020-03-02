@@ -21,6 +21,7 @@ namespace Engine
                 TEXTURE             = 0b0000'0000'0100'0000,
                 SKELETON            = 0b0000'0000'1000'0000,
                 SINGLE_BONE         = 0b0000'0001'0000'0000,
+                DYNAMIC_MODEL       = 0b0000'0010'0000'0000,
             };
 
             // Libération des ressources
@@ -35,7 +36,7 @@ namespace Engine
 
             // Indique si ce renderer est compatible avec le masque fourni
             // Cela permet de déterminer si cette pipeline peut afficher un modèle
-            inline bool MatchRenderMask(uint16_t mask) { return this->render_mask == mask; }
+            inline bool MatchRenderMask(uint16_t mask) const { return this->render_mask == mask; }
 
         private :
 
