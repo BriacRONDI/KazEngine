@@ -1,10 +1,12 @@
 #pragma once
 
 #include <array>
-#include "../../Common/Tools/Tools.h"
 
 namespace Engine
 {
+    class Vector3;
+    class Matrix4x4;
+
     class Vector4
     {
         public :
@@ -20,6 +22,19 @@ namespace Engine
                 std::array<float, 4> xyzw;
             };
 
+            // Distance entre le plan "this" et le point "point"
+            float DistanceToPoint(Vector3 const& point);
+
+            // Le point se trouve dans le demi-espace pointé par la normale au plan
+            bool InsidePositiveHalfSpace(Vector3 const& point);
+
+            // Produit scalaire
+            inline float Dot(Vector4 const& other) { return this->x * other.x + this->y * other.y + this->z * other.z + this->w * other.w; }
+
+            inline float& operator[](uint32_t index){ return this->xyzw[index]; }
+            inline float operator[](uint32_t index) const { return this->xyzw[index]; }
+            Vector4 operator*(Matrix4x4 const& matrix) const;
+            Vector4 NormalizePlane();
             std::unique_ptr<char> Serialize() const;
             size_t Deserialize(const char* data);
     };

@@ -26,9 +26,9 @@ namespace Engine
         this->camera.view           = this->rotation * this->translation;
         this->camera.projection     = Matrix4x4::PerspectiveProjectionMatrix(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
         // this->camera.projection     = Matrix4x4::OrthographicProjectionMatrix(-5.0f, 5.0f, -5.0f, 5.0f, 0.0f, 30.0f);
-
         this->camera.position       = {0.0f, 0.0f, 0.0f};
 
+        this->frustum.InitFrustum(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
         Mouse::GetInstance().AddListener(this);
     }
 
@@ -38,6 +38,12 @@ namespace Engine
     Camera::~Camera()
     {
         Mouse::GetInstance().RemoveListener(this);
+    }
+
+    Frustum const& Camera::GetFrustum()
+    {
+        // this->frustum.MoveFrustum(this->camera.position, this->moving_vertical_angle, this->moving_horizontal_angle);
+        return this->frustum;
     }
 
     void Camera::MouseMove(unsigned int x, unsigned int y)
@@ -51,15 +57,15 @@ namespace Engine
             float delta_fx = static_cast<float>(delta_ix) * sensitivity;
             float delta_fy = static_cast<float>(delta_iy) * sensitivity;
 
-            float horizontal;
-            horizontal = std::fmod(this->horizontal_angle + delta_fx, 360.0f);
-            if(horizontal < 0) horizontal += 360.0f;
+            this->moving_horizontal_angle = std::fmod(this->horizontal_angle + delta_fx, 360.0f);
+            if(this->moving_horizontal_angle < 0) this->moving_horizontal_angle += 360.0f;
 
-            float vertical = this->vertical_angle + delta_fy;
-            if(vertical > 90.0f) vertical = 90.0f;
-            if(vertical < -90.0f) vertical = -90.0f;
+            this->moving_vertical_angle = this->vertical_angle + delta_fy;
+            if(this->moving_vertical_angle > 90.0f) this->moving_vertical_angle = 90.0f;
+            if(this->moving_vertical_angle < -90.0f) this->moving_vertical_angle = -90.0f;
 
-            this->rotation = Matrix4x4::RotationMatrix(vertical, {1.0f, 0.0f, 0.0f}) * Matrix4x4::RotationMatrix(horizontal, {0.0f, 1.0f, 0.0f});
+            this->rotation = Matrix4x4::RotationMatrix(this->moving_vertical_angle, {1.0f, 0.0f, 0.0f})
+                           * Matrix4x4::RotationMatrix(this->moving_horizontal_angle, {0.0f, 1.0f, 0.0f});
             this->camera.view = this->rotation * this->translation;
 
         }else if(Mouse::GetInstance().IsButtonPressed(MOUSE_BUTTON::MOUSE_BUTTON_MIDDLE)) {
@@ -158,6 +164,7 @@ namespace Engine
     {
         Vector3 direction = Vector3({0.0f, 0.0f, 1.0f}) * this->rotation;
         this->position = this->position + direction;
+        this->camera.position = this->position;
         this->translation = Matrix4x4::TranslationMatrix(this->position);
         this->camera.view = this->rotation * this->translation;
     }
@@ -166,6 +173,7 @@ namespace Engine
     {
         Vector3 direction = Vector3({0.0f, 0.0f, 1.0f}) * this->rotation;
         this->position = this->position - direction;
+        this->camera.position = this->position;
         this->translation = Matrix4x4::TranslationMatrix(this->position);
         this->camera.view = this->rotation * this->translation;
     }

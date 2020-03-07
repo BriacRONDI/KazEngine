@@ -29,12 +29,14 @@ namespace Engine
             inline Matrix4x4& operator=(Matrix4x4 const& other) { if(this != &other) this->value = other.value; return *this; }
             inline Matrix4x4& operator=(Matrix4x4&& other) { if(this != &other) this->value = std::move(other.value); return *this; }
             Matrix4x4 operator*(Matrix4x4 const& other) const;
+            Vector4 operator*(Vector4 const& vertex) const;
             Matrix4x4 ExtractRotation() const;
             Matrix4x4 ExtractTranslation() const;
             void SetTranslation(Vector3 const& translation);
             Vector3 GetTranslation() const;
             Matrix4x4 ToTranslationMatrix() const;
             Matrix4x4 Inverse() const;
+            Matrix4x4 Transpose() const;
             static Matrix4x4 PerspectiveProjectionMatrix(float const aspect_ratio, float const field_of_view, float const near_clip, float const far_clip);
             static Matrix4x4 OrthographicProjectionMatrix(float const left_plane, float const right_plane, float const top_plane,
                                                           float const bottom_plane, float const near_plane, float const far_plane);

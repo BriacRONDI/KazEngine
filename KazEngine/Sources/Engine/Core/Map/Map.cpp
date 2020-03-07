@@ -44,8 +44,6 @@ namespace Engine
         // DEBUG DATA
         Tools::IMAGE_MAP image = Tools::LoadImageFile("./Assets/grass_tile.png");
         DescriptorSetManager::GetInstance().CreateTextureDescriptorSet(image, "grass");
-
-        this->need_update = {true, true, true};
     }
 
     Map::~Map()
@@ -62,6 +60,8 @@ namespace Engine
 
     void Map::UpdateVertexBuffer()
     {
+        return;
+
         struct SHADER_INPUT {
             Vector3 position;
             Vector2 uv;
@@ -89,8 +89,6 @@ namespace Engine
     VkCommandBuffer Map::BuildCommandBuffer(uint32_t swap_chain_image_index, VkFramebuffer frame_buffer)
     {
         VkCommandBuffer command_buffer = this->command_buffers[swap_chain_image_index];
-        if(!this->need_update[swap_chain_image_index]) return command_buffer;
-        this->need_update[swap_chain_image_index] = false;
         this->UpdateVertexBuffer();
 
         VkCommandBufferInheritanceInfo inheritance_info = {};
@@ -102,7 +100,7 @@ namespace Engine
         VkCommandBufferBeginInfo command_buffer_begin_info = {};
         command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         command_buffer_begin_info.pNext = nullptr; 
-        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT |VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         command_buffer_begin_info.pInheritanceInfo = &inheritance_info;
 
         VkResult result = vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);

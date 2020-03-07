@@ -58,7 +58,7 @@ namespace Engine {
 
             std::unique_ptr<char> BuildVBO(VkDeviceSize& output_size);
             
-            void UpdateRenderMask(std::map<std::string, Mesh::MATERIAL> const& materials);
+            void UpdateRenderMask(std::map<std::string, Mesh::MATERIAL> const& materials = {});
             std::unique_ptr<char> Serialize(uint32_t& output_size);
             size_t Deserialize(const char* data);
 

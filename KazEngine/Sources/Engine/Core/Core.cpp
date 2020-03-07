@@ -198,7 +198,7 @@ namespace Engine
         // Création des pipelines //
         ////////////////////////////
 
-        this->renderers.resize(5);
+        this->renderers.resize(6);
         std::array<std::string, 3> shaders;
 
         /*shaders[0] = "./Shaders/basic_model.vert.spv";
@@ -249,14 +249,13 @@ namespace Engine
             return false;
         }
 
-        /*shaders[0] = "./Shaders/dynamic_model.vert.spv";
-        shaders[1] = "./Shaders/base.frag.spv";
-        shaders[2] = "./Shaders/normal_debug.geom.spv";
-        schema = Renderer::POSITION_VERTEX | Renderer::NORMAL_VERTEX | Renderer::UV_VERTEX | Renderer::MATERIAL | Renderer::TEXTURE | Renderer::SKELETON;
-        if(!normal_debug.Initialize(schema, shaders, ds_manager.GetLayoutArray(DescriptorSetManager::SKELETON_TEXTURE_LAYOUT_ARRAY))) {
-            this->Clear();
+        shaders[0] = "./Shaders/basic_model.vert.spv";
+        shaders[1] = "./Shaders/basic_model.frag.spv";
+        schema = Renderer::POSITION_VERTEX | Renderer::DYNAMIC_MODEL;
+        if(!renderers[5].Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema), VK_POLYGON_MODE_LINE)) {
+            this->DestroyInstance();
             return false;
-        }*/
+        }
 
         // On initialise les command buffers, même s'il n'y a encore rien à afficher,
         // cela évite des warnings dans le cas où la scène serait vide.

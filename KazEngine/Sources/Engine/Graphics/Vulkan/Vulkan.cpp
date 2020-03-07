@@ -665,6 +665,7 @@ namespace Engine
         // Activation du Geometry Shader
         VkPhysicalDeviceFeatures features = {};
         features.vertexPipelineStoresAndAtomics = VK_TRUE;
+        features.fillModeNonSolid = VK_TRUE;
         #if defined(DISPLAY_LOGS)
         features.geometryShader = VK_TRUE;
         #endif
@@ -2234,7 +2235,8 @@ namespace Engine
                                 VkVertexInputBindingDescription const& vertex_binding_description,
                                 std::vector<VkVertexInputAttributeDescription> const& vertex_attribute_descriptions,
                                 std::vector<VkPushConstantRange> const& push_constant_rages,
-                                PIPELINE& pipeline)
+                                PIPELINE& pipeline,
+                                VkPolygonMode polygon_mode)
     {
         VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo = {};
         pPipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2311,7 +2313,7 @@ namespace Engine
         rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
         rasterization_state.pNext = nullptr;
         rasterization_state.flags = 0;
-        rasterization_state.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterization_state.polygonMode = polygon_mode;
         rasterization_state.cullMode = VK_CULL_MODE_BACK_BIT;
         rasterization_state.frontFace = VK_FRONT_FACE_CLOCKWISE;
         rasterization_state.depthClampEnable = VK_FALSE;
@@ -2321,6 +2323,8 @@ namespace Engine
         rasterization_state.depthBiasClamp = 0.0f;
         rasterization_state.depthBiasSlopeFactor = 0.0f;
         rasterization_state.lineWidth = 1.0f;
+
+        if(polygon_mode == VK_POLYGON_MODE_LINE) rasterization_state.cullMode = VK_CULL_MODE_NONE;
 
         VkPipelineColorBlendAttachmentState att_state[1];
         att_state[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;

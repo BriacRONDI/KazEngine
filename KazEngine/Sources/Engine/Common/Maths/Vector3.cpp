@@ -39,6 +39,26 @@ namespace Engine
     }
 
     /**
+     * Produit scalaire
+     */
+    float Vector3::Dot(Vector3 const& other) const
+    {
+        return this->x * other.x + this->y * other.y + this->z * other.z;
+    }
+
+    /**
+     * Produit vectoriel
+     */
+    Vector3 Vector3::Cross(Vector3 const& other) const
+    {
+        return {
+            this->y * other.z - other.y * this->z,
+            this->z * other.x - other.z * this->x,
+            this->x * other.y - other.x * this->y
+        };
+    }
+
+    /**
     * Addition de vecteurs
     */
     Vector3 Vector3::operator+(Vector3 const& other) const

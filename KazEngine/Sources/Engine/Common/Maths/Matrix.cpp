@@ -46,6 +46,16 @@ namespace Engine
         };
     }
 
+    Vector4 Matrix4x4::operator*(Vector4 const& vertex) const
+    {
+        return {
+            this->value[0] * vertex[0] + this->value[4] * vertex[1] + this->value[8]  * vertex[2] + this->value[12] * vertex[3],
+            this->value[1] * vertex[0] + this->value[5] * vertex[1] + this->value[9]  * vertex[2] + this->value[13] * vertex[3],
+            this->value[2] * vertex[0] + this->value[6] * vertex[1] + this->value[10] * vertex[2] + this->value[14] * vertex[3],
+            this->value[3] * vertex[0] + this->value[7] * vertex[1] + this->value[11] * vertex[2] + this->value[15] * vertex[3]
+        };
+    }
+
     /**
      * Création d'une matrice de projection en perspective
      */
@@ -54,10 +64,10 @@ namespace Engine
         float f = 1.0f / std::tan(field_of_view * 0.5f * DEGREES_TO_RADIANS);
 
         return {
-            f / aspect_ratio,   0.0f,       0.0f,                                               0.0f,
-            0.0f,               f,          0.0f,                                               0.0f,
-            0.0f,               0.0f,       far_clip / (near_clip - far_clip),                 -1.0f,
-            0.0f,               0.0f,       (near_clip * far_clip) / (near_clip - far_clip),    0.0f
+            f / aspect_ratio,   0.0f,       0.0f,                                                   0.0f,
+            0.0f,               f,          0.0f,                                                   0.0f,
+            0.0f,               0.0f,       (far_clip + near_clip) / (near_clip - far_clip),        -1.0f,
+            0.0f,               0.0f,       (2 * near_clip * far_clip) / (near_clip - far_clip),    0.0f
         };
     }
 
@@ -97,9 +107,9 @@ namespace Engine
             z = axis[2];
         }
 
-        const float c = cos(rad_angle);
+        const float c = std::cos(rad_angle);
         const float _1_c = 1.0f - c;
-        const float s = sin(rad_angle);
+        const float s = std::sin(rad_angle);
 
         return std::array<float, 16>({
             x * x * _1_c + c,
@@ -384,5 +394,15 @@ namespace Engine
 		result[15] = (n12 * n23 * n31 - n13 * n22 * n31 + n13 * n21 * n32 - n11 * n23 * n32 - n12 * n21 * n33 + n11 * n22 * n33) * detInv;
 
 		return result;
+    }
+
+    Matrix4x4 Matrix4x4::Transpose() const
+    {
+        return {
+            this->value[0], this->value[4], this->value[8], this->value[12],
+            this->value[1], this->value[5], this->value[9], this->value[13],
+            this->value[2], this->value[6], this->value[10], this->value[14],
+            this->value[3], this->value[7], this->value[11], this->value[15]
+        };
     }
 }

@@ -213,7 +213,8 @@ namespace Engine
                                 VkVertexInputBindingDescription const& vertex_binding_description,
                                 std::vector<VkVertexInputAttributeDescription> const& vertex_attribute_descriptions,
                                 std::vector<VkPushConstantRange> const& push_constant_rages,
-                                PIPELINE& pipeline);
+                                PIPELINE& pipeline,
+                                VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL);
 
             // Reconstruit le staging buffer avec une nouvelle taille
             bool ResizeStagingBuffer(VkDeviceSize size);

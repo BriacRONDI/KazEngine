@@ -29,7 +29,10 @@ namespace Engine
             inline ~Renderer() { this->Release(); }
 
             // Initialisation du renderer compatible avec le schéma
-            bool Initialize(const uint16_t schema, std::array<std::string, 3> const& shaders, std::vector<VkDescriptorSetLayout> const& descriptor_set_layouts);
+            bool Initialize(const uint16_t schema,
+                            std::array<std::string, 3> const& shaders,
+                            std::vector<VkDescriptorSetLayout> const& descriptor_set_layouts,
+                            VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL);
 
             // Récupère la pipeline
             inline Vulkan::PIPELINE const& GetPipeline() const { return this->pipeline; }

@@ -4,6 +4,7 @@ SETLOCAL
 CALL :COMPILE dynamic_model.vert
 CALL :COMPILE basic_model.vert
 CALL :COMPILE basic_model_geom.vert
+CALL :COMPILE basic_model.frag
 REM CALL :COMPILE colored_model.frag
 CALL :COMPILE textured_model.frag
 CALL :COMPILE normal_debug.geom

@@ -131,7 +131,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Sources\Engine\Common\Maths\Frustum.cpp" />
     <ClCompile Include="Sources\Engine\Common\Maths\Matrix.cpp" />
+    <ClCompile Include="Sources\Engine\Common\Maths\Plane.cpp" />
     <ClCompile Include="Sources\Engine\Common\Maths\Vector2.cpp" />
     <ClCompile Include="Sources\Engine\Common\Maths\Vector3.cpp" />
     <ClCompile Include="Sources\Engine\Common\Maths\Vector4.cpp" />
@@ -159,8 +161,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Sources\Engine\Common\EventEmitter.hpp" />
+    <ClInclude Include="Sources\Engine\Common\Maths\Frustum.h" />
     <ClInclude Include="Sources\Engine\Common\Maths\Maths.h" />
     <ClInclude Include="Sources\Engine\Common\Maths\Matrix.h" />
+    <ClInclude Include="Sources\Engine\Common\Maths\Plane.h" />
     <ClInclude Include="Sources\Engine\Common\Maths\Vector2.h" />
     <ClInclude Include="Sources\Engine\Common\Maths\Vector3.h" />
     <ClInclude Include="Sources\Engine\Common\Maths\Vector4.h" />

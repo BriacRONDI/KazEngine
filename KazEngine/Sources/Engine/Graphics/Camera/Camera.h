@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../Common/Maths/Maths.h"
+#include "../../Common/Maths/Frustum.h"
 #include "../../Platform/Inputs/Mouse/Mouse.h"
 
 #if defined(DISPLAY_LOGS)
@@ -20,11 +21,14 @@ namespace Engine
                 Vector3 position;
             };
 
+            // Singleton
             void DestroyInstance();
             static inline Camera& GetInstance() { if(Camera::instance == nullptr) Camera::instance = new Camera; return *Camera::instance; }
+
             inline CAMERA_UBO& GetUniformBuffer() { return this->camera; }  // Récupère la transformation finale
             void SetPosition(Vector3 const& position);                      // Modifie la position
             void Rotate(Vector3 const& rotation);                           // Rotation de la camera
+            Frustum const& GetFrustum();                                    // Récupère le frustum
 
             ///////////////////////////
             ///    IMouseListener    //
@@ -43,12 +47,16 @@ namespace Engine
             CAMERA_UBO camera;                      // Uniform buffer de la caméra
             Mouse::MOUSE_POSITION mouse_origin;     // Position de la souris au moment du click
 
+            float moving_vertical_angle;            // Rotation verticale en mouvement
+            float moving_horizontal_angle;          // Rotation horizontale en mouvement
             float vertical_angle;                   // Rotation verticale
             float horizontal_angle;                 // Rotation horizontale
 
             Matrix4x4 rotation;                     // Matrice de rotation
             Matrix4x4 translation;                  // Matrice de translation
             Vector3 position;                       // Position de la caméra
+
+            Frustum frustum;                        // Frustum de la caméra
 
             Camera();
             virtual ~Camera();

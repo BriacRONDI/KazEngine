@@ -5,6 +5,7 @@
 #include "../../Graphics/Camera/Camera.h"
 #include "../ManagedBuffer/ManagedBuffer.h"
 #include "../../Graphics/Vulkan/DescriptorSetManager/DescriptorSetManager.h"
+#include "../../Common/Maths/Maths.h"
 
 namespace Engine
 {
@@ -26,7 +27,6 @@ namespace Engine
             Renderer renderer;
 
             VkDeviceSize index_buffer_offet = 0;
-            std::vector<bool> need_update;
 
             Map();
             ~Map();

@@ -5,7 +5,10 @@ namespace Engine
     /**
      * Création de la pipeline et du descriptor set
      */
-    bool Renderer::Initialize(const uint16_t schema, std::array<std::string, 3> const& shaders, std::vector<VkDescriptorSetLayout> const& descriptor_set_layouts)
+    bool Renderer::Initialize(const uint16_t schema,
+                              std::array<std::string, 3> const& shaders,
+                              std::vector<VkDescriptorSetLayout> const& descriptor_set_layouts,
+                              VkPolygonMode polygon_mode)
     {
         // Capacités de rendu des shaders
         this->render_mask = schema;
@@ -117,7 +120,8 @@ namespace Engine
             shader_stages, vertex_binding_description,
             vertex_attribute_description,
             push_constant_ranges,
-            this->pipeline
+            this->pipeline,
+            polygon_mode
         );
 
         for(auto& stage : shader_stages)
@@ -137,9 +141,6 @@ namespace Engine
      */
     void Renderer::Release()
     {
-        // Descriptor Set
-        // this->descriptor_set.Release();
-
         // Pipeline
         if(this->pipeline.handle != VK_NULL_HANDLE) vkDestroyPipeline(Vulkan::GetDevice(), this->pipeline.handle, nullptr);
         if(this->pipeline.layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(Vulkan::GetDevice(), this->pipeline.layout, nullptr);

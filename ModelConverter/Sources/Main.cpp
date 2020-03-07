@@ -35,9 +35,10 @@ int main(int argc, char* argv[])
         // output_filename = "../KazEngine/Assets/multi_material_cube.kea";
         // input_filename = "Assets/Models/grom-hellscream/grom_rig.fbx";
         // output_filename = "../KazEngine/Assets/hellscream.kea";
-        input_filename = "Assets/Models/SimpleGuy.2.0/SimpleGuy.2.0.fbx";
-        //input_filename = "Assets/Models/SimpleGuy/SimpleGuy.fbx";
-        output_filename = "../KazEngine/Assets/SimpleGuy.kea";
+        // input_filename = "Assets/Models/SimpleGuy.2.0/SimpleGuy.2.0.fbx";
+        // output_filename = "../KazEngine/Assets/SimpleGuy.kea";
+        input_filename = "Assets/Models/fleche/fleche.fbx";
+        output_filename = "../KazEngine/Assets/fleche.kea";
 
         std::cout << "Opening file : " << input_filename << std::endl;
         std::vector<char> data = Engine::Tools::GetBinaryFileContents(input_filename);
