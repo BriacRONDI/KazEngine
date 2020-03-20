@@ -46,6 +46,14 @@ namespace Engine
     }
 
     /**
+     * Conversion en Vector3
+     */
+    Vector3 Vector4::ToVector3()
+    {
+        return {this->x, this->y, this->z};
+    }
+
+    /**
      * Désérialization
      */
     size_t Vector4::Deserialize(const char* data)

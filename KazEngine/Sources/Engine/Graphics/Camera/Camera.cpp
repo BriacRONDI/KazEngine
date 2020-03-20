@@ -15,7 +15,7 @@ namespace Engine
     /**
      * Constructeur
      */
-    Camera::Camera()
+    Camera::Camera() : frustum(this->camera.position, this->rotation)
     {
         this->mouse_origin          = {};
         this->vertical_angle        = 0.0f;
@@ -28,7 +28,7 @@ namespace Engine
         // this->camera.projection     = Matrix4x4::OrthographicProjectionMatrix(-5.0f, 5.0f, -5.0f, 5.0f, 0.0f, 30.0f);
         this->camera.position       = {0.0f, 0.0f, 0.0f};
 
-        this->frustum.InitFrustum(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
+        this->frustum.Setup(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
         Mouse::GetInstance().AddListener(this);
     }
 
@@ -38,12 +38,6 @@ namespace Engine
     Camera::~Camera()
     {
         Mouse::GetInstance().RemoveListener(this);
-    }
-
-    Frustum const& Camera::GetFrustum()
-    {
-        // this->frustum.MoveFrustum(this->camera.position, this->moving_vertical_angle, this->moving_horizontal_angle);
-        return this->frustum;
     }
 
     void Camera::MouseMove(unsigned int x, unsigned int y)

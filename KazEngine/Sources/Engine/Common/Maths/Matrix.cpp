@@ -88,9 +88,9 @@ namespace Engine
     /**
     * Création d'une matrice de rotation
     */
-    Matrix4x4 Matrix4x4::RotationMatrix(float angle, Vector3 const& axis, bool normalize_axis)
+    Matrix4x4 Matrix4x4::RotationMatrix(float angle, Vector3 const& axis, bool normalize_axis, bool to_radians)
     {
-        float rad_angle = angle * DEGREES_TO_RADIANS;
+        float rad_angle = to_radians ? angle * DEGREES_TO_RADIANS : angle;
 
         float x;
         float y;

@@ -40,7 +40,7 @@ namespace Engine
             static Matrix4x4 PerspectiveProjectionMatrix(float const aspect_ratio, float const field_of_view, float const near_clip, float const far_clip);
             static Matrix4x4 OrthographicProjectionMatrix(float const left_plane, float const right_plane, float const top_plane,
                                                           float const bottom_plane, float const near_plane, float const far_plane);
-            static Matrix4x4 RotationMatrix(float angle, Vector3 const& axis, bool normalize_axis = false);
+            static Matrix4x4 RotationMatrix(float angle, Vector3 const& axis, bool normalize_axis = false, bool to_radians = true);
             static Matrix4x4 TranslationMatrix(Vector3 const& vector);
             static Matrix4x4 EulerRotation(Matrix4x4 const& matrix, Vector3 const& vector, EULER_ORDER order);
             static Matrix4x4 ScalingMatrix(Vector3 const& vector);

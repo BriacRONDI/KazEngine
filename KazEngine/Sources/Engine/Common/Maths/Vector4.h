@@ -33,6 +33,8 @@ namespace Engine
 
             inline float& operator[](uint32_t index){ return this->xyzw[index]; }
             inline float operator[](uint32_t index) const { return this->xyzw[index]; }
+            inline Vector4 operator*(float scalar) const { return {this->x * scalar, this->y * scalar, this->z * scalar, this->w * scalar}; }
+            Vector3 ToVector3();
             Vector4 operator*(Matrix4x4 const& matrix) const;
             Vector4 NormalizePlane();
             std::unique_ptr<char> Serialize() const;

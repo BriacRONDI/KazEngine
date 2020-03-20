@@ -28,7 +28,7 @@ namespace Engine
             inline CAMERA_UBO& GetUniformBuffer() { return this->camera; }  // Récupère la transformation finale
             void SetPosition(Vector3 const& position);                      // Modifie la position
             void Rotate(Vector3 const& rotation);                           // Rotation de la camera
-            Frustum const& GetFrustum();                                    // Récupère le frustum
+            inline Frustum const& GetFrustum() { return this->frustum; }    // Récupère le frustum
 
             ///////////////////////////
             ///    IMouseListener    //

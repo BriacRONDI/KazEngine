@@ -9,12 +9,20 @@ namespace Engine
     {
         
         public :
+
+            Vector3 const& position;
+            Matrix4x4 const& rotation;
+
+            Vector4 far_left_top_point;
+            Vector4 near_right_bottom_point;
+            float vertical_angle;
+            float horizontal_angle;
             
-            void InitFrustum(float const aspect_ratio, float const field_of_view, float const near_clip, float const far_clip);
-            void MoveFrustum(Vector3 const& position, Engine::Matrix4x4 const& rotation);
+            Frustum(Vector3 const& position, Matrix4x4 const& rotation) : position(position), rotation(rotation) {}
+            void Setup(float const aspect_ratio, float const field_of_view, float const near_clip, float const far_clip);
 
             // Le point se trouve dans le frustum
-            // bool IsInside(Vector3 const& point);
+            bool IsInside(Vector3 const& point) const;
 
         private :
 
@@ -31,8 +39,12 @@ namespace Engine
             #pragma pop_macro("far")
             #pragma pop_macro("near")
 
+            /*Vector3 const& position;
+            Matrix4x4 const& rotation;
+
             Vector4 far_left_top_point;
             Vector4 near_right_bottom_point;
-            float field_of_view;
+            float vertical_angle;
+            float horizontal_angle;*/
     };
 }

@@ -40,6 +40,7 @@ namespace Engine
             inline Vector3 operator*(float const scalar) const { return { this->x * scalar, this->y * scalar, this->z * scalar }; }
             Vector3 operator+(Vector3 const& other) const;
             Vector3 operator-(Vector3 const& other) const;
+            inline Vector3 operator-() const { return {-this->x, -this->y, -this->z}; }
             Vector3 Normalize() const;
             Vector3 ToRadians() const;
             float Length() const;
