@@ -41,6 +41,16 @@ namespace Engine
             return;
         }
 
+        #if defined(DISPLAY_LOGS)
+        /*shaders[0] = "./Shaders/basic_model.vert.spv";
+        shaders[1] = "./Shaders/basic_model.frag.spv";
+        schema = Renderer::POSITION_VERTEX;
+        if(!this->ray_renderer.Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema), VK_POLYGON_MODE_LINE)) {
+            this->DestroyInstance();
+            return;
+        }*/
+        #endif
+
         // DEBUG DATA
         Tools::IMAGE_MAP image = Tools::LoadImageFile("./Assets/grass_tile.png");
         DescriptorSetManager::GetInstance().CreateTextureDescriptorSet(image, "grass");
@@ -60,22 +70,21 @@ namespace Engine
 
     void Map::UpdateVertexBuffer()
     {
-        return;
-
         struct SHADER_INPUT {
             Vector3 position;
             Vector2 uv;
         };
 
+        float far_clip = 2000.0f;
         std::vector<SHADER_INPUT> vertex_buffer(4);
-        vertex_buffer[0].position = { -1.0f, 0.0f, -1.0f };
-        vertex_buffer[0].uv = { 0.0f, 1.0f };
-        vertex_buffer[1].position = { -1.0f, 0.0f, 1.0f };
+        vertex_buffer[0].position = { -far_clip, 0.0f, -far_clip };
+        vertex_buffer[0].uv = { 0.0f, far_clip };
+        vertex_buffer[1].position = { -far_clip, 0.0f, far_clip };
         vertex_buffer[1].uv = { 0.0f, 0.0f };
-        vertex_buffer[2].position = { 1.0f, 0.0f, 1.0f };
-        vertex_buffer[2].uv = { 1.0f, 0.0f };
-        vertex_buffer[3].position = { 1.0f, 0.0f, -1.0f };
-        vertex_buffer[3].uv = { 1.0f, 1.0f };
+        vertex_buffer[2].position = { far_clip, 0.0f, far_clip };
+        vertex_buffer[2].uv = { far_clip, 0.0f };
+        vertex_buffer[3].position = { far_clip, 0.0f, -far_clip };
+        vertex_buffer[3].uv = { far_clip, far_clip };
 
         this->index_buffer_offet = vertex_buffer.size() * sizeof(SHADER_INPUT);
         this->map_data_buffer.WriteData(vertex_buffer.data(), this->index_buffer_offet, 0);

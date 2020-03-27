@@ -2309,6 +2309,8 @@ namespace Engine
         input_assembly_state.primitiveRestartEnable = VK_FALSE;
         input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
+        if(polygon_mode == VK_POLYGON_MODE_LINE) input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+
         VkPipelineRasterizationStateCreateInfo rasterization_state;
         rasterization_state.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
         rasterization_state.pNext = nullptr;

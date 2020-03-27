@@ -34,6 +34,11 @@ namespace Engine {
                 uint32_t first_index;
             };
 
+            struct HIT_BOX {
+                Vector3 near_left_bottom_point;
+                Vector3 far_right_top_point;
+            };
+
             std::string name;
             std::vector<Vector3> vertex_buffer;
             std::vector<uint32_t> index_buffer;
@@ -44,6 +49,7 @@ namespace Engine {
             std::vector<std::pair<std::string, SUB_MESH>> sub_meshes;
             std::vector<DEFORMER> deformers;
             std::string skeleton;
+            HIT_BOX hit_box;
 
             VkDeviceSize vertex_buffer_offset   = 0;
             VkDeviceSize index_buffer_offset    = 0;

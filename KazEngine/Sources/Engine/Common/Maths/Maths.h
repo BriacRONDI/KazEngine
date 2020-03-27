@@ -15,10 +15,13 @@ namespace Engine
 {
     namespace Maths
     {
+        // Renvoie la valeur comprise entre source et dest, positionnée suivant un ratio allant de 0 à 1
         inline float Interpolate(float source, float dest, float ratio)
         {
             if(source <= dest) return source + std::abs(dest - source) * ratio;
             else return source - std::abs(dest - source) * ratio;
         }
+
+        bool ray_box_aabb_intersect(Vector3 const& ray_origin, Vector3 const& ray_direction, Vector3 const& box_min, Vector3 const& box_max);
     }
 }

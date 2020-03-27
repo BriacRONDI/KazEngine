@@ -17,7 +17,7 @@ namespace Engine {
 
     class Entity;
 
-    class Core {
+    class Core : IMouseListener {
 
         public:
 
@@ -45,6 +45,20 @@ namespace Engine {
             bool AddSkeleton(std::string const& skeleton);
             bool RebuildCommandBuffers();
             inline uint32_t GetAnimationOffset(std::string const& skeleton, std::string const& animation) { return this->animations[skeleton][animation].offset; }
+            
+            // Séléction d'objet par la souris
+            // http://schabby.de/picking-opengl-ray-tracing/
+            Entity* MousePick();
+
+            ///////////////////////////
+            ///    IMouseListener    //
+            ///////////////////////////
+
+            virtual void MouseMove(unsigned int x, unsigned int y);
+            virtual void MouseButtonDown(MOUSE_BUTTON button);
+            virtual void MouseButtonUp(MOUSE_BUTTON button);
+            virtual void MouseScrollUp();
+            virtual void MouseScrollDown();
 
         private:
 
@@ -66,9 +80,6 @@ namespace Engine {
 
             // Device vulkan
             VkDevice device;
-
-            // Gestion des descriptor sets
-            // DescriptorSetManager ds_manager;
 
             // Générateurs de rendu (pipelines)
             std::vector<Renderer> renderers;
@@ -100,7 +111,7 @@ namespace Engine {
             uint8_t current_frame_index;
 
             // Singleton
-            Core() = default;
+            Core();
             ~Core();
 
             // Helpers

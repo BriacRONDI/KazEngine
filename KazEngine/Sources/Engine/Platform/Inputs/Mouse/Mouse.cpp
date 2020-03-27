@@ -8,6 +8,7 @@ namespace Engine
 
     Mouse::Mouse()
     {
+        this->clipped = false;
     }
 
     Mouse::~Mouse()
@@ -81,7 +82,7 @@ namespace Engine
     /**
      * Renvoie la position de la souris
      */
-    Mouse::MOUSE_POSITION const& Mouse::GetPosition()
+    Point<uint32_t> const& Mouse::GetPosition()
     {
         return this->position;
     }
@@ -92,5 +93,34 @@ namespace Engine
     bool Mouse::IsButtonPressed(IMouseListener::MOUSE_BUTTON button)
     {
         return this->button_state[button];
+    }
+
+    /**
+     * Contraint la souris à rester dans une zone de l'écran
+     */
+    void Mouse::Clip(Point<uint32_t> const& clip_origin, Area<uint32_t> const& clip_size)
+    {
+        #if defined(_WIN32)
+        RECT clip_area;
+        clip_area.left = clip_origin.X;
+        clip_area.top = clip_origin.Y;
+        clip_area.right = clip_origin.X + clip_size.Width;
+        clip_area.bottom = clip_origin.Y + clip_size.Height;
+        ClipCursor(&clip_area);
+        #endif
+
+        this->clipped = true;
+    }
+
+    /**
+     * Libère la souris lorsqu'elle est contrainte à rester dans une zone de l'écran
+     */
+    void Mouse::UnClip()
+    {
+        #if defined(_WIN32)
+        ClipCursor(nullptr);
+        #endif
+
+        this->clipped = false;
     }
 }

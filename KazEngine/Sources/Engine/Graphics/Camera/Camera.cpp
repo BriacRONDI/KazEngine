@@ -17,6 +17,8 @@ namespace Engine
      */
     Camera::Camera() : frustum(this->camera.position, this->rotation)
     {
+        this->near_clip_distance    = 0.1f;
+        this->far_clip_distance     = 2000.0f;
         this->mouse_origin          = {};
         this->vertical_angle        = 0.0f;
         this->horizontal_angle      = 0.0f;
@@ -24,9 +26,10 @@ namespace Engine
         this->rotation              = Matrix4x4::RotationMatrix(this->vertical_angle, {1.0f, 0.0f, 0.0f}) * Matrix4x4::RotationMatrix(this->horizontal_angle, {0.0f, 1.0f, 0.0f});
         this->translation           = Matrix4x4::TranslationMatrix(this->position);
         this->camera.view           = this->rotation * this->translation;
-        this->camera.projection     = Matrix4x4::PerspectiveProjectionMatrix(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
+        this->camera.projection     = Matrix4x4::PerspectiveProjectionMatrix(4.0f/3.0f, 60.0f, this->near_clip_distance, this->far_clip_distance);
         // this->camera.projection     = Matrix4x4::OrthographicProjectionMatrix(-5.0f, 5.0f, -5.0f, 5.0f, 0.0f, 30.0f);
         this->camera.position       = {0.0f, 0.0f, 0.0f};
+        this->rts_move              = false;
 
         this->frustum.Setup(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
         Mouse::GetInstance().AddListener(this);
@@ -40,12 +43,37 @@ namespace Engine
         Mouse::GetInstance().RemoveListener(this);
     }
 
-    void Camera::MouseMove(unsigned int x, unsigned int y)
+    void Camera::Update()
+    {
+        if(this->rts_move && Mouse::GetInstance().IsClipped()) {
+            auto& mouse_position = Mouse::GetInstance().GetPosition();
+            auto& surface = Vulkan::GetDrawSurface();
+
+            if(mouse_position.X > 0 && mouse_position.Y > 0 && mouse_position.X < surface.width - 1 && mouse_position.Y < surface.height - 1) return;
+
+            float scroll_speed = 0.001f * this->position.y;
+            if(mouse_position.X == 0) this->position.x += scroll_speed;
+            if(mouse_position.Y == 0) this->position.z += scroll_speed;
+            if(mouse_position.X == surface.width - 1) this->position.x -= scroll_speed;
+            if(mouse_position.Y == surface.height - 1) this->position.z -= scroll_speed;
+        
+            this->translation = Matrix4x4::TranslationMatrix(position);
+            this->camera.view = this->rotation * this->translation;
+            this->camera.position = this->position;
+        }
+    }
+
+    void Camera::RtsMove(unsigned int x, unsigned int y)
+    {
+        
+    }
+
+    void Camera::FpsMove(unsigned int x, unsigned int y)
     {
         if(Mouse::GetInstance().IsButtonPressed(MOUSE_BUTTON::MOUSE_BUTTON_LEFT)) {
 
-            int32_t delta_ix = this->mouse_origin.x - x;
-            int32_t delta_iy = y - this->mouse_origin.y;
+            int32_t delta_ix = this->mouse_origin.X - x;
+            int32_t delta_iy = y - this->mouse_origin.Y;
 
             float sensitivity = 0.5f;
             float delta_fx = static_cast<float>(delta_ix) * sensitivity;
@@ -64,15 +92,15 @@ namespace Engine
 
         }else if(Mouse::GetInstance().IsButtonPressed(MOUSE_BUTTON::MOUSE_BUTTON_MIDDLE)) {
 
-            int32_t delta_ix = this->mouse_origin.x - x;
-            int32_t delta_iy = y - this->mouse_origin.y;
+            int32_t delta_ix = this->mouse_origin.X - x;
+            int32_t delta_iy = y - this->mouse_origin.Y;
 
             float sensitivity = 0.01f;
             float delta_fx = static_cast<float>(delta_ix) * sensitivity;
             float delta_fy = static_cast<float>(delta_iy) * sensitivity;
 
-            Vector3 strafe_x = Vector3({0.0f, 0.0f, delta_fx}) * Matrix4x4::RotationMatrix(90.0f, {0.0f, 1.0f, 0.0f}) * this->rotation;
-            Vector3 strafe_y = Vector3({0.0f, 0.0f, delta_fy}) * Matrix4x4::RotationMatrix(90.0f, {1.0f, 0.0f, 0.0f}) * this->rotation;
+            Vector3 strafe_x = this->GetRightVector() * delta_fx;
+            Vector3 strafe_y = this->GetUpVector() * delta_fy;
             Vector3 position = this->position + strafe_x + strafe_y;
             this->translation = Matrix4x4::TranslationMatrix(position);
             this->camera.view = this->rotation * this->translation;
@@ -80,13 +108,12 @@ namespace Engine
             
         }else if(Mouse::GetInstance().IsButtonPressed(MOUSE_BUTTON::MOUSE_BUTTON_RIGHT)) {
 
-            int32_t delta_iy = this->mouse_origin.y - y;
+            int32_t delta_iy = this->mouse_origin.Y - y;
             float sensitivity = 0.01f;
             float delta_fy = static_cast<float>(delta_iy) * sensitivity;
             
-            Vector3 direction = Vector3({0.0f, 0.0f, delta_fy}) * this->rotation;
-
-            Vector3 position = this->position + direction;
+            Vector3 direction = this->GetFrontVector() * delta_fy;
+            Vector3 position = this->position - direction;
             this->translation = Matrix4x4::TranslationMatrix(position);
             this->camera.view = this->rotation * this->translation;
             this->camera.position = position;
@@ -101,63 +128,72 @@ namespace Engine
 
     void Camera::MouseButtonUp(MOUSE_BUTTON button)
     {
-        if(button == MOUSE_BUTTON::MOUSE_BUTTON_LEFT) {
+        if(!this->rts_move) {
+            if(button == MOUSE_BUTTON::MOUSE_BUTTON_LEFT) {
 
-            Mouse::MOUSE_POSITION const& position = Mouse::GetInstance().GetPosition();
+                Point<uint32_t> const& position = Mouse::GetInstance().GetPosition();
 
-            int32_t delta_ix = this->mouse_origin.x - position.x;
-            int32_t delta_iy = position.y - this->mouse_origin.y;
+                int32_t delta_ix = this->mouse_origin.X - position.X;
+                int32_t delta_iy = position.Y - this->mouse_origin.Y;
 
-            float sensitivity = 0.5f;
-            float delta_fx = static_cast<float>(delta_ix) * sensitivity;
-            float delta_fy = static_cast<float>(delta_iy) * sensitivity;
+                float sensitivity = 0.5f;
+                float delta_fx = static_cast<float>(delta_ix) * sensitivity;
+                float delta_fy = static_cast<float>(delta_iy) * sensitivity;
 
-            this->horizontal_angle += delta_fx;
-            this->horizontal_angle = std::fmod(this->horizontal_angle, 360.0f);
-            if(this->horizontal_angle < 0) this->horizontal_angle += 360.0f;
+                this->horizontal_angle += delta_fx;
+                this->horizontal_angle = std::fmod(this->horizontal_angle, 360.0f);
+                if(this->horizontal_angle < 0) this->horizontal_angle += 360.0f;
 
-            this->vertical_angle += delta_fy;
-            if(this->vertical_angle > 90.0f) this->vertical_angle = 90.0f;
-            if(this->vertical_angle < -90.0f) this->vertical_angle = -90.0f;
+                this->vertical_angle += delta_fy;
+                if(this->vertical_angle > 90.0f) this->vertical_angle = 90.0f;
+                if(this->vertical_angle < -90.0f) this->vertical_angle = -90.0f;
         
-        }else if(button == MOUSE_BUTTON::MOUSE_BUTTON_MIDDLE) {
+            }else if(button == MOUSE_BUTTON::MOUSE_BUTTON_MIDDLE) {
 
-            Mouse::MOUSE_POSITION const& position = Mouse::GetInstance().GetPosition();
+                Point<uint32_t> const& position = Mouse::GetInstance().GetPosition();
 
-            int32_t delta_ix = this->mouse_origin.x - position.x;
-            int32_t delta_iy = position.y - this->mouse_origin.y;
+                int32_t delta_ix = this->mouse_origin.X - position.X;
+                int32_t delta_iy = position.Y - this->mouse_origin.Y;
 
-            float sensitivity = 0.01f;
-            float delta_fx = static_cast<float>(delta_ix) * sensitivity;
-            float delta_fy = static_cast<float>(delta_iy) * sensitivity;
+                float sensitivity = 0.01f;
+                float delta_fx = static_cast<float>(delta_ix) * sensitivity;
+                float delta_fy = static_cast<float>(delta_iy) * sensitivity;
 
-            Vector3 strafe_x = Vector3({0.0f, 0.0f, delta_fx}) * Matrix4x4::RotationMatrix(90.0f, {0.0f, 1.0f, 0.0f}) * this->rotation;
-            Vector3 strafe_y = Vector3({0.0f, 0.0f, delta_fy}) * Matrix4x4::RotationMatrix(90.0f, {1.0f, 0.0f, 0.0f}) * this->rotation;
-            this->position = this->position + strafe_x + strafe_y;
-            this->translation = Matrix4x4::TranslationMatrix(this->position);
-            this->camera.position = this->position;
+                Vector3 strafe_x = this->GetRightVector() * delta_fx;
+                Vector3 strafe_y = this->GetUpVector() * delta_fy;
+                this->position = this->position + strafe_x + strafe_y;
+                this->translation = Matrix4x4::TranslationMatrix(this->position);
+                this->camera.position = this->position;
 
-        }else if(button == MOUSE_BUTTON::MOUSE_BUTTON_RIGHT) {
+            }else if(button == MOUSE_BUTTON::MOUSE_BUTTON_RIGHT) {
 
-            Mouse::MOUSE_POSITION const& mouse = Mouse::GetInstance().GetPosition();
+                Point<uint32_t> const& mouse = Mouse::GetInstance().GetPosition();
 
-            int32_t delta_iy = this->mouse_origin.y - mouse.y;
-            float sensitivity = 0.01f;
-            float delta_fy = static_cast<float>(delta_iy) * sensitivity;
-            
-            Vector3 direction = Vector3({0.0f, 0.0f, delta_fy}) * this->rotation;
+                int32_t delta_iy = this->mouse_origin.Y - mouse.Y;
+                float sensitivity = 0.01f;
+                float delta_fy = static_cast<float>(delta_iy) * sensitivity;
 
-            this->position = this->position + direction;
-            this->translation = Matrix4x4::TranslationMatrix(this->position);
-            this->camera.view = this->rotation * this->translation;
-            this->camera.position = this->position;
+                Vector3 direction = this->GetFrontVector() * delta_fy;
+                this->position = this->position - direction;
+                this->translation = Matrix4x4::TranslationMatrix(this->position);
+                this->camera.view = this->rotation * this->translation;
+                this->camera.position = this->position;
+            }
         }
     }
 
     void Camera::MouseScrollUp()
     {
-        Vector3 direction = Vector3({0.0f, 0.0f, 1.0f}) * this->rotation;
-        this->position = this->position + direction;
+        if(this->rts_move) {
+            float min_height = 1.0f;
+            float zoom_speed = 1.0f;
+            this->position.y -= zoom_speed;
+            if(this->position.y < min_height) this->position.y = min_height;
+
+        }else{
+            this->position = this->position - this->GetFrontVector();
+        }
+        
         this->camera.position = this->position;
         this->translation = Matrix4x4::TranslationMatrix(this->position);
         this->camera.view = this->rotation * this->translation;
@@ -165,8 +201,16 @@ namespace Engine
 
     void Camera::MouseScrollDown()
     {
-        Vector3 direction = Vector3({0.0f, 0.0f, 1.0f}) * this->rotation;
-        this->position = this->position - direction;
+        if(this->rts_move) {
+            float max_height = 30.0f;
+            float zoom_speed = 1.0f;
+            this->position.y += zoom_speed;
+            if(this->position.y > max_height) this->position.y = max_height;
+
+        }else{
+            this->position = this->position + this->GetFrontVector();
+        }
+
         this->camera.position = this->position;
         this->translation = Matrix4x4::TranslationMatrix(this->position);
         this->camera.view = this->rotation * this->translation;

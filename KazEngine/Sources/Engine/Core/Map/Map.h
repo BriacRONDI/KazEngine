@@ -25,6 +25,7 @@ namespace Engine
             std::vector<VkCommandBuffer> command_buffers;
             ManagedBuffer map_data_buffer;
             Renderer renderer;
+            Renderer ray_renderer;
 
             VkDeviceSize index_buffer_offet = 0;
 

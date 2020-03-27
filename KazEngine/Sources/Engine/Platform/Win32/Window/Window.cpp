@@ -309,61 +309,68 @@ namespace Engine
                 break;
             }
 
-            //La touche VK_DOWN est enfoncée
+            // Appui sur une touche du clavier
             case WM_KEYDOWN :
-                Keyboard::GetInstance()->PressKey(static_cast<unsigned char>(wParam));
-                switch(wParam)
-                {
-                    case VK_ESCAPE:
-                        PostQuitMessage(0);
-                        break;
-                }
+                if(wParam == VK_ESCAPE) Mouse::GetInstance().UnClip();
+                else if(Mouse::GetInstance().IsClipped()) Keyboard::GetInstance()->PressKey(static_cast<unsigned char>(wParam));
                 break;
 
-            //La touche VK_UP est enfoncée
+            // Relâchement d'une touche du clavier
             case WM_KEYUP :
-                Keyboard::GetInstance()->ReleaseKey(static_cast<unsigned char>(wParam));
+                if(Mouse::GetInstance().IsClipped()) Keyboard::GetInstance()->ReleaseKey(static_cast<unsigned char>(wParam));
                 break;
 
             // La souris de séplace sur la fenêtre
             case WM_MOUSEMOVE :
-                Mouse::GetInstance().MouseMove(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+                if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseMove(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
                 break;
 
             // La molette est utilisée
             case WM_MOUSEWHEEL :
-                if(GET_WHEEL_DELTA_WPARAM(wParam) > 0) Mouse::GetInstance().MouseScrollUp();
-                else Mouse::GetInstance().MouseScrollDown();
+                if(Mouse::GetInstance().IsClipped()) {
+                    if(GET_WHEEL_DELTA_WPARAM(wParam) > 0) Mouse::GetInstance().MouseScrollUp();
+                    else Mouse::GetInstance().MouseScrollDown();
+                }
                 break;
 
             // Bouton gauche de la souris enfoncé
             case WM_LBUTTONDOWN :
-                Mouse::GetInstance().MouseButtonDown(IMouseListener::MOUSE_BUTTON_LEFT);
+                if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseButtonDown(IMouseListener::MOUSE_BUTTON_LEFT);
                 break;
 
             // Bouton droit de la souris enfoncé
             case WM_RBUTTONDOWN :
-                Mouse::GetInstance().MouseButtonDown(IMouseListener::MOUSE_BUTTON_RIGHT);
+                if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseButtonDown(IMouseListener::MOUSE_BUTTON_RIGHT);
                 break;
 
             // Bouton central de la souris enfoncé
             case WM_MBUTTONDOWN :
-                Mouse::GetInstance().MouseButtonDown(IMouseListener::MOUSE_BUTTON_MIDDLE);
+                if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseButtonDown(IMouseListener::MOUSE_BUTTON_MIDDLE);
                 break;
 
             // Bouton gauche de la souris relâché
             case WM_LBUTTONUP :
-                Mouse::GetInstance().MouseButtonUp(IMouseListener::MOUSE_BUTTON_LEFT);
+                if(!Mouse::GetInstance().IsClipped()) {
+                    RECT client_rect;
+                    POINT client_origin = {0, 0};
+                    if(GetClientRect(hwnd, &client_rect) && ClientToScreen(hwnd, &client_origin)) {
+                        Point<uint32_t> clip_offset = {static_cast<uint32_t>(client_origin.x), static_cast<uint32_t>(client_origin.y)};
+                        Area<uint32_t> clip_size = {static_cast<uint32_t>(client_rect.right), static_cast<uint32_t>(client_rect.bottom)};
+                        Mouse::GetInstance().Clip(clip_offset, clip_size);
+                    }
+                }else{
+                    Mouse::GetInstance().MouseButtonUp(IMouseListener::MOUSE_BUTTON_LEFT);
+                }
                 break;
 
             // Bouton droit de la souris relâché
             case WM_RBUTTONUP :
-                Mouse::GetInstance().MouseButtonUp(IMouseListener::MOUSE_BUTTON_RIGHT);
+                if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseButtonUp(IMouseListener::MOUSE_BUTTON_RIGHT);
                 break;
 
             // Bouton central de la souris relâché
             case WM_MBUTTONUP :
-                Mouse::GetInstance().MouseButtonUp(IMouseListener::MOUSE_BUTTON_MIDDLE);
+                if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseButtonUp(IMouseListener::MOUSE_BUTTON_MIDDLE);
                 break;
 
             //Message non géré

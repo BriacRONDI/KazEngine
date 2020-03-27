@@ -14,11 +14,17 @@ namespace Engine
         return *Core::instance;
     }
 
+    Core::Core()
+    {
+        Mouse::GetInstance().AddListener(this);
+    }
+
     /**
      * Libération des resouces
      */
     Core::~Core()
     {
+        Mouse::GetInstance().RemoveListener(this);
         this->entities.clear();
         this->meshes.clear();
         ModelManager::GetInstance().DestroyInstance();
@@ -557,6 +563,48 @@ namespace Engine
         }
 
         return true;
+    }
+
+    Entity* Core::MousePick()
+    {
+        auto& camera = Engine::Camera::GetInstance();
+        Engine::Area<float> const& near_plane_size = camera.GetFrustum().GetNearPlaneSize();
+        Engine::Vector3 camera_position = -camera.GetUniformBuffer().position;
+        Engine::Point<uint32_t> const& mouse_position = Engine::Mouse::GetInstance().GetPosition();
+        Engine::Surface& draw_surface = Engine::Vulkan::GetDrawSurface();
+        Engine::Area<float> float_draw_surface = {static_cast<float>(draw_surface.width), static_cast<float>(draw_surface.height)};
+
+        float x = static_cast<float>(mouse_position.X) - float_draw_surface.Width / 2.0f;
+        float y = static_cast<float>(mouse_position.Y) - float_draw_surface.Height / 2.0f;
+
+        x /= float_draw_surface.Width / 2.0f;
+        y /= float_draw_surface.Height / 2.0f;
+
+        Engine::Vector3 mouse_world_position = camera_position + camera.GetFrontVector() * camera.GetNearClipDistance() + camera.GetRightVector() * near_plane_size.Width * x - camera.GetUpVector() * near_plane_size.Height * y;
+        Engine::Vector3 mouse_ray = mouse_world_position - camera_position;
+        mouse_ray = mouse_ray.Normalize();
+
+        for(auto const& entity : this->entities) {
+            for(auto const& mesh : entity->GetMeshes()) {
+                if(Maths::ray_box_aabb_intersect(camera_position, mouse_ray, mesh->hit_box.near_left_bottom_point, mesh->hit_box.far_right_top_point)) {
+                    std::cout << "Mesh clicked !!!" << std::endl;
+                }
+            }
+        }
+
+        return nullptr;
+    }
+
+    void Core::MouseMove(unsigned int x, unsigned int y){}
+    void Core::MouseButtonUp(MOUSE_BUTTON button){}
+    void Core::MouseScrollUp(){}
+    void Core::MouseScrollDown(){}
+
+    void Core::MouseButtonDown(MOUSE_BUTTON button)
+    {
+        if(button == MOUSE_BUTTON::MOUSE_BUTTON_LEFT) {
+            this->MousePick();
+        }
     }
 
     /**

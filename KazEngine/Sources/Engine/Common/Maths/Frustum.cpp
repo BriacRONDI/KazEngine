@@ -5,15 +5,16 @@ namespace Engine
     void Frustum::Setup(float const aspect_ratio, float const field_of_view, float const near_clip, float const far_clip)
     {
         this->vertical_angle = field_of_view * 0.5f * DEGREES_TO_RADIANS;
+        this->near_plane_distance = near_clip;
 
         float half_tangent = std::tan(this->vertical_angle);
-        float near_height = half_tangent * near_clip;
-        float near_width = near_height * aspect_ratio;
+        this->near_plane_size.Height = half_tangent * near_clip;
+        this->near_plane_size.Width = this->near_plane_size.Height * aspect_ratio;
         float far_height = half_tangent * far_clip;
 	    float far_width = far_height * aspect_ratio;
 
         this->far_left_top_point = {-far_width, -far_height, -far_clip, 1.0f};
-        this->near_right_bottom_point = {near_width, near_height, -near_clip, 1.0f};
+        this->near_right_bottom_point = {this->near_plane_size.Width, this->near_plane_size.Height, -near_clip, 1.0f};
 
         this->horizontal_angle = std::atan(half_tangent * aspect_ratio);
     }

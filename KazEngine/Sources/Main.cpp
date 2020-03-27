@@ -20,7 +20,7 @@ class DebugMe : public Engine::IKeyboardListener
         DebugMe() { Engine::Keyboard::GetInstance()->AddListener(this); };
         ~DebugMe()  { Engine::Keyboard::GetInstance()->RemoveListener(this); };
 
-        Engine::Matrix4x4* frustum_matrix;
+        Engine::Matrix4x4* cross_matrix;
         Engine::Matrix4x4* fleche_matrix;
 
         std::string display;
@@ -31,23 +31,43 @@ class DebugMe : public Engine::IKeyboardListener
         void Update()
         {
 
-            if(Engine::Keyboard::GetInstance()->IsPressed(VK_LEFT))  this->rot_h -= this->rot_speed;
+            /*if(Engine::Keyboard::GetInstance()->IsPressed(VK_LEFT))  this->rot_h -= this->rot_speed;
             if(Engine::Keyboard::GetInstance()->IsPressed(VK_RIGHT)) this->rot_h += this->rot_speed;
             if(Engine::Keyboard::GetInstance()->IsPressed(VK_ADD)) this->rot_v += this->rot_speed;
             if(Engine::Keyboard::GetInstance()->IsPressed(VK_SUBTRACT)) this->rot_v -= this->rot_speed;
 
             Engine::Matrix4x4 rotation = Engine::Matrix4x4::RotationMatrix(this->rot_h, {0.0f, 1.0f, 0.0f}) * Engine::Matrix4x4::RotationMatrix(this->rot_v, {1.0f, 0.0f, 0.0f});
             Engine::Matrix4x4 direction = rotation * Engine::Matrix4x4::TranslationMatrix({0.0f, 0.0f, 1.0f});
-            Engine::Vector3 movement = {direction[12], direction[13], direction[14]};
+            Engine::Vector3 movement = {direction[12], direction[13], direction[14]};*/
 
-            // *this->fleche_matrix = Engine::Matrix4x4::TranslationMatrix(cam_normal_left) * Engine::Matrix4x4::ScalingMatrix({0.25f, 0.25f, 0.25f});
+            auto& camera = Engine::Camera::GetInstance();
+            Engine::Area<float> const& near_plane_size = camera.GetFrustum().GetNearPlaneSize();
+            Engine::Vector3 camera_position = -camera.GetUniformBuffer().position;
+            Engine::Point<uint32_t> const& mouse_position = Engine::Mouse::GetInstance().GetPosition();
+            Engine::Surface& draw_surface = Engine::Vulkan::GetDrawSurface();
+            Engine::Area<float> float_draw_surface = {static_cast<float>(draw_surface.width), static_cast<float>(draw_surface.height)};
+
+            float x = static_cast<float>(mouse_position.X) - float_draw_surface.Width / 2.0f;
+            float y = static_cast<float>(mouse_position.Y) - float_draw_surface.Height / 2.0f;
+
+            x /= float_draw_surface.Width / 2.0f;
+            y /= float_draw_surface.Height / 2.0f;
+
+            Engine::Vector3 mouse_world_position = camera_position + camera.GetFrontVector() * (camera.GetNearClipDistance() + 0.0f) + camera.GetRightVector() * near_plane_size.Width * x - camera.GetUpVector() * near_plane_size.Height * y;
+            Engine::Vector3 mouse_ray = mouse_world_position - camera_position;
+            mouse_ray = mouse_ray.Normalize();
+
+            *this->fleche_matrix = Engine::Matrix4x4::TranslationMatrix(mouse_ray) * Engine::Matrix4x4::TranslationMatrix({0,-1,0}) * Engine::Matrix4x4::ScalingMatrix({0.25f, 0.25f, 0.25f});
+            *this->cross_matrix = Engine::Matrix4x4::TranslationMatrix(mouse_world_position) * camera.rotation.Transpose() * Engine::Matrix4x4::ScalingMatrix({0.001f, 0.001f, 0.001f});
         }
 
         virtual void KeyDown(unsigned char Key)
         {
             if(Key == VK_SPACE) {
-                this->rot_h = 0.0f;
-                this->rot_v = 0.0f;
+                Engine::Camera::GetInstance().SetPosition({});
+                Engine::Camera::GetInstance().Rotate({});
+            }else if(Key == VK_RETURN) {
+                Engine::Core::GetInstance().MousePick();
             }
         }
 
@@ -86,10 +106,23 @@ int main(int argc, char** argv)
     Engine::Core& engine = Engine::Core::GetInstance();
     engine.Initialize();
 
+    std::shared_ptr<Engine::Mesh> mesh_cross(new Engine::Mesh);
+    mesh_cross->vertex_buffer = {{-1.0f, -1.0f, 0.0f},{1.0f, 1.0f, 0.0f},{1.0f, -1.0f, 0.0f},{-1.0f, 1.0f, 0.0f}};
+    mesh_cross->index_buffer = {0,1,2,3};
+    mesh_cross->UpdateRenderMask();
+    std::shared_ptr<Engine::DefaultColorEntity> cross(new Engine::DefaultColorEntity);
+    cross->AttachMesh(mesh_cross);
+    cross->default_color = {1.0f, 0.0f, 0.0f};
+    cross->matrix = Engine::Matrix4x4::ScalingMatrix({0.01f, 0.01f, 0.01f});
+    debug_me.cross_matrix = &cross->matrix;
+    engine.AddEntity(cross, false);
+
     Engine::ModelManager::GetInstance().LoadFile("./Assets/SimpleGuy.kea");
     std::shared_ptr<Engine::SkeletonEntity> simple_guy(new Engine::SkeletonEntity);
     simple_guy->AttachMesh(Engine::ModelManager::GetInstance().models["Body"]);
-    engine.AddEntity(simple_guy, false);
+    Engine::ModelManager::GetInstance().models["Body"]->hit_box.near_left_bottom_point = {-0.25f, -1.3f, 0.25f};
+    Engine::ModelManager::GetInstance().models["Body"]->hit_box.far_right_top_point = {0.25f, 0.0f, -0.25f};
+    // engine.AddEntity(simple_guy, false);
     simple_guy->SetAnimation("Armature|Walk");
 
     #if defined(DISPLAY_LOGS)
@@ -97,19 +130,21 @@ int main(int argc, char** argv)
     std::shared_ptr<Engine::Entity> fleche(new Engine::Entity);
     fleche->AttachMesh(Engine::ModelManager::GetInstance().models["Fleche"]);
     debug_me.fleche_matrix = &fleche->matrix;
-    // engine.AddEntity(fleche, false);
+    engine.AddEntity(fleche, false);
 
     Engine::ModelManager::GetInstance().LoadFile("./Assets/mono_textured_cube.kea");
     std::shared_ptr<Engine::Entity> cube(new Engine::Entity);
     cube->AttachMesh(Engine::ModelManager::GetInstance().models["MT_Cube"]);
-    cube->matrix = Engine::Matrix4x4::ScalingMatrix({0.1f, 0.1f, 0.1f});
+    Engine::ModelManager::GetInstance().models["MT_Cube"]->hit_box.near_left_bottom_point = {-0.1f, -1.1f, 0.1f};
+    Engine::ModelManager::GetInstance().models["MT_Cube"]->hit_box.far_right_top_point = {0.1f, -0.9f, -0.1f};
+    cube->matrix = Engine::Matrix4x4::TranslationMatrix({0.0f, -1.0f, 0.0f}) * Engine::Matrix4x4::ScalingMatrix({0.1f, 0.1f, 0.1f});
     engine.AddEntity(cube, false);
     #endif
 
     engine.RebuildCommandBuffers();
 
     Engine::Camera::GetInstance().SetPosition({0.0f, 3.0f, -5.0f});
-    Engine::Camera::GetInstance().Rotate({0.0f, 30.0f, 0.0f});
+    Engine::Camera::GetInstance().Rotate({0.0f, 45.0f, 0.0f});
 
     auto animation_start = std::chrono::system_clock::now();
     auto framerate_start = std::chrono::system_clock::now();
@@ -132,21 +167,19 @@ int main(int argc, char** argv)
             framerate_start = now;
             fps = frame_count;
             frame_count = 0;
+            // main_window->SetTitle("KazEngine [" + std::to_string(fps) + " FPS] ");
         }else{
             frame_count++;
         }
 
-        bool inside_cam = Engine::Camera::GetInstance().GetFrustum().IsInside({0.0f, 0.0f, 0.0f});
-        main_window->SetTitle("KazEngine [" + std::to_string(fps) + " FPS] "
-                              + " [inside cam : " + std::to_string(inside_cam) + "] "
-        #if defined(DISPLAY_LOGS)
-                              + debug_me.display);
-        debug_me.Update();
-        #else
-        );
-        #endif
+        // bool inside_cam = Engine::Camera::GetInstance().GetFrustum().IsInside({0.0f, 0.0f, 0.0f});
+        
+        auto mouse_pos = Engine::Mouse::GetInstance().GetPosition();
+        main_window->SetTitle("KazEngine [FPS : " + std::to_string(fps) + "] " + "[mouse : " + std::to_string(mouse_pos.X) + ", " + std::to_string(mouse_pos.Y) + "]");
 
+        Engine::Camera::GetInstance().Update();
         engine.DrawScene();
+        debug_me.Update();
     }
 
     // Libération des resources
