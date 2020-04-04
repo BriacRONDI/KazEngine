@@ -405,4 +405,9 @@ namespace Engine
             this->value[3], this->value[7], this->value[11], this->value[15]
         };
     }
+
+    Vector3 Matrix4x4::operator*(Vector3 const& vertex) const
+    {
+        return (*this * Vector4({vertex.x, vertex.y, vertex.z, 1.0f})).ToVector3();
+    }
 }

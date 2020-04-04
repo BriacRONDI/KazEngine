@@ -1,7 +1,5 @@
 #pragma once
 
-#include <chrono>
-
 #include "../Graphics/Vulkan/Vulkan.h"
 #include "../Graphics/Mesh/Mesh.h"
 #include "../Graphics/Camera/Camera.h"
@@ -29,7 +27,8 @@ namespace Engine {
                 ENTITY_UBO          = 1,
                 LIGHT_UBO           = 2,
                 BONE_OFFSETS_UBO    = 3,
-                META_SKELETON_UBO   = 4
+                META_SKELETON_UBO   = 4,
+                MAP_PROPERTIES      = 5
             };
 
             // Buffers
@@ -48,7 +47,8 @@ namespace Engine {
             
             // Séléction d'objet par la souris
             // http://schabby.de/picking-opengl-ray-tracing/
-            Entity* MousePick();
+            void MousePick();
+            void MoveToPosition();
 
             ///////////////////////////
             ///    IMouseListener    //
@@ -92,6 +92,9 @@ namespace Engine {
 
             // Entités
             std::vector<std::shared_ptr<Entity>> entities;
+
+            // Entité sélectionnée
+            std::shared_ptr<Entity> selected_entity;
 
             // Models chargés dans le vertex buffer
             std::vector<std::shared_ptr<Mesh>> meshes;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstring>
 #include <array>
 
 namespace Engine
@@ -34,6 +35,7 @@ namespace Engine
             inline float& operator[](uint32_t index){ return this->xyzw[index]; }
             inline float operator[](uint32_t index) const { return this->xyzw[index]; }
             inline Vector4 operator*(float scalar) const { return {this->x * scalar, this->y * scalar, this->z * scalar, this->w * scalar}; }
+            inline bool operator==(Vector4 const& other) const { return this->xyzw == other.xyzw; }
             Vector3 ToVector3();
             Vector4 operator*(Matrix4x4 const& matrix) const;
             Vector4 NormalizePlane();

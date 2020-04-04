@@ -29,7 +29,7 @@ namespace Engine
         this->camera.projection     = Matrix4x4::PerspectiveProjectionMatrix(4.0f/3.0f, 60.0f, this->near_clip_distance, this->far_clip_distance);
         // this->camera.projection     = Matrix4x4::OrthographicProjectionMatrix(-5.0f, 5.0f, -5.0f, 5.0f, 0.0f, 30.0f);
         this->camera.position       = {0.0f, 0.0f, 0.0f};
-        this->rts_move              = false;
+        this->rts_mode              = true;
 
         this->frustum.Setup(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
         Mouse::GetInstance().AddListener(this);
@@ -45,18 +45,50 @@ namespace Engine
 
     void Camera::Update()
     {
-        if(this->rts_move && Mouse::GetInstance().IsClipped()) {
-            auto& mouse_position = Mouse::GetInstance().GetPosition();
-            auto& surface = Vulkan::GetDrawSurface();
+        if(Mouse::GetInstance().IsClipped() && this->rts_mode) this->RtsScroll();
+    }
 
-            if(mouse_position.X > 0 && mouse_position.Y > 0 && mouse_position.X < surface.width - 1 && mouse_position.Y < surface.height - 1) return;
+    void Camera::RtsScroll()
+    {
+        auto& mouse_position = Mouse::GetInstance().GetPosition();
+        auto& surface = Vulkan::GetDrawSurface();
+        bool update_camera = false;
 
-            float scroll_speed = 0.001f * this->position.y;
-            if(mouse_position.X == 0) this->position.x += scroll_speed;
-            if(mouse_position.Y == 0) this->position.z += scroll_speed;
-            if(mouse_position.X == surface.width - 1) this->position.x -= scroll_speed;
-            if(mouse_position.Y == surface.height - 1) this->position.z -= scroll_speed;
-        
+        if(mouse_position.X > 0 && mouse_position.X < surface.width - 1) {
+            if(this->rts_is_scrolling[0]) this->rts_is_scrolling[0] = false;
+        }else{
+            if(!this->rts_is_scrolling[0]) {
+                this->scroll_start[0] = std::chrono::system_clock::now();
+                this->rts_scroll_initial_position[0] = this->position.x;
+                this->rts_is_scrolling[0] = true;
+            }
+
+            update_camera = true;
+            auto scroll_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - this->scroll_start[0]);
+            float scroll_length = this->rts_scroll_speed * this->position.y * static_cast<float>(scroll_duration.count());
+
+            if(mouse_position.X == 0) this->position.x = this->rts_scroll_initial_position[0] + scroll_length;
+            if(mouse_position.X == surface.width - 1) this->position.x = this->rts_scroll_initial_position[0] - scroll_length;
+        }
+
+        if(mouse_position.Y > 0 && mouse_position.Y < surface.height - 1) {
+            if(this->rts_is_scrolling[1]) this->rts_is_scrolling[1] = false;
+        }else{
+            if(!this->rts_is_scrolling[1]) {
+                this->scroll_start[1] = std::chrono::system_clock::now();
+                this->rts_scroll_initial_position[1] = this->position.z;
+                this->rts_is_scrolling[1] = true;
+            }
+
+            update_camera = true;
+            auto scroll_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - this->scroll_start[1]);
+            float scroll_length = this->rts_scroll_speed * this->position.y * static_cast<float>(scroll_duration.count());
+
+            if(mouse_position.Y == 0) this->position.z = this->rts_scroll_initial_position[1] + scroll_length;
+            if(mouse_position.Y == surface.height - 1) this->position.z = this->rts_scroll_initial_position[1] - scroll_length;
+        }
+
+        if(update_camera) {
             this->translation = Matrix4x4::TranslationMatrix(position);
             this->camera.view = this->rotation * this->translation;
             this->camera.position = this->position;
@@ -128,7 +160,7 @@ namespace Engine
 
     void Camera::MouseButtonUp(MOUSE_BUTTON button)
     {
-        if(!this->rts_move) {
+        if(!this->rts_mode) {
             if(button == MOUSE_BUTTON::MOUSE_BUTTON_LEFT) {
 
                 Point<uint32_t> const& position = Mouse::GetInstance().GetPosition();
@@ -184,7 +216,7 @@ namespace Engine
 
     void Camera::MouseScrollUp()
     {
-        if(this->rts_move) {
+        /*if(this->rts_mode) {
             float min_height = 1.0f;
             float zoom_speed = 1.0f;
             this->position.y -= zoom_speed;
@@ -192,7 +224,9 @@ namespace Engine
 
         }else{
             this->position = this->position - this->GetFrontVector();
-        }
+        }*/
+
+        this->position = this->position - this->GetFrontVector();
         
         this->camera.position = this->position;
         this->translation = Matrix4x4::TranslationMatrix(this->position);
@@ -201,7 +235,7 @@ namespace Engine
 
     void Camera::MouseScrollDown()
     {
-        if(this->rts_move) {
+        /*if(this->rts_mode) {
             float max_height = 30.0f;
             float zoom_speed = 1.0f;
             this->position.y += zoom_speed;
@@ -209,7 +243,9 @@ namespace Engine
 
         }else{
             this->position = this->position + this->GetFrontVector();
-        }
+        }*/
+
+        this->position = this->position + this->GetFrontVector();
 
         this->camera.position = this->position;
         this->translation = Matrix4x4::TranslationMatrix(this->position);

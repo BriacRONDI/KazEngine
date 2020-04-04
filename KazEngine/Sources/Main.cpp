@@ -66,8 +66,6 @@ class DebugMe : public Engine::IKeyboardListener
             if(Key == VK_SPACE) {
                 Engine::Camera::GetInstance().SetPosition({});
                 Engine::Camera::GetInstance().Rotate({});
-            }else if(Key == VK_RETURN) {
-                Engine::Core::GetInstance().MousePick();
             }
         }
 
@@ -114,15 +112,15 @@ int main(int argc, char** argv)
     cross->AttachMesh(mesh_cross);
     cross->default_color = {1.0f, 0.0f, 0.0f};
     cross->matrix = Engine::Matrix4x4::ScalingMatrix({0.01f, 0.01f, 0.01f});
-    debug_me.cross_matrix = &cross->matrix;
-    engine.AddEntity(cross, false);
+    // debug_me.cross_matrix = &cross->matrix;
+    // engine.AddEntity(cross, false);
 
     Engine::ModelManager::GetInstance().LoadFile("./Assets/SimpleGuy.kea");
     std::shared_ptr<Engine::SkeletonEntity> simple_guy(new Engine::SkeletonEntity);
     simple_guy->AttachMesh(Engine::ModelManager::GetInstance().models["Body"]);
     Engine::ModelManager::GetInstance().models["Body"]->hit_box.near_left_bottom_point = {-0.25f, -1.3f, 0.25f};
     Engine::ModelManager::GetInstance().models["Body"]->hit_box.far_right_top_point = {0.25f, 0.0f, -0.25f};
-    // engine.AddEntity(simple_guy, false);
+    engine.AddEntity(simple_guy, false);
     simple_guy->SetAnimation("Armature|Walk");
 
     #if defined(DISPLAY_LOGS)
@@ -130,7 +128,7 @@ int main(int argc, char** argv)
     std::shared_ptr<Engine::Entity> fleche(new Engine::Entity);
     fleche->AttachMesh(Engine::ModelManager::GetInstance().models["Fleche"]);
     debug_me.fleche_matrix = &fleche->matrix;
-    engine.AddEntity(fleche, false);
+    // engine.AddEntity(fleche, false);
 
     Engine::ModelManager::GetInstance().LoadFile("./Assets/mono_textured_cube.kea");
     std::shared_ptr<Engine::Entity> cube(new Engine::Entity);
@@ -138,48 +136,45 @@ int main(int argc, char** argv)
     Engine::ModelManager::GetInstance().models["MT_Cube"]->hit_box.near_left_bottom_point = {-0.1f, -1.1f, 0.1f};
     Engine::ModelManager::GetInstance().models["MT_Cube"]->hit_box.far_right_top_point = {0.1f, -0.9f, -0.1f};
     cube->matrix = Engine::Matrix4x4::TranslationMatrix({0.0f, -1.0f, 0.0f}) * Engine::Matrix4x4::ScalingMatrix({0.1f, 0.1f, 0.1f});
-    engine.AddEntity(cube, false);
+    // engine.AddEntity(cube, false);
     #endif
 
     engine.RebuildCommandBuffers();
 
-    Engine::Camera::GetInstance().SetPosition({0.0f, 3.0f, -5.0f});
+    Engine::Camera::GetInstance().SetPosition({0.0f, 5.0f, -5.0f});
     Engine::Camera::GetInstance().Rotate({0.0f, 45.0f, 0.0f});
 
-    auto animation_start = std::chrono::system_clock::now();
+    // auto animation_start = std::chrono::system_clock::now();
     auto framerate_start = std::chrono::system_clock::now();
-    auto animation_total_duration = std::chrono::milliseconds(1000);
+    // auto animation_total_duration = std::chrono::milliseconds(1000);
     uint64_t frame_count = 0;
+
+    
 
     // Boucle principale
     while(Engine::Window::Loop())
     {
-        auto now = std::chrono::system_clock::now();
-
-        auto animation_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - animation_start);
-        float animation_ratio = static_cast<float>(animation_current_duration.count()) / static_cast<float>(animation_total_duration.count());
-        if(animation_current_duration > animation_total_duration) animation_start = now;
-        simple_guy->frame_index = static_cast<uint32_t>(animation_ratio * 30);
-
         static uint64_t fps = 0;
-        auto framerate_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - framerate_start);
+        auto now = std::chrono::system_clock::now();
+        auto framerate_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - framerate_start);
         if(framerate_current_duration > std::chrono::milliseconds(1000)) {
             framerate_start = now;
             fps = frame_count;
             frame_count = 0;
-            // main_window->SetTitle("KazEngine [" + std::to_string(fps) + " FPS] ");
+            if(Engine::Mouse::GetInstance().IsClipped()) {
+                main_window->SetTitle("KazEngine [" + std::to_string(fps) + " FPS] (Appuyez sur ESC pour libérer la souris)");
+            }else{
+                main_window->SetTitle("KazEngine [" + std::to_string(fps) + " FPS] (Cliquez sur le fenêtre pour capturer la souris)");
+            }
         }else{
             frame_count++;
         }
 
-        // bool inside_cam = Engine::Camera::GetInstance().GetFrustum().IsInside({0.0f, 0.0f, 0.0f});
-        
-        auto mouse_pos = Engine::Mouse::GetInstance().GetPosition();
-        main_window->SetTitle("KazEngine [FPS : " + std::to_string(fps) + "] " + "[mouse : " + std::to_string(mouse_pos.X) + ", " + std::to_string(mouse_pos.Y) + "]");
+        if(Engine::Mouse::GetInstance().IsClipped()) Engine::Window::SetMouseCursor(Engine::Window::CURSOR_TYPE::CURSOR_HAND);
 
         Engine::Camera::GetInstance().Update();
         engine.DrawScene();
-        debug_me.Update();
+        // debug_me.Update();
     }
 
     // Libération des resources

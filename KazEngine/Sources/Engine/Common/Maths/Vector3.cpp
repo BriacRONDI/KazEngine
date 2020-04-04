@@ -29,14 +29,14 @@ namespace Engine
     /**
     * Multiplication par une matrice
     */
-    Vector3 Vector3::operator*(Matrix4x4 const& matrix) const
+    /*Vector3 Vector3::operator*(Matrix4x4 const& matrix) const
     {
         return {
             this->x * matrix[0] + this->y * matrix[1] + this->z * matrix[2],
             this->x * matrix[4] + this->y * matrix[5] + this->z * matrix[6],
             this->x * matrix[8] + this->y * matrix[9] + this->z * matrix[10]
         };
-    }
+    }*/
 
     /**
     * Addition de vecteurs

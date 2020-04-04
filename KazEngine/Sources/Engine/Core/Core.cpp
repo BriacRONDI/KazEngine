@@ -136,7 +136,8 @@ namespace Engine
         VkDeviceSize work_buffer_size = Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(Camera::CAMERA_UBO))
                                       + Vulkan::GetInstance().ComputeUniformBufferAlignment(Entity::MAX_UBO_SIZE) * start_entity_limit
                                       + Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(uint32_t) * 10)
-                                      + Vulkan::GetDeviceLimits().maxUniformBufferRange;
+                                      + Vulkan::GetDeviceLimits().maxUniformBufferRange
+                                      + Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(Map::MAP_UBO));
 
         // Le staging buffer de vulkan doit pouvoir accueillir toutes les données, on le dimensionne en conséquence
         Vulkan::GetInstance().ResizeStagingBuffer(work_buffer_size);
@@ -167,6 +168,11 @@ namespace Engine
             meta_skeleton_buffer_infos.offset + meta_skeleton_buffer_infos.range,
             Vulkan::GetDeviceLimits().maxUniformBufferRange);
 
+        VkDescriptorBufferInfo map_properties_buffer_infos = this->work_buffer.CreateSubBuffer(
+            SUB_BUFFER_TYPE::MAP_PROPERTIES,
+            bone_offsets_buffer_infos.offset + bone_offsets_buffer_infos.range,
+            Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(Map::MAP_UBO)));
+
         ////////////////////////////////////
         //         Storage buffer         //
         // Stockage des données en volume //
@@ -190,15 +196,16 @@ namespace Engine
         entity_buffer_infos.range = Entity::MAX_UBO_SIZE;
         bone_offsets_buffer_infos.range = Bone::MAX_BONES_PER_UBO * sizeof(Matrix4x4);
 
-        // DescriptorSetManager::GetInstance().CreateViewDescriptorSet(camera_buffer_infos, entity_buffer_infos, enable_geometry_shader);
         DescriptorSetManager::GetInstance().CreateCameraDescriptorSet(camera_buffer_infos, enable_geometry_shader);
         DescriptorSetManager::GetInstance().CreateEntityDescriptorSet(entity_buffer_infos, enable_geometry_shader);
         DescriptorSetManager::GetInstance().InitializeTextureLayout();
         DescriptorSetManager::GetInstance().CreateSkeletonDescriptorSet(meta_skeleton_buffer_infos, skeleton_buffer_infos, bone_offsets_buffer_infos);
+        DescriptorSetManager::GetInstance().CreateMapDescriptorSet(map_properties_buffer_infos);
 
-        // On réserve un chunk pour la caméra
-        uint32_t camera_offset;
-        if(!this->work_buffer.ReserveChunk(camera_offset, sizeof(Camera::CAMERA_UBO), SUB_BUFFER_TYPE::CAMERA_UBO)) return false;
+        // On réserve un chunk pour la caméra et un autre pour la map
+        uint32_t offset;
+        if(!this->work_buffer.ReserveChunk(offset, sizeof(Camera::CAMERA_UBO), SUB_BUFFER_TYPE::CAMERA_UBO)) return false;
+        if(!this->work_buffer.ReserveChunk(offset, sizeof(Map::MAP_UBO), SUB_BUFFER_TYPE::MAP_PROPERTIES)) return false;
 
         ////////////////////////////
         // Création des pipelines //
@@ -565,7 +572,34 @@ namespace Engine
         return true;
     }
 
-    Entity* Core::MousePick()
+    void Core::MoveToPosition()
+    {
+        auto& camera = Engine::Camera::GetInstance();
+        Engine::Area<float> const& near_plane_size = camera.GetFrustum().GetNearPlaneSize();
+        Engine::Vector3 camera_position = -camera.GetUniformBuffer().position;
+        Engine::Point<uint32_t> const& mouse_position = Engine::Mouse::GetInstance().GetPosition();
+        Engine::Surface& draw_surface = Engine::Vulkan::GetDrawSurface();
+        Engine::Area<float> float_draw_surface = {static_cast<float>(draw_surface.width), static_cast<float>(draw_surface.height)};
+
+        float x = static_cast<float>(mouse_position.X) - float_draw_surface.Width / 2.0f;
+        float y = static_cast<float>(mouse_position.Y) - float_draw_surface.Height / 2.0f;
+
+        x /= float_draw_surface.Width / 2.0f;
+        y /= float_draw_surface.Height / 2.0f;
+
+        Engine::Vector3 mouse_world_position = camera_position + camera.GetFrontVector() * camera.GetNearClipDistance() + camera.GetRightVector() * near_plane_size.Width * x - camera.GetUpVector() * near_plane_size.Height * y;
+        Engine::Vector3 mouse_ray = mouse_world_position - camera_position;
+        mouse_ray = mouse_ray.Normalize();
+
+        float ray_length;
+        if(Maths::intersect_plane({0, 1, 0}, {}, camera_position, mouse_ray, ray_length)) {
+            Vector3 destination = camera_position + mouse_ray * ray_length;
+            Map::GetInstance().SetDestination(destination);
+            this->selected_entity->MoveToPosition(destination);
+        }
+    }
+
+    void Core::MousePick()
     {
         auto& camera = Engine::Camera::GetInstance();
         Engine::Area<float> const& near_plane_size = camera.GetFrustum().GetNearPlaneSize();
@@ -585,14 +619,30 @@ namespace Engine
         mouse_ray = mouse_ray.Normalize();
 
         for(auto const& entity : this->entities) {
-            for(auto const& mesh : entity->GetMeshes()) {
-                if(Maths::ray_box_aabb_intersect(camera_position, mouse_ray, mesh->hit_box.near_left_bottom_point, mesh->hit_box.far_right_top_point)) {
-                    std::cout << "Mesh clicked !!!" << std::endl;
+            for(auto const& hit_box : entity->GetHitBoxes()) {
+                if(Maths::ray_box_aabb_intersect(camera_position, mouse_ray, hit_box.near_left_bottom_point, hit_box.far_right_top_point, -2000.0f, 2000.0f)) {
+                    if(this->selected_entity != entity) {
+                        this->selected_entity = entity;
+                        Map::GetInstance().SetSelection(&entity->matrix[12]);
+                        #if defined(DISPLAY_LOGS)
+                        std::cout << "Entity selected : " << entity->GetMeshes().at(0)->name << std::endl;
+                        #endif
+                    }
+                    return;
                 }
             }
         }
 
-        return nullptr;
+        if(this->selected_entity != nullptr) {
+            Map::GetInstance().UnsetSelection();
+            Map::GetInstance().UnsetDestination();
+            #if defined(DISPLAY_LOGS)
+            std::cout << "Entity deselected : " << this->selected_entity->GetMeshes().at(0)->name << std::endl;
+            #endif
+        }
+
+
+        this->selected_entity = nullptr;
     }
 
     void Core::MouseMove(unsigned int x, unsigned int y){}
@@ -604,6 +654,8 @@ namespace Engine
     {
         if(button == MOUSE_BUTTON::MOUSE_BUTTON_LEFT) {
             this->MousePick();
+        }else if(button == MOUSE_BUTTON::MOUSE_BUTTON_RIGHT && this->selected_entity != nullptr){
+            this->MoveToPosition();
         }
     }
 
@@ -781,8 +833,9 @@ namespace Engine
     void Core::DrawScene()
     {
         // Mise à jour des Uniform Buffers
-        for(auto& entity : this->entities) entity->UpdateUBO(this->work_buffer);
+        for(auto& entity : this->entities) entity->Update(this->work_buffer);
         this->work_buffer.WriteData(&Camera::GetInstance().GetUniformBuffer(), sizeof(Camera::CAMERA_UBO), 0, SUB_BUFFER_TYPE::CAMERA_UBO);
+        this->work_buffer.WriteData(&Map::GetInstance().GetUniformBuffer(), sizeof(Map::MAP_UBO), 0, SUB_BUFFER_TYPE::MAP_PROPERTIES);
         if(!this->work_buffer.Flush()) return;
 
         // On pase à l'image suivante

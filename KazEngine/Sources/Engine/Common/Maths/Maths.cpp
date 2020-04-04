@@ -4,8 +4,6 @@ namespace Engine
 {
     namespace Maths
     {
-        // Intersection entre une ligne et une hit-box (ray-box intersection)
-        // https://medium.com/@bromanz/another-view-on-the-classic-ray-aabb-intersection-algorithm-for-bvh-traversal-41125138b525
         bool ray_box_aabb_intersect(Vector3 const& ray_origin, Vector3 const& ray_direction, Vector3 const& box_min, Vector3 const& box_max, float min_range, float max_range)
         {
             Vector3 inverse_ray = 1.0f / ray_direction;
@@ -20,5 +18,18 @@ namespace Engine
 
             return (tmin < tmax);
         }
+
+        bool intersect_plane(Vector3 const& plane_normal, Vector3 const& plane_origin, Vector3 const& ray_origin, Vector3 const& ray_direction, float &ray_length) 
+        { 
+            // assuming vectors are all normalized
+            float denom = plane_normal.Dot(ray_direction); 
+            if(denom > 1e-6) { 
+                Vector3 distance = plane_origin - ray_origin; 
+                ray_length = distance.Dot(plane_normal) / denom; 
+                return (ray_length >= 0); 
+            } 
+ 
+            return false; 
+        } 
     }
 }

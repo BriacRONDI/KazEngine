@@ -10,9 +10,15 @@ layout (set=0, binding=0) uniform Camera
 } camera;
 
 layout (location = 0) out vec2 outUV;
+layout (location = 1) out vec3 outPosition;
+// layout (location = 2) flat out vec3 outSelectionCenter;
 
 void main() 
 {
 	outUV = inUV;
-	gl_Position = camera.projection * camera.view * vec4(inPos, 1.0);
+	mat4 MVP = camera.projection * camera.view;
+	vec4 position = MVP * vec4(inPos, 1.0);
+	gl_Position = position;
+	outPosition = position.xyz;
+	// outSelectionCenter = (MVP * vec4(map.selection, 1.0)).xyz;
 }

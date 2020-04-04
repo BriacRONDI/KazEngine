@@ -22,6 +22,7 @@ namespace Engine
                 SKELETON            = 0b0000'0000'1000'0000,
                 SINGLE_BONE         = 0b0000'0001'0000'0000,
                 DYNAMIC_MODEL       = 0b0000'0010'0000'0000,
+                MAP_PROPERTIES      = 0b0000'0100'0000'0000
             };
 
             // Libération des ressources

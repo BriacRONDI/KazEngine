@@ -12,6 +12,25 @@ namespace Engine
         Map::instance = nullptr;
     }
 
+    Map::MAP_UBO const& Map::GetUniformBuffer()
+    {
+        if(this->selected_position) {
+            Vector4 position;
+            std::memcpy(position.xyzw.data(), this->selected_position, 3 * sizeof(float));
+            position.w = 1.0f;
+            position = Camera::GetInstance().GetUniformBuffer().projection * Camera::GetInstance().GetUniformBuffer().view * position;
+            this->uniform_buffer.selection_position = position.ToVector3();
+        }
+
+        if(this->uniform_buffer.display_destination) {
+            Vector4 position = {this->destination_position.x, this->destination_position.y, this->destination_position.z, 1.0f};
+            position = Camera::GetInstance().GetUniformBuffer().projection * Camera::GetInstance().GetUniformBuffer().view * position;
+            this->uniform_buffer.destination_position = position.ToVector3();
+        }
+
+        return this->uniform_buffer;
+    }
+
     Map::Map()
     {
         // Création d'un vertex buffer pour y placer la map
@@ -32,7 +51,7 @@ namespace Engine
         std::array<std::string, 3> shaders;
         shaders[0] = "./Shaders/textured_map.vert.spv";
         shaders[1] = "./Shaders/textured_map.frag.spv";
-        uint16_t schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::TEXTURE;
+        uint16_t schema = Renderer::POSITION_VERTEX | Renderer::UV_VERTEX | Renderer::TEXTURE | Renderer::MAP_PROPERTIES;
         if(!this->renderer.Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema))) {
             this->DestroyInstance();
             #if defined(DISPLAY_LOGS)
@@ -41,19 +60,11 @@ namespace Engine
             return;
         }
 
-        #if defined(DISPLAY_LOGS)
-        /*shaders[0] = "./Shaders/basic_model.vert.spv";
-        shaders[1] = "./Shaders/basic_model.frag.spv";
-        schema = Renderer::POSITION_VERTEX;
-        if(!this->ray_renderer.Initialize(schema, shaders, DescriptorSetManager::GetInstance().GetLayoutArray(schema), VK_POLYGON_MODE_LINE)) {
-            this->DestroyInstance();
-            return;
-        }*/
-        #endif
-
         // DEBUG DATA
         Tools::IMAGE_MAP image = Tools::LoadImageFile("./Assets/grass_tile.png");
         DescriptorSetManager::GetInstance().CreateTextureDescriptorSet(image, "grass");
+
+        this->UpdateVertexBuffer();
     }
 
     Map::~Map()
@@ -98,7 +109,7 @@ namespace Engine
     VkCommandBuffer Map::BuildCommandBuffer(uint32_t swap_chain_image_index, VkFramebuffer frame_buffer)
     {
         VkCommandBuffer command_buffer = this->command_buffers[swap_chain_image_index];
-        this->UpdateVertexBuffer();
+        // this->UpdateVertexBuffer();
 
         VkCommandBufferInheritanceInfo inheritance_info = {};
         inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
@@ -109,7 +120,7 @@ namespace Engine
         VkCommandBufferBeginInfo command_buffer_begin_info = {};
         command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         command_buffer_begin_info.pNext = nullptr; 
-        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT |VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         command_buffer_begin_info.pInheritanceInfo = &inheritance_info;
 
         VkResult result = vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
@@ -139,7 +150,8 @@ namespace Engine
 
         std::vector<VkDescriptorSet> bind_descriptor_sets = {
             DescriptorSetManager::GetInstance().GetCameraDescriptorSet(),
-            DescriptorSetManager::GetInstance().GetTextureDescriptorSet("grass")
+            DescriptorSetManager::GetInstance().GetTextureDescriptorSet("grass"),
+            DescriptorSetManager::GetInstance().GetMapDescriptorSet()
         };
 
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->renderer.GetPipeline().handle);

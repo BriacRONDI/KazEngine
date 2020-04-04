@@ -68,8 +68,8 @@ namespace Engine
 
             //Style de la fenête (avec ou sans bords, taille fixe ou non etc...)
             dwExStyle = WS_EX_APPWINDOW | WS_EX_WINDOWEDGE;
-            // dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-            dwStyle = WS_OVERLAPPEDWINDOW;
+            dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+            // dwStyle = WS_OVERLAPPEDWINDOW;
 
             // La fenêtre est en mode fenêtré
             this->WindowState = IWindowListener::E_WINDOW_STATE::WINDOW_STATE_WINDOWED;
@@ -194,6 +194,22 @@ namespace Engine
 
         // La boucle peut se poursuivre
         return true;
+    }
+
+    void Window::SetMouseCursor(CURSOR_TYPE cursor)
+    {
+        HCURSOR hCursor;
+
+        switch(cursor) {
+            case CURSOR_HAND :
+                hCursor = LoadCursor(NULL, IDC_HAND);
+                break;
+
+            default :
+                hCursor = LoadCursor(NULL, IDC_ARROW);
+        }
+
+        SetCursor(hCursor);
     }
 
     /**

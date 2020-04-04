@@ -15,5 +15,6 @@ namespace Engine
             virtual uint32_t UpdateUBO(ManagedBuffer& buffer);
             virtual inline uint32_t GetUboSize() { return Entity::GetUboSize() + sizeof(uint32_t) * 2; }
             virtual void SetAnimation(std::string const& animation);
+            virtual void Update(ManagedBuffer& buffer);
     };
 }

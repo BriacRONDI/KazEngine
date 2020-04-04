@@ -1,5 +1,7 @@
 #pragma once
 
+#include <chrono>
+
 #include "../../Common/Maths/Maths.h"
 #include "../../Common/Maths/Frustum.h"
 #include "../../Platform/Inputs/Mouse/Mouse.h"
@@ -7,7 +9,6 @@
 
 #if defined(DISPLAY_LOGS)
 #include <iostream>
-#include <chrono>
 #endif
 
 namespace Engine
@@ -43,7 +44,7 @@ namespace Engine
             ///    IMouseListener    //
             ///////////////////////////
 
-            inline virtual void MouseMove(unsigned int x, unsigned int y) { this->rts_move ? this->RtsMove(x, y) : this->FpsMove(x, y); }
+            inline virtual void MouseMove(unsigned int x, unsigned int y) { this->rts_mode ? this->RtsMove(x, y) : this->FpsMove(x, y); }
             virtual void MouseButtonDown(MOUSE_BUTTON button);
             virtual void MouseButtonUp(MOUSE_BUTTON button);
             virtual void MouseScrollUp();
@@ -52,9 +53,14 @@ namespace Engine
         private:
 
             static Camera* instance;
-            bool rts_move;
             float near_clip_distance;
             float far_clip_distance;
+
+            bool rts_mode;
+            bool rts_is_scrolling[2] = {false, false};
+            float rts_scroll_speed = 2.5f / 1000.0f;
+            float rts_scroll_initial_position[2];
+            std::chrono::system_clock::time_point scroll_start[2];
 
             CAMERA_UBO camera;                      // Uniform buffer de la caméra
             Point<uint32_t> mouse_origin;           // Position de la souris au moment du click
@@ -74,5 +80,6 @@ namespace Engine
             virtual ~Camera();
             void RtsMove(unsigned int x, unsigned int y);
             void FpsMove(unsigned int x, unsigned int y);
+            void RtsScroll();
     };
 }

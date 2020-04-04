@@ -68,6 +68,12 @@ namespace Engine
                 FULLSCREEN_MODE_DISABLED = false
             };
 
+            enum CURSOR_TYPE {
+                CURSOR_DEFAULT  = 0,
+                CURSOR_HAND     = 1,
+                CURSOR_NO       = 2
+            };
+
             Window(Area<uint32_t> window_size, std::string title, FULL_SCREEN_MODE full_screen);
             ~Window();
 
@@ -76,6 +82,7 @@ namespace Engine
             static bool Loop();
             inline Area<uint32_t> const& GetSize() { return this->Size; }
             void SetTitle(std::string const& title);
+            static void SetMouseCursor(CURSOR_TYPE cursor);
 
             void Center();
             void Hide();

@@ -24,8 +24,6 @@ namespace Engine
             bool ReserveChunk(VkDeviceSize& offset, size_t size);
             bool ReserveChunk(uint32_t& offset, size_t size, uint8_t sub_buffer_id);
 
-            std::unique_ptr<char> data;
-
         private :
 
             struct SUB_BUFFER {
@@ -39,7 +37,7 @@ namespace Engine
             };
             
             Vulkan::DATA_BUFFER buffer;
-            // std::unique_ptr<char> data;
+            std::unique_ptr<char> data;
             std::unordered_map<uint8_t, SUB_BUFFER> sub_buffer;
             bool need_flush;
             VkDeviceSize flush_range_start;

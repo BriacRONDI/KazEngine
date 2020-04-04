@@ -34,7 +34,7 @@ namespace Engine
             Vector3& operator=(Vector3 const& other);
             Vector3& operator=(Vector3&& other);
             inline bool operator==(Vector3 const& other) const { return this->xyz == other.xyz; }
-            Vector3 operator*(Matrix4x4 const& matrix) const;
+            // Vector3 operator*(Matrix4x4 const& matrix) const;
             inline Vector3 operator*(float const scalar) const { return { this->x * scalar, this->y * scalar, this->z * scalar }; }
             inline Vector3 operator*(Vector3 const& other) const { return { this->x * other.x, this->y * other.y, this->z * other.z }; }
             inline Vector3 operator/(float const scalar) const { return { this->x / scalar, this->y / scalar, this->z / scalar }; }

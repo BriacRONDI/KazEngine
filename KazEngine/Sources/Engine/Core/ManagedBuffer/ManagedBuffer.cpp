@@ -47,7 +47,7 @@ namespace Engine
     {
         if(this->need_flush) {
             // VIRER CETTE LIGNE
-            std::vector<char> debug_data(this->data.get() + this->flush_range_start, this->data.get() + this->flush_range_end);
+            // std::vector<char> debug_data(this->data.get() + this->flush_range_start, this->data.get() + this->flush_range_end);
             size_t bytes_sent = Vulkan::GetInstance().SendToBuffer(this->buffer, this->data.get() + this->flush_range_start,
                                                                    this->flush_range_end - this->flush_range_start, this->flush_range_start);
 
