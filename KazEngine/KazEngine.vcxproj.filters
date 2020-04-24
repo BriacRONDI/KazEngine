@@ -12,9 +12,12 @@
     <ClCompile Include="Sources\ManagedBuffer\ManagedBuffer.cpp" />
     <ClCompile Include="Sources\Camera\Camera.cpp" />
     <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
+    <ClCompile Include="Sources\DescriptorSet\DescriptorSet.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Sources\Vulkan\ListOfFunctions.inl" />
+    <None Include="Shaders\map.frag" />
+    <None Include="Shaders\map.vert" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Sources\Vulkan\Vulkan.h" />
@@ -31,5 +34,6 @@
     <ClInclude Include="Sources\ManagedBuffer\ManagedBuffer.h" />
     <ClInclude Include="Sources\Camera\Camera.h" />
     <ClInclude Include="Sources\Camera\Frustum\Frustum.h" />
+    <ClInclude Include="Sources\DescriptorSet\DescriptorSet.h" />
   </ItemGroup>
 </Project>

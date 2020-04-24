@@ -148,6 +148,7 @@
     <ClCompile Include="Sources\Camera\Camera.cpp" />
     <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
     <ClCompile Include="Sources\Core\Core.cpp" />
+    <ClCompile Include="Sources\DescriptorSet\DescriptorSet.cpp" />
     <ClCompile Include="Sources\Main.cpp" />
     <ClCompile Include="Sources\ManagedBuffer\ManagedBuffer.cpp" />
     <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp" />
@@ -158,12 +159,15 @@
     <ClCompile Include="Sources\Vulkan\Vulkan.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Shaders\map.frag" />
+    <None Include="Shaders\map.vert" />
     <None Include="Sources\Vulkan\ListOfFunctions.inl" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Sources\Camera\Camera.h" />
     <ClInclude Include="Sources\Camera\Frustum\Frustum.h" />
     <ClInclude Include="Sources\COre\Core.h" />
+    <ClInclude Include="Sources\DescriptorSet\DescriptorSet.h" />
     <ClInclude Include="Sources\ManagedBuffer\ManagedBuffer.h" />
     <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h" />
     <ClInclude Include="Sources\Platform\Common\Window\IWindowListener.h" />
