@@ -1,21 +1,8 @@
 @ECHO off
 
 SETLOCAL
-CALL :COMPILE dynamic_model.vert
-CALL :COMPILE basic_model.vert
-CALL :COMPILE basic_model_geom.vert
-CALL :COMPILE basic_model.frag
-REM CALL :COMPILE colored_model.frag
-CALL :COMPILE textured_model.frag
-CALL :COMPILE normal_debug.geom
-CALL :COMPILE base.frag
-CALL :COMPILE material_basic_model.vert
-CALL :COMPILE material_basic_model.frag
-CALL :COMPILE texture_basic_model.vert
-CALL :COMPILE material_skeleton_model.vert
-CALL :COMPILE global_bone_model.vert
-CALL :COMPILE textured_map.vert
-CALL :COMPILE textured_map.frag
+CALL :COMPILE map.vert
+CALL :COMPILE map.frag
 pause
 
 :COMPILE

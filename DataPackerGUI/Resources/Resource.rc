@@ -1,0 +1,173 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "winres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// Français (France) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_FRA)
+LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""winres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_MAIN_WINDOW DIALOGEX 0, 0, 449, 278
+STYLE DS_SETFONT | DS_FIXEDSYS | DS_CENTER | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+EXSTYLE WS_EX_TRANSPARENT | WS_EX_APPWINDOW
+CAPTION "KazEngine DataPacker"
+MENU IDR_MAIN_MENU
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "",IDC_TREE,"SysTreeView32",TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | TVS_EDITLABELS | WS_DISABLED | WS_BORDER | WS_HSCROLL | WS_TABSTOP,7,7,435,264,WS_EX_ACCEPTFILES
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_MAIN_WINDOW, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 442
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 271
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+IDD_MAIN_WINDOW AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_MAIN_ICON           ICON                    "icon.ico"
+
+IDI_MESH                ICON                    "3dmodels.ico"
+
+IDI_FOLDER_CLOSED       ICON                    "closed_folder.ico"
+
+IDI_MATERIAL            ICON                    "material.ico"
+
+IDI_FOLDER_OPENED       ICON                    "opened_folder.ico"
+
+IDI_TEXTURE             ICON                    "texture.ico"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MAIN_MENU MENU
+BEGIN
+    POPUP "Fichier"
+    BEGIN
+        MENUITEM "Nouveau",                     ID_FILE_NEW
+        MENUITEM "Ouvrir",                      ID_FILE_OPEN
+        MENUITEM "Enregistrer",                 ID_FILE_SAVE
+        MENUITEM "Enregistrer Sous",            ID_FILE_SAVE_AS
+        MENUITEM "Fermer",                      ID_FILE_CLOSE
+        MENUITEM "Quitter",                     ID_FILE_LEAVE
+    END
+END
+
+IDR_TREE_CONTEXT_FOLDER MENU
+BEGIN
+    POPUP ""
+    BEGIN
+        MENUITEM "Create Folder",               ID_CREATE_FOLDER
+        MENUITEM "Delete",                      ID_DELETE_FOLDER
+        MENUITEM "Rename",                      ID_RENAME_FOLDER
+    END
+END
+
+IDR_TREE_CONTEXT_BINARY MENU
+BEGIN
+    POPUP ""
+    BEGIN
+        MENUITEM "Delete",                      ID_DELETE_BINARY
+        MENUITEM "Rename",                      ID_RENAME_BINARY
+    END
+END
+
+IDR_TREE_CONTEXT_ROOT MENU
+BEGIN
+    POPUP ""
+    BEGIN
+        MENUITEM "Create Folder",               ID_CREATE_ROOT_FOLDER
+    END
+END
+
+#endif    // Français (France) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

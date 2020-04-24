@@ -1,215 +1,35 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Fichiers sources">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
-    </Filter>
-    <Filter Include="Fichiers d%27en-tête">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
-    <Filter Include="Fichiers de ressources">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
-    </Filter>
+    <ClCompile Include="Sources\Main.cpp" />
+    <ClCompile Include="Sources\Vulkan\Vulkan.cpp" />
+    <ClCompile Include="Sources\Platform\Win32\Console\Console.cpp" />
+    <ClCompile Include="Sources\Platform\Win32\Window\Window.cpp" />
+    <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp" />
+    <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp" />
+    <ClCompile Include="Sources\Core\Core.cpp" />
+    <ClCompile Include="Sources\Scene\Map\Map.cpp" />
+    <ClCompile Include="Sources\ManagedBuffer\ManagedBuffer.cpp" />
+    <ClCompile Include="Sources\Camera\Camera.cpp" />
+    <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Sources\Main.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Common\Packer\Packer.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Common\Tools\Tools.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Graphics\Camera\Camera.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Graphics\Vulkan\Vulkan.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Platform\Inputs\Keyboard\Keyboard.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Platform\Inputs\Mouse\Mouse.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Platform\Win32\Console\Console.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Platform\Win32\Window\Window.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Common\Maths\Vector3.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Common\Maths\Vector2.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Common\Maths\Matrix.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Core\Core.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Core\Entity\Entity.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Graphics\Vulkan\DescriptorSetManager\DescriptorSetManager.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Core\ManagedBuffer\ManagedBuffer.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Graphics\Renderer\Renderer.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Graphics\Mesh\Mesh.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Common\Maths\Vector4.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Graphics\Vulkan\Texture\Texture.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Core\ModelManager\ModelManager.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Graphics\Skeleton\Deformer.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Graphics\Lighting\Lighting.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Core\Entity\SkeletonEntity\SkeletonEntity.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Core\Map\Map.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Common\Maths\Frustum.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Common\Maths\Plane.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
-    <ClCompile Include="Sources\Engine\Common\Maths\Maths.cpp">
-      <Filter>Fichiers sources</Filter>
-    </ClCompile>
+    <None Include="Sources\Vulkan\ListOfFunctions.inl" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Sources\Engine\Common\Packer\Packer.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Common\Tools\Tools.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Common\EventEmitter.hpp">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Common\stb_image.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Common\Types.hpp">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Graphics\Camera\Camera.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Graphics\Vulkan\Vulkan.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Platform\Common\Window\IWindowListener.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Platform\Common\Window\Window.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Platform\Inputs\Keyboard\IKeyboardListener.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Platform\Inputs\Keyboard\Keyboard.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Platform\Inputs\Mouse\IMouseListener.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Platform\Inputs\Mouse\Mouse.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Platform\Win32\Console\Console.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Engine.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Common\Maths\Vector3.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Common\Maths\Vector2.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Common\Maths\Matrix.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Common\Maths\Maths.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Core\Core.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Core\Entity\Entity.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Graphics\Vulkan\DescriptorSetManager\DescriptorSetManager.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Core\ManagedBuffer\ManagedBuffer.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Graphics\Renderer\Renderer.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Graphics\Mesh\Mesh.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Common\Maths\Vector4.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Graphics\Vulkan\Texture\Texture.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Core\ModelManager\ModelManager.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Graphics\Skeleton\Skeleton.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Core\Entity\DefaultColorEntity\DefaultColorEntity.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Core\Entity\SkeletonEntity\SkeletonEntity.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Graphics\Lighting\Lighting.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Core\Map\Map.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Common\Maths\Frustum.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-    <ClInclude Include="Sources\Engine\Common\Maths\Plane.h">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Sources\Engine\Graphics\Vulkan\ListOfFunctions.inl">
-      <Filter>Fichiers d%27en-tête</Filter>
-    </None>
+    <ClInclude Include="Sources\Vulkan\Vulkan.h" />
+    <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h" />
+    <ClInclude Include="Sources\Platform\Common\Window\IWindowListener.h" />
+    <ClInclude Include="Sources\Platform\Common\Window\Window.h" />
+    <ClInclude Include="Sources\Platform\Win32\Console\Console.h" />
+    <ClInclude Include="Sources\Platform\Common\Keyboard\IKeyboardListener.h" />
+    <ClInclude Include="Sources\Platform\Common\Keyboard\Keyboard.h" />
+    <ClInclude Include="Sources\Platform\Common\Mouse\IMouseListener.h" />
+    <ClInclude Include="Sources\Platform\Common\Mouse\Mouse.h" />
+    <ClInclude Include="Sources\COre\Core.h" />
+    <ClInclude Include="Sources\Scene\Map\Map.h" />
+    <ClInclude Include="Sources\ManagedBuffer\ManagedBuffer.h" />
+    <ClInclude Include="Sources\Camera\Camera.h" />
+    <ClInclude Include="Sources\Camera\Frustum\Frustum.h" />
   </ItemGroup>
 </Project>

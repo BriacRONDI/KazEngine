@@ -20,8 +20,8 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
-    <ProjectGuid>{EB9859A8-4158-47FA-85DF-6978FC08F861}</ProjectGuid>
-    <RootNamespace>KazEngine</RootNamespace>
+    <ProjectGuid>{A872F24A-19DE-46A4-8A35-B53C05E83706}</ProjectGuid>
+    <RootNamespace>DataPackerGUI</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -43,6 +43,7 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
+    <CLRSupport>false</CLRSupport>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -69,6 +70,9 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
@@ -78,9 +82,27 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LinkIncremental>false</LinkIncremental>
-  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-release\include;I:\Developpement\Sources\C++\KazEngine\DataPacker\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>Default</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-release\lib;I:\Developpement\Sources\C++\KazEngine\x64\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>Comdlg32.lib;Comctl32.lib;Ole32.lib;Shell32.lib;zlib.lib;Tools.lib;DataPacker.lib;EngineModel.lib;LogManager.lib</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -97,15 +119,16 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;DISPLAY_LOGS;VK_USE_PLATFORM_WIN32_KHR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>I:\Developpement\Sources\C++\KazEngine\LogManager\Sources;I:\Developpement\Sources\C++\KazEngine\Maths\Sources;D:\VulkanSDK\1.2.135.0\Include;I:\Developpement\Sources\C++\KazEngine\Tools\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-debug\include;I:\Developpement\Sources\C++\KazEngine\DataPacker\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>D:\VulkanSDK\1.2.135.0\Lib;I:\Developpement\Sources\C++\KazEngine\x64\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;Tools.lib;LogManager.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-debug\lib;I:\Developpement\Sources\C++\KazEngine\x64\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>DataPacker.lib;Comdlg32.lib;Tools.lib;Comctl32.lib;Ole32.lib;Shell32.lib;zlibd.lib;EngineModel.lib;LogManager.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -124,57 +147,33 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;VK_USE_PLATFORM_WIN32_KHR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>I:\Developpement\Sources\C++\KazEngine\Maths\Sources;D:\VulkanSDK\1.2.135.0\Include;I:\Developpement\Sources\C++\KazEngine\Tools\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <OptimizeReferences>true</OptimizeReferences>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>D:\VulkanSDK\1.2.135.0\Lib;I:\Developpement\Sources\C++\KazEngine\x64\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;Tools.lib;%(AdditionalDependencies)</AdditionalDependencies>
-    </Link>
-  </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Sources\Camera\Camera.cpp" />
-    <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
-    <ClCompile Include="Sources\Core\Core.cpp" />
+    <ClCompile Include="Sources\FileManager\FileManager.cpp" />
     <ClCompile Include="Sources\Main.cpp" />
-    <ClCompile Include="Sources\ManagedBuffer\ManagedBuffer.cpp" />
-    <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp" />
-    <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp" />
-    <ClCompile Include="Sources\Platform\Win32\Console\Console.cpp" />
-    <ClCompile Include="Sources\Platform\Win32\Window\Window.cpp" />
-    <ClCompile Include="Sources\Scene\Map\Map.cpp" />
-    <ClCompile Include="Sources\Vulkan\Vulkan.cpp" />
+    <ClCompile Include="Sources\Import\FBX\FbxParser.cpp" />
+    <ClCompile Include="Sources\TreeView\TreeView.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Sources\Vulkan\ListOfFunctions.inl" />
+    <ClInclude Include="Sources\FileManager\FileManager.h" />
+    <ClInclude Include="Resources\resource.h" />
+    <ClInclude Include="Sources\Import\FBX\FbxParser.h" />
+    <ClInclude Include="Sources\Import\Import.h" />
+    <ClInclude Include="Sources\Import\Parser\Parser.h" />
+    <ClInclude Include="Sources\TreeView\ITreeViewListener.h" />
+    <ClInclude Include="Sources\TreeView\TreeView.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Sources\Camera\Camera.h" />
-    <ClInclude Include="Sources\Camera\Frustum\Frustum.h" />
-    <ClInclude Include="Sources\COre\Core.h" />
-    <ClInclude Include="Sources\ManagedBuffer\ManagedBuffer.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\IWindowListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\Window.h" />
-    <ClInclude Include="Sources\Platform\Common\Keyboard\IKeyboardListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Keyboard\Keyboard.h" />
-    <ClInclude Include="Sources\Platform\Common\Mouse\IMouseListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Mouse\Mouse.h" />
-    <ClInclude Include="Sources\Platform\Win32\Console\Console.h" />
-    <ClInclude Include="Sources\Scene\Map\Map.h" />
-    <ClInclude Include="Sources\Vulkan\Vulkan.h" />
+    <ResourceCompile Include="Resources\Resource.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Resources\3dmodels.ico" />
+    <Image Include="Resources\closed_folder.ico" />
+    <Image Include="Resources\icon.ico" />
+    <Image Include="Resources\material.ico" />
+    <Image Include="Resources\material_small.ico" />
+    <Image Include="Resources\opened_folder.ico" />
+    <Image Include="Resources\texture.ico" />
+    <Image Include="Sources\icon.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

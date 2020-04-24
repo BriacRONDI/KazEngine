@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="Sources\Model.h" />
+    <ClInclude Include="Sources\Mesh\Mesh.h" />
+    <ClInclude Include="Sources\Skeleton\Skeleton.h" />
+    <ClInclude Include="Sources\Deformer\Deformer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Sources\Mesh\Mesh.cpp" />
+    <ClCompile Include="Sources\Skeleton\Skeleton.cpp" />
+    <ClCompile Include="Sources\Deformer\Deformer.cpp" />
+  </ItemGroup>
+</Project>

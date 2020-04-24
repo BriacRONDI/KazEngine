@@ -20,8 +20,8 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
-    <ProjectGuid>{EB9859A8-4158-47FA-85DF-6978FC08F861}</ProjectGuid>
-    <RootNamespace>KazEngine</RootNamespace>
+    <ProjectGuid>{0FBE550B-D3BA-4EEF-91B3-7B9EB6038DB6}</ProjectGuid>
+    <RootNamespace>LogManager</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -39,13 +39,13 @@
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -69,10 +69,10 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -81,6 +81,19 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -91,21 +104,6 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;DISPLAY_LOGS;VK_USE_PLATFORM_WIN32_KHR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>I:\Developpement\Sources\C++\KazEngine\LogManager\Sources;I:\Developpement\Sources\C++\KazEngine\Maths\Sources;D:\VulkanSDK\1.2.135.0\Include;I:\Developpement\Sources\C++\KazEngine\Tools\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <Link>
-      <SubSystem>Console</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>D:\VulkanSDK\1.2.135.0\Lib;I:\Developpement\Sources\C++\KazEngine\x64\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;Tools.lib;LogManager.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -130,9 +128,8 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;VK_USE_PLATFORM_WIN32_KHR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>I:\Developpement\Sources\C++\KazEngine\Maths\Sources;D:\VulkanSDK\1.2.135.0\Include;I:\Developpement\Sources\C++\KazEngine\Tools\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -140,41 +137,17 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>D:\VulkanSDK\1.2.135.0\Lib;I:\Developpement\Sources\C++\KazEngine\x64\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;Tools.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Sources\Camera\Camera.cpp" />
-    <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
-    <ClCompile Include="Sources\Core\Core.cpp" />
-    <ClCompile Include="Sources\Main.cpp" />
-    <ClCompile Include="Sources\ManagedBuffer\ManagedBuffer.cpp" />
-    <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp" />
-    <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp" />
-    <ClCompile Include="Sources\Platform\Win32\Console\Console.cpp" />
-    <ClCompile Include="Sources\Platform\Win32\Window\Window.cpp" />
-    <ClCompile Include="Sources\Scene\Map\Map.cpp" />
-    <ClCompile Include="Sources\Vulkan\Vulkan.cpp" />
+    <ClInclude Include="Sources\LogManager.h" />
+    <ClInclude Include="Sources\Terminal\Terminal.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Sources\Vulkan\ListOfFunctions.inl" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Sources\Camera\Camera.h" />
-    <ClInclude Include="Sources\Camera\Frustum\Frustum.h" />
-    <ClInclude Include="Sources\COre\Core.h" />
-    <ClInclude Include="Sources\ManagedBuffer\ManagedBuffer.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\IWindowListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\Window.h" />
-    <ClInclude Include="Sources\Platform\Common\Keyboard\IKeyboardListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Keyboard\Keyboard.h" />
-    <ClInclude Include="Sources\Platform\Common\Mouse\IMouseListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Mouse\Mouse.h" />
-    <ClInclude Include="Sources\Platform\Win32\Console\Console.h" />
-    <ClInclude Include="Sources\Scene\Map\Map.h" />
-    <ClInclude Include="Sources\Vulkan\Vulkan.h" />
+    <ClCompile Include="Sources\Terminal\Win32\Terminal.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </ExcludedFromBuild>
+    </ClCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
