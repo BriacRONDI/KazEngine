@@ -13,7 +13,6 @@ layout (set=2, binding=0) uniform MapProperties
 
 layout (location = 0) in vec2 inUV;
 layout (location = 1) in vec3 inPosition;
-// layout (location = 2) flat in vec3 inSelectionCenter;
 
 layout (location = 0) out vec4 outColor;
 

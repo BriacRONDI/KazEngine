@@ -75,7 +75,7 @@ namespace Engine
             };
 
             struct STAGING_BUFFER : DATA_BUFFER {
-                void* pointer;
+                char* pointer;
 
                 STAGING_BUFFER() : DATA_BUFFER(), pointer(nullptr) {}
             };
@@ -186,7 +186,7 @@ namespace Engine
             bool CreateCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY, bool create_fence = true);
 
             // Envoi de données vers un data buffer
-            size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, const void* data, VkDeviceSize data_size, VkDeviceSize destination_offset);
+            size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, VkDeviceSize data_size, VkDeviceSize destination_offset);
 
             // Envoi d'une image vers un buffer d'image
             // bool SendToBuffer(IMAGE_BUFFER& buffer, const void* data, VkDeviceSize data_size, uint32_t width, uint32_t height);

@@ -8,7 +8,6 @@ namespace Engine
 
         this->current_frame_index = 0;
         this->graphics_command_pool = nullptr;
-        this->transfer_command_pool = nullptr;
         this->map = nullptr;
     }
 
@@ -19,14 +18,23 @@ namespace Engine
         if(!this->AllocateRenderingResources()) return false;
 
         uint8_t frame_count = Vulkan::GetConcurrentFrameCount();
+        std::vector<uint32_t> queue_families = {Vulkan::GetGraphicsQueue().index};
+        if(Vulkan::GetGraphicsQueue().index != Vulkan::GetTransferQueue().index) queue_families.push_back(Vulkan::GetTransferQueue().index);
+
         this->game_buffers.resize(frame_count);
-        for(auto& buffer : this->game_buffers) {
-            if(!buffer.Create(1024 * 1024 * 5, MULTI_USAGE_BUFFER_MASK, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+        for(uint8_t i=0; i<frame_count; i++) {
+
+            if(!Vulkan::GetInstance().CreateDataBuffer(this->staging_buffers[i], 1024 * 1024 * 5,
+                                                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                                       queue_families)) {
                 this->Clear();
                 return false;
             }
 
-
+            if(!this->game_buffers[i].Create(this->staging_buffers[i], 1024 * 1024 * 5, MULTI_USAGE_BUFFER_MASK, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
+                this->Clear();
+                return false;
+            }
         }
 
         this->map = new Map(this->graphics_command_pool);

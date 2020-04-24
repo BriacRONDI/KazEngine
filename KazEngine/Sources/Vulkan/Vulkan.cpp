@@ -1861,7 +1861,7 @@ namespace Engine
      * Renvoie la taille du segment de données mis à jour,
      * valeure multiple de nonCoherentAtomSize pour respectier les bonnes pratiques
      */
-    size_t Vulkan::SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, const void* data, VkDeviceSize data_size, VkDeviceSize destination_offset)
+    size_t Vulkan::SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, VkDeviceSize data_size, VkDeviceSize destination_offset)
     {
         // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
         VkResult result = vkWaitForFences(this->device, 1, &command_buffer.fence, VK_FALSE, 1000000000);
@@ -1884,7 +1884,7 @@ namespace Engine
         if(nonCoherentAtomSize * multiple == data_size) flush_size = data_size;
         else flush_size = nonCoherentAtomSize * (multiple + 1);
 
-        std::memcpy(reinterpret_cast<char*>(staging_buffer.pointer) + destination_offset, data, data_size);
+        // std::memcpy(reinterpret_cast<char*>(staging_buffer.pointer) + destination_offset, data, data_size);
 
         // Flush staging buffer
         VkMappedMemoryRange flush_range = {};

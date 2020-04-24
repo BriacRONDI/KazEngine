@@ -29,6 +29,7 @@ namespace Engine
             std::vector<Vulkan::RENDERING_RESOURCES> resources;
             Map* map;
             std::vector<ManagedBuffer> game_buffers;
+            std::vector<Vulkan::STAGING_BUFFER> staging_buffers;
 
             bool AllocateRenderingResources();
             bool BuildRenderPass(uint32_t swap_chain_image_index);
