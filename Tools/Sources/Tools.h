@@ -107,6 +107,15 @@ namespace Tools
     IMAGE_MAP LoadImageData(std::vector<char> buffer);
 
     /**
+     * Load image from memory using stb_image library
+     * https://github.com/nothings/stb
+     * @param buffer Buffer containing the whole file data
+     * @param size Buffer size
+     * @return IMAGE_MAP object, with empty data in case of failure
+     */
+    IMAGE_MAP LoadImageData(const char* buffer, size_t size);
+
+    /**
      * Convert a Unicode String to an UTF8 string
      * @param wstr Unicode String
      * @return UTF8 String

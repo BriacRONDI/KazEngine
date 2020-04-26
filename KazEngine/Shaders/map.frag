@@ -1,9 +1,9 @@
 #version 450
 #extension GL_KHR_vulkan_glsl : enable
 
-layout (set=1, binding=0) uniform sampler2D inTexture;
+layout (set=0, binding=0) uniform sampler2D inTexture;
 
-layout (set=2, binding=0) uniform MapProperties
+layout (set=1, binding=1) uniform MapProperties
 {
 	vec3 selection_position;
 	uint display_selection;

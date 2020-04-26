@@ -35,5 +35,6 @@
     <ClInclude Include="Sources\Camera\Camera.h" />
     <ClInclude Include="Sources\Camera\Frustum\Frustum.h" />
     <ClInclude Include="Sources\DescriptorSet\DescriptorSet.h" />
+    <ClInclude Include="Sources\Engine.h" />
   </ItemGroup>
 </Project>

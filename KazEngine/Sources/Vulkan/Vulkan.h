@@ -52,7 +52,8 @@ namespace Engine
                 BACKGROUND_RESOURCES_INITIALIZATION_FAILURE = 15,
                 DEPTH_BUFFER_LAYOUT_UPDATE_FAILURE          = 16,
                 MAIN_THREAD_INITIALIZATION_FAILURE          = 17,
-                PIPELINES_CREATION_FAILURE                  = 18
+                PIPELINES_CREATION_FAILURE                  = 18,
+                TRANSFER_ALLOCATION_FAILURE                 = 19
             };
 
             ////////////////////
@@ -128,6 +129,15 @@ namespace Engine
                 PIPELINE() : layout(nullptr), handle(nullptr) {}
             };
 
+            enum VERTEX_BINDING_ATTRIBUTE : uint8_t {
+                POSITION        = 0,
+                UV              = 1,
+                COLOR           = 2,
+                NORMAL          = 3,
+                BONE_WEIGHTS    = 4,
+                BONE_IDS        = 5
+            };
+
             ///////////////////////////////
             // Interface IWindowListener //
             ///////////////////////////////
@@ -139,6 +149,7 @@ namespace Engine
             // FONCTIONS PRINCIPALES //
             ///////////////////////////
 
+            static std::vector<VkVertexInputAttributeDescription> CreateVertexInputDescription(std::vector<VERTEX_BINDING_ATTRIBUTE> attributes, VkVertexInputBindingDescription &description, uint32_t binding = 0);
             static inline Vulkan& CreateInstance() { if(Vulkan::vulkan == nullptr) Vulkan::vulkan = new Vulkan; return *Vulkan::vulkan; }
             static inline bool HasInstance() { return Vulkan::vulkan != nullptr; }                                          // Indique si l'instance vulkan existe
             static inline Vulkan& GetInstance() { return *Vulkan::vulkan; }                                                 // Récupération de l'instance du singleton
@@ -190,7 +201,8 @@ namespace Engine
 
             // Envoi d'une image vers un buffer d'image
             // bool SendToBuffer(IMAGE_BUFFER& buffer, const void* data, VkDeviceSize data_size, uint32_t width, uint32_t height);
-            
+            size_t SendToBuffer(IMAGE_BUFFER& buffer, Tools::IMAGE_MAP const& image);
+
             // Applique une birrière de changement de queue family à un data buffer
             bool TransitionBufferQueueFamily(
                               DATA_BUFFER& buffer, COMMAND_BUFFER command_buffer, DEVICE_QUEUE queue,
@@ -277,12 +289,13 @@ namespace Engine
             VkRenderPass render_pass;
 
             // Ressources utilisées pour les créations de buffers, copies de données et transitions de layouts
-            /*VkCommandPool main_command_pool;
+            // VkCommandPool main_command_pool;
+            // COMMAND_BUFFER main_command_buffer;
+            // DATA_BUFFER staging_buffer;
+            // void* staging_pointer;
             VkCommandPool transfert_command_pool;
-            COMMAND_BUFFER main_command_buffer;
             COMMAND_BUFFER transfer_command_buffer;
-            DATA_BUFFER staging_buffer;
-            void* staging_pointer;*/
+            STAGING_BUFFER transfer_staging;
 
             ////////////////////
             // CORE FUNCTIONS //
@@ -305,6 +318,9 @@ namespace Engine
             bool CreateSwapChain();                                                                             // Création de la swap chain
             VkFormat FindDepthFormat();                                                                         // Recherche du format d'image pour le depth buffer
             bool CreateRenderPass();                                                                            // Création de la render pass
+            bool AllocateTransferResources();
+            void ReleaseTransferResources();
+            
             // bool InitMainBuffers();                                                                             // Initialisation les buffers principaux
             // void ReleaseMainBuffers();                                                                          // Détruit les buffers principaux
             /* bool TransitionImageLayout(IMAGE_BUFFER& buffer,

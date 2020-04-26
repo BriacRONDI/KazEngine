@@ -116,6 +116,18 @@ namespace Tools
         return image;
     }
 
+    IMAGE_MAP LoadImageData(const char* buffer, size_t size)
+    {
+        IMAGE_MAP image = {};
+        stbi_uc* stbi_data = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(buffer), static_cast<int>(size), reinterpret_cast<int*>(&image.width), reinterpret_cast<int*>(&image.height), reinterpret_cast<int*>(&image.format), STBI_rgb_alpha);
+        if(stbi_data != nullptr) {
+            image.data.resize(image.width * image.height * STBI_rgb_alpha);
+            std::memcpy(image.data.data(), stbi_data, image.width * image.height * STBI_rgb_alpha);
+            stbi_image_free(stbi_data);
+        }
+        return image;
+    }
+
     std::string GetFileDirectory(std::string const& path)
     {
         if(path[path.size() - 1] == '\\' || path[path.size() - 1] == '/') return path;

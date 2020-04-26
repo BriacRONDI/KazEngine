@@ -295,7 +295,8 @@ namespace DataPackerGUI
                     DataPacker::Packer::PackToMemory(this->data, dest_path, DataPacker::Packer::DATA_TYPE::MODEL_TREE, filename, package_ptr, static_cast<uint32_t>(package.size()));
                     package_ptr.release();
                     this->need_save = true;
-                }else if(extension == L"kea") {
+
+                /*} else if(extension == L"kea") {
 
                     // Get file name without extension
                     std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
@@ -308,7 +309,28 @@ namespace DataPackerGUI
                     std::unique_ptr<char> package_ptr(kea_data.data());
                     DataPacker::Packer::PackToMemory(this->data, dest_path, DataPacker::Packer::DATA_TYPE::MODEL_TREE, filename, package_ptr, static_cast<uint32_t>(kea_data.size()));
                     package_ptr.release();
+                    this->need_save = true;*/
+
+                } else {
+
+                    // Get file name without extension
+                    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+                    std::string filename = converter.to_bytes(Tools::GetFileName(path.substr(0, ext_pos))).data();
+
+                    // Get file content
+                    std::vector<char> kea_data = Tools::GetBinaryFileContents(path);
+
+                    DataPacker::Packer::DATA_TYPE data_type;
+                    if(extension == L"kea") data_type = DataPacker::Packer::DATA_TYPE::MODEL_TREE;
+                    else if(extension == L"png" || extension == L"bmp" || extension == L"jpg") data_type = DataPacker::Packer::DATA_TYPE::IMAGE_FILE;
+                    else DataPacker::Packer::DATA_TYPE::BINARY_DATA;
+
+                    // Copy data to destination path
+                    std::unique_ptr<char> package_ptr(kea_data.data());
+                    DataPacker::Packer::PackToMemory(this->data, dest_path, data_type, filename, package_ptr, static_cast<uint32_t>(kea_data.size()));
+                    package_ptr.release();
                     this->need_save = true;
+                    
                 }
             }
         }

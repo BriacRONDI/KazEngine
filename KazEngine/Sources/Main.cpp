@@ -7,7 +7,7 @@
 #include <LogManager.h>
 #endif
 
-#include "./Core/Core.h"
+#include "Engine.h"
 
 int main(int argc, char** argv)
 {
@@ -31,9 +31,28 @@ int main(int argc, char** argv)
     Engine::Core engine;
     engine.Initialize();
 
+    auto framerate_start = std::chrono::system_clock::now();
+    uint64_t frame_count = 0;
+
     // Main loop
     while(Engine::Window::Loop())
     {
+        static uint64_t fps = 0;
+        auto now = std::chrono::system_clock::now();
+        auto framerate_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - framerate_start);
+        if(framerate_current_duration > std::chrono::milliseconds(1000)) {
+            framerate_start = now;
+            fps = frame_count;
+            frame_count = 0;
+            if(Engine::Mouse::GetInstance().IsClipped()) {
+                main_window->SetTitle("KazEngine [" + std::to_string(fps) + " FPS] (Appuyez sur ESC pour liberer la souris)");
+            }else{
+                main_window->SetTitle("KazEngine [" + std::to_string(fps) + " FPS] (Cliquez sur le fenetre pour capturer la souris)");
+            }
+        }else{
+            frame_count++;
+        }
+
         engine.Loop();
     }
 

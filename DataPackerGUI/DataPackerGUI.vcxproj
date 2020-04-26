@@ -90,7 +90,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-release\include;I:\Developpement\Sources\C++\KazEngine\DataPacker\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>E:\Developpement\GitHub\zlib;$(SolutionDir)DataPacker\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>Default</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
@@ -99,7 +99,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-release\lib;I:\Developpement\Sources\C++\KazEngine\x64\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>E:\Developpement\GitHub\zlib\build\Release;$(SolutionDir)$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>Comdlg32.lib;Comctl32.lib;Ole32.lib;Shell32.lib;zlib.lib;Tools.lib;DataPacker.lib;EngineModel.lib;LogManager.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -121,13 +121,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-debug\include;I:\Developpement\Sources\C++\KazEngine\DataPacker\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>E:\Developpement\GitHub\zlib;$(SolutionDir)DataPacker\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-debug\lib;I:\Developpement\Sources\C++\KazEngine\x64\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>E:\Developpement\GitHub\zlib\build\Debug;$(SolutionDir)$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>DataPacker.lib;Comdlg32.lib;Tools.lib;Comctl32.lib;Ole32.lib;Shell32.lib;zlibd.lib;EngineModel.lib;LogManager.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>

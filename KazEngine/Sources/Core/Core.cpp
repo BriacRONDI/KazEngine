@@ -22,6 +22,11 @@ namespace Engine
         if(Vulkan::GetGraphicsQueue().index != Vulkan::GetTransferQueue().index) queue_families.push_back(Vulkan::GetTransferQueue().index);
 
         this->game_buffers.resize(frame_count);
+        this->staging_buffers.resize(frame_count);
+
+        /*uint32_t uniform_buffer_size = Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(Camera::CAMERA_UBO))
+                                     + Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(Map::MAP_UBO));*/
+
         for(uint8_t i=0; i<frame_count; i++) {
 
             if(!Vulkan::GetInstance().CreateDataBuffer(this->staging_buffers[i], 1024 * 1024 * 5,
@@ -31,13 +36,22 @@ namespace Engine
                 return false;
             }
 
+            constexpr auto offset = 0;
+            VkResult result = vkMapMemory(Vulkan::GetDevice(), this->staging_buffers[i].memory, offset, 1024 * 1024 * 5, 0, (void**)&this->staging_buffers[i].pointer);
+            if(result != VK_SUCCESS) {
+                #if defined(DISPLAY_LOGS)
+                std::cout << "Core::Initialize => vkMapMemory(staging_buffer) : Failed" << std::endl;
+                #endif
+                return false;
+            }
+
             if(!this->game_buffers[i].Create(this->staging_buffers[i], 1024 * 1024 * 5, MULTI_USAGE_BUFFER_MASK, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
                 this->Clear();
                 return false;
             }
         }
 
-        this->map = new Map(this->graphics_command_pool);
+        this->map = new Map(this->graphics_command_pool, this->game_buffers);
 
         return true;
     }
@@ -114,7 +128,7 @@ namespace Engine
         vkCmdExecuteCommands(command_buffer, 2, command_buffers);*/
         // vkCmdExecuteCommands(command_buffer, 1, &this->main_render_pass_command_buffers[swap_chain_image_index]);
 
-        VkCommandBuffer map_buffer = this->map->GetCommandBuffer(swap_chain_image_index);
+        VkCommandBuffer map_buffer = this->map->GetCommandBuffer(swap_chain_image_index, frame_buffer);
         vkCmdExecuteCommands(command_buffer, 1, &map_buffer);
 
         // Fin de la render pass primaire

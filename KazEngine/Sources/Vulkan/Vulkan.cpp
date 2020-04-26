@@ -93,7 +93,7 @@ namespace Engine
     Vulkan::~Vulkan()
     {
         // On attend que la carte graphique arrête de travailler
-        if(this->device != VK_NULL_HANDLE) vkDeviceWaitIdle(this->device);
+        if(this->device != nullptr) vkDeviceWaitIdle(this->device);
 
         // Depth Buffer
         this->ReleaseDepthBuffer();
@@ -101,27 +101,29 @@ namespace Engine
         // Libère les buffers principaux
         // this->ReleaseMainBuffers();
 
+        this->ReleaseTransferResources();
+
         // Render Pass
-        if(this->render_pass != VK_NULL_HANDLE) vkDestroyRenderPass(this->device, this->render_pass, nullptr);
+        if(this->render_pass != nullptr) vkDestroyRenderPass(this->device, this->render_pass, nullptr);
 
         // Image Views de la Swap Chain
         for(int i=0; i<this->swap_chain.images.size(); i++)
-            if(this->swap_chain.images[i].view != VK_NULL_HANDLE)
+            if(this->swap_chain.images[i].view != nullptr)
                 vkDestroyImageView(this->device, this->swap_chain.images[i].view, nullptr);
         this->swap_chain.images.clear();
 
         // Swap Chain
-        if(this->swap_chain.handle != VK_NULL_HANDLE) vkDestroySwapchainKHR(this->device, this->swap_chain.handle, nullptr);
+        if(this->swap_chain.handle != nullptr) vkDestroySwapchainKHR(this->device, this->swap_chain.handle, nullptr);
 
         // Device
-        if(this->device != VK_NULL_HANDLE && vkDestroyDevice) vkDestroyDevice(this->device, nullptr);
+        if(this->device != nullptr && vkDestroyDevice) vkDestroyDevice(this->device, nullptr);
 
         // Surface
-        if(this->presentation_surface != VK_NULL_HANDLE) vkDestroySurfaceKHR(this->instance, this->presentation_surface, nullptr);
+        if(this->presentation_surface != nullptr) vkDestroySurfaceKHR(this->instance, this->presentation_surface, nullptr);
 
         // Validation Layers
         #if defined(DISPLAY_LOGS)
-        if(this->report_callback != VK_NULL_HANDLE) vkDestroyDebugUtilsMessengerEXT(this->instance, this->report_callback, nullptr);
+        if(this->report_callback != nullptr) vkDestroyDebugUtilsMessengerEXT(this->instance, this->report_callback, nullptr);
         #endif
 
         // Instance
@@ -269,6 +271,9 @@ namespace Engine
         // Création du command buffer principal
         /* if(init_status == INIT_RETURN_CODE::SUCCESS && !this->InitMainBuffers())
             init_status = INIT_RETURN_CODE::MAIN_THREAD_INITIALIZATION_FAILURE; */
+
+        if(init_status == INIT_RETURN_CODE::SUCCESS && !this->AllocateTransferResources())
+            init_status = INIT_RETURN_CODE::TRANSFER_ALLOCATION_FAILURE;
 
         // Création du depth buffer
         if(init_status == INIT_RETURN_CODE::SUCCESS) {
@@ -1525,6 +1530,43 @@ namespace Engine
         if(this->depth_buffer.handle != VK_NULL_HANDLE) vkDestroyImage(this->device, this->depth_buffer.handle, nullptr);
     }
 
+    bool Vulkan::AllocateTransferResources()
+    {
+        // Transfert Command Pool
+        if(!this->CreateCommandPool(this->transfert_command_pool, this->transfer_queue.index)) return false;
+
+        // Transfert Command buffer
+        std::vector<COMMAND_BUFFER> buffers(1);
+        if(!this->CreateCommandBuffer(this->transfert_command_pool, buffers)) return false;
+        this->transfer_command_buffer = buffers[0];
+        buffers.clear();
+
+        // Staging buffer
+        std::vector<uint32_t> queue_families = {Vulkan::GetGraphicsQueue().index};
+        if(Vulkan::GetGraphicsQueue().index != Vulkan::GetTransferQueue().index) queue_families.push_back(Vulkan::GetTransferQueue().index);
+        if(!Vulkan::GetInstance().CreateDataBuffer(this->transfer_staging, 1024 * 1024 * 5,
+                                                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                                   queue_families)) return false;
+
+        constexpr auto offset = 0;
+        VkResult result = vkMapMemory(Vulkan::GetDevice(), this->transfer_staging.memory, offset, 1024 * 1024 * 5, 0, (void**)&this->transfer_staging.pointer);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "AllocateTransferResources => vkMapMemory(staging_buffer) : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        return true;
+    }
+
+    void Vulkan::ReleaseTransferResources()
+    {
+        std::vector<COMMAND_BUFFER> buffers = {this->transfer_command_buffer};
+        this->ReleaseCommandBuffer(this->transfert_command_pool, buffers);
+        this->transfer_command_buffer = {};
+    }
+
     /**
      * Détruit tous les buffers principaux
      */
@@ -1707,14 +1749,14 @@ namespace Engine
                                        VkPipelineStageFlags source_stage, VkPipelineStageFlags dest_stage)
     {
         // On évite que plusieurs opérations aient lieu en même temps en utilisant une fence
-        VkResult result = vkWaitForFences(this->device, 1, &this->main_command_buffer.fence, VK_FALSE, 1000000000);
+        VkResult result = vkWaitForFences(this->device, 1, &this->transfer_command_buffer.fence, VK_FALSE, 1000000000);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             std::cout << "TransitionImageLayout => vkWaitForFences : Timeout" << std::endl;
             #endif
             return false;
         }
-        vkResetFences(this->device, 1, &this->main_command_buffer.fence);
+        vkResetFences(this->device, 1, &this->transfer_command_buffer.fence);
 
         VkCommandBufferBeginInfo command_buffer_begin_info;
         command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1722,7 +1764,7 @@ namespace Engine
         command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         command_buffer_begin_info.pInheritanceInfo = nullptr;
 
-        vkBeginCommandBuffer(this->main_command_buffer.handle, &command_buffer_begin_info);
+        vkBeginCommandBuffer(this->transfer_command_buffer.handle, &command_buffer_begin_info);
 
         VkImageMemoryBarrier image_memory_barrier;
         image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1741,13 +1783,13 @@ namespace Engine
         image_memory_barrier.subresourceRange.layerCount = 1;
 
         vkCmdPipelineBarrier(
-            this->main_command_buffer.handle,
+            this->transfer_command_buffer.handle,
             source_stage, dest_stage,
             0, 0, nullptr, 0, nullptr, 1,
             &image_memory_barrier
         );
 
-        vkEndCommandBuffer(this->main_command_buffer.handle);
+        vkEndCommandBuffer(this->transfer_command_buffer.handle);
 
         VkSubmitInfo submit_info = {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1756,9 +1798,9 @@ namespace Engine
         submit_info.pWaitSemaphores = nullptr;
         submit_info.pWaitDstStageMask = nullptr;
         submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &this->main_command_buffer.handle;
+        submit_info.pCommandBuffers = &this->transfer_command_buffer.handle;
 
-        result = vkQueueSubmit(this->graphics_queue.handle, 1, &submit_info, this->main_command_buffer.fence);
+        result = vkQueueSubmit(this->graphics_queue.handle, 1, &submit_info, this->transfer_command_buffer.fence);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             std::cout << "TransitionImageLayout => vkQueueSubmit : Failed" << std::endl;
@@ -1778,7 +1820,7 @@ namespace Engine
      * un changement de queue family lors des accès au buffer.
      * Cela est notament le cas pour les transferts de données qui pasent que la transfer queue à la graphics queue
      */
-    bool Vulkan::TransitionBufferQueueFamily(
+    /*bool Vulkan::TransitionBufferQueueFamily(
             DATA_BUFFER& buffer, COMMAND_BUFFER command_buffer, DEVICE_QUEUE queue,
             VkAccessFlags source_mask, VkAccessFlags dest_mask,
             uint32_t source_queue_index, uint32_t dest_queue_index,
@@ -1843,7 +1885,7 @@ namespace Engine
         #endif
 
         return true;
-    }
+    }*/
 
     /**
      * Calcule le segment de mémoire occupé par une donnée en tenant compte du nonCoherentAtomSize
@@ -1947,7 +1989,8 @@ namespace Engine
     /**
      * Envoi d'une image vers un buffer de la carte graphique en passant par un staging buffer
      */
-    /*bool Vulkan::SendToBuffer(IMAGE_BUFFER& buffer, const void* data, VkDeviceSize data_size, uint32_t width, uint32_t height)
+    // bool Vulkan::SendToBuffer(IMAGE_BUFFER& buffer, const void* data, VkDeviceSize data_size, uint32_t width, uint32_t height)
+    size_t Vulkan::SendToBuffer(IMAGE_BUFFER& buffer, Tools::IMAGE_MAP const& image)
     {
         // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
         VkResult result = vkWaitForFences(this->device, 1, &this->transfer_command_buffer.fence, VK_FALSE, 1000000000);
@@ -1964,13 +2007,13 @@ namespace Engine
         //      le staging buffer     //
         ////////////////////////////////
 
-        std::memcpy(reinterpret_cast<char*>(this->staging_pointer), data, data_size);
+        std::memcpy(this->transfer_staging.pointer, image.data.data(), image.data.size());
 
         // Flush staging buffer
         VkMappedMemoryRange flush_range = {};
         flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
         flush_range.pNext = nullptr;
-        flush_range.memory = this->staging_buffer.memory;
+        flush_range.memory = this->transfer_staging.memory;
         flush_range.offset = 0;
         flush_range.size = VK_WHOLE_SIZE;
         vkFlushMappedMemoryRanges(this->device, 1, &flush_range);
@@ -2020,12 +2063,12 @@ namespace Engine
         buffer_image_copy_info.imageOffset.x = 0;
         buffer_image_copy_info.imageOffset.y = 0;
         buffer_image_copy_info.imageOffset.z = 0;
-        buffer_image_copy_info.imageExtent.width = width;
-        buffer_image_copy_info.imageExtent.height = height;
+        buffer_image_copy_info.imageExtent.width = image.width;
+        buffer_image_copy_info.imageExtent.height = image.height;
         buffer_image_copy_info.imageExtent.depth = 1;
 
         vkCmdCopyBufferToImage(this->transfer_command_buffer.handle,
-            this->staging_buffer.handle, buffer.handle,
+            this->transfer_staging.handle, buffer.handle,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_image_copy_info);
 
         vkEndCommandBuffer(this->transfer_command_buffer.handle);
@@ -2050,7 +2093,7 @@ namespace Engine
             return false;
         }
 
-        if(!this->TransitionImageLayout(buffer,
+        /*if(!this->TransitionImageLayout(buffer,
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)) {
@@ -2058,11 +2101,11 @@ namespace Engine
             std::cout << "SendToBuffer[image] => TransitionImageLayout : Failed" << std::endl;
             #endif
             return 0;
-        }
+        }*/
 
         // Succès
         return true;
-    }*/
+    }
 
     /**
      * Calcule l'alignement correspondant à un Uniform Buffer
@@ -2223,6 +2266,62 @@ namespace Engine
         }
 
         return true;
+    }
+
+    std::vector<VkVertexInputAttributeDescription> Vulkan::CreateVertexInputDescription(
+                std::vector<VERTEX_BINDING_ATTRIBUTE> attributes,
+                VkVertexInputBindingDescription &description,
+                uint32_t binding)
+    {
+        std::vector<VkVertexInputAttributeDescription> output;
+        output.reserve(attributes.size());
+        uint32_t location = 0;
+        uint32_t offset = 0;
+
+        for(auto type : attributes) {
+
+            VkVertexInputAttributeDescription attribute;
+            attribute.offset = offset;
+            attribute.location = location;
+            attribute.binding = binding;
+            location++;
+
+            switch(type) {
+
+                case VERTEX_BINDING_ATTRIBUTE::POSITION :
+                case VERTEX_BINDING_ATTRIBUTE::NORMAL :
+                case VERTEX_BINDING_ATTRIBUTE::COLOR :
+                    attribute.format = VK_FORMAT_R32G32B32_SFLOAT;
+                    offset += sizeof(Maths::Vector3);
+                    break;
+
+                case VERTEX_BINDING_ATTRIBUTE::UV :
+                    attribute.format = VK_FORMAT_R32G32_SFLOAT;
+                    offset += sizeof(Maths::Vector2);
+                    break;
+
+                case VERTEX_BINDING_ATTRIBUTE::BONE_WEIGHTS :
+                    attribute.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                    offset += sizeof(Maths::Vector4);
+                    break;
+
+                case VERTEX_BINDING_ATTRIBUTE::BONE_IDS :
+                    attribute.format = VK_FORMAT_R32G32B32A32_SINT;
+                    offset += sizeof(int) * 4;
+                    break;
+
+                default :
+                    attribute.format = VK_FORMAT_UNDEFINED;
+            }
+
+            output.push_back(attribute);
+        }
+
+        description.binding = binding;
+        description.stride = offset;
+        description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        return output;
     }
 
     /**

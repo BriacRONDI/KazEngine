@@ -1,8 +1,6 @@
 #pragma once
 
-#include <string>
 #include <vector>
-#include <sstream>
 #include "../../Maths/Sources/Maths.h"
 
 namespace DataPacker
@@ -65,6 +63,9 @@ namespace DataPacker
 
                 /// Compute serialized header size
                 inline uint32_t HeaderSize() const { return this->type == DATA_TYPE::ROOT_NODE ? 0 : static_cast<uint32_t>(sizeof(DATA_TYPE) + sizeof(uint8_t) + this->name.size() + sizeof(uint32_t)); }
+
+                /// Get a pointer on the target buffer
+                inline const char* Data(const char* buffer) { return buffer + this->position + this->HeaderSize(); }
             };
 
             /**

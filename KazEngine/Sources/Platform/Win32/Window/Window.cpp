@@ -173,7 +173,7 @@ namespace Engine
     void Window::SetTitle(std::string const& title)
     {
         // String to Wide string
-        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+        std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> converter;
         SetWindowText(this->hWnd, converter.from_bytes(title).data());
     }
 
