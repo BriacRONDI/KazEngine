@@ -9,7 +9,6 @@ namespace Engine
             if(this->buffer.handle != VK_NULL_HANDLE) vkDestroyBuffer(Vulkan::GetDevice(), this->buffer.handle, nullptr);
         }
 
-        // this->data.reset();
         this->sub_buffer.clear();
         this->free_chunks.clear();
         this->buffer = {};
@@ -31,14 +30,6 @@ namespace Engine
 
         return true;
     }
-
-    /*void ManagedBuffer::SetBuffer(Vulkan::DATA_BUFFER& buffer)
-    {
-        this->buffer = buffer;
-        // this->data.reset();
-        // this->data = std::unique_ptr<char>(new char[buffer.size]);
-        this->free_chunks.push_back({0, buffer.size});
-    }*/
 
     inline void ManagedBuffer::UpdateFlushRange(size_t start_offset, size_t data_size)
     {
@@ -66,6 +57,7 @@ namespace Engine
         if(this->need_flush) {
             size_t bytes_sent = Vulkan::GetInstance().SendToBuffer(this->buffer, command_buffer, this->staging_buffer,
                                                                    this->flush_range_end - this->flush_range_start, this->flush_range_start);
+
             if(!bytes_sent) {
                 this->need_flush = false;
                 this->flush_range_start = 0;

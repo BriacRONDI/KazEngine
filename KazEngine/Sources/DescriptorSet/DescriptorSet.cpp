@@ -10,6 +10,21 @@ namespace Engine
         this->sampler           = nullptr;
     }
 
+    DescriptorSet::~DescriptorSet()
+    {
+        if(Vulkan::HasInstance()) {
+            vkDeviceWaitIdle(Vulkan::GetDevice());
+
+            if(this->image_buffer.view != nullptr) vkDestroyImageView(Vulkan::GetDevice(), this->image_buffer.view, nullptr);
+            if(this->image_buffer.handle != nullptr) vkDestroyImage(Vulkan::GetDevice(), this->image_buffer.handle, nullptr);
+            if(this->image_buffer.memory != nullptr) vkFreeMemory(Vulkan::GetDevice(), this->image_buffer.memory, nullptr);
+
+            if(this->sampler != nullptr) vkDestroySampler(Vulkan::GetDevice(), this->sampler, nullptr);
+            if(this->layout != nullptr) vkDestroyDescriptorSetLayout(Vulkan::GetDevice(), this->layout, nullptr);
+            if(this->pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->pool, nullptr);
+        }
+    }
+
     VkDescriptorSetLayoutBinding DescriptorSet::CreateSimpleBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage_flags)
     {
         VkDescriptorSetLayoutBinding layout_binding;

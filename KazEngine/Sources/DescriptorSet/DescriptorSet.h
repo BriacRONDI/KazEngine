@@ -9,6 +9,7 @@ namespace Engine
         public :
             
             DescriptorSet();
+            ~DescriptorSet();
             static VkDescriptorSetLayoutBinding CreateSimpleBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage_flags);
             bool Create(std::vector<VkDescriptorSetLayoutBinding> const& layout_bindings, std::vector<VkDescriptorBufferInfo> const& buffers_infos);
             bool Create(Tools::IMAGE_MAP const& image);

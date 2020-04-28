@@ -24,8 +24,9 @@ namespace Engine
             };
 
             // Singleton
-            void DestroyInstance();
-            static inline Camera& GetInstance() { if(Camera::instance == nullptr) Camera::instance = new Camera; return *Camera::instance; }
+            static void DestroyInstance();
+            static inline Camera& CreateInstance() { if(Camera::instance == nullptr) Camera::instance = new Camera; return *Camera::instance; }
+            static inline Camera& GetInstance() { return *Camera::instance; }
 
             inline CAMERA_UBO& GetUniformBuffer() { return this->camera; }  // Récupère la transformation finale
             void SetPosition(Maths::Vector3 const& position);                      // Modifie la position

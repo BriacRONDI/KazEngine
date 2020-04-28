@@ -1443,7 +1443,7 @@ namespace Engine
     {
         // Allocation des command buffers
         std::vector<VkCommandBuffer> output_buffers(command_buffers.size());
-        if(!this->AllocateCommandBuffer(pool, static_cast<uint32_t>(command_buffers.size()), output_buffers, level)) {
+        if(!this->AllocateCommandBuffer(pool, output_buffers, level)) {
             #if defined(DISPLAY_LOGS)
             std::cout << "CreateCommandBuffer => AllocateCommandBuffer : Failed" << std::endl;
             #endif
@@ -1488,16 +1488,16 @@ namespace Engine
     /**
      * Allocation des command buffers
      */
-    bool Vulkan::AllocateCommandBuffer(VkCommandPool& pool, uint32_t count, std::vector<VkCommandBuffer>& buffer, VkCommandBufferLevel level)
+    bool Vulkan::AllocateCommandBuffer(VkCommandPool& pool, std::vector<VkCommandBuffer>& buffers, VkCommandBufferLevel level)
     {
         VkCommandBufferAllocateInfo cmd = {};
         cmd.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         cmd.pNext = nullptr;
         cmd.commandPool = pool;
         cmd.level = level;
-        cmd.commandBufferCount = count;
+        cmd.commandBufferCount = static_cast<uint32_t>(buffers.size());
 
-        VkResult result = vkAllocateCommandBuffers(this->device, &cmd, buffer.data());
+        VkResult result = vkAllocateCommandBuffers(this->device, &cmd, buffers.data());
         return result == VK_SUCCESS;
     }
 
@@ -1565,6 +1565,8 @@ namespace Engine
         std::vector<COMMAND_BUFFER> buffers = {this->transfer_command_buffer};
         this->ReleaseCommandBuffer(this->transfert_command_pool, buffers);
         this->transfer_command_buffer = {};
+
+        this->transfer_staging.Clear();
     }
 
     /**
@@ -1743,7 +1745,7 @@ namespace Engine
     /**
      * Change le layout d'un buffer d'image
      */
-    /*bool Vulkan::TransitionImageLayout(IMAGE_BUFFER& buffer,
+    bool Vulkan::TransitionImageLayout(IMAGE_BUFFER& buffer,
                                        VkAccessFlags source_mask, VkAccessFlags dest_mask,
                                        VkImageLayout old_layout, VkImageLayout new_layout,
                                        VkPipelineStageFlags source_stage, VkPipelineStageFlags dest_stage)
@@ -1813,7 +1815,7 @@ namespace Engine
         #endif
 
         return true;
-    }*/
+    }
 
     /**
      * Application d'une barrière de transition pour indiquer
@@ -2093,7 +2095,7 @@ namespace Engine
             return false;
         }
 
-        /*if(!this->TransitionImageLayout(buffer,
+        if(!this->TransitionImageLayout(buffer,
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)) {
@@ -2101,7 +2103,7 @@ namespace Engine
             std::cout << "SendToBuffer[image] => TransitionImageLayout : Failed" << std::endl;
             #endif
             return 0;
-        }*/
+        }
 
         // Succès
         return true;
@@ -2162,19 +2164,20 @@ namespace Engine
     /**
      * Acquisition d'une image de la Swap Chain
      */
-    bool Vulkan::AcquireNextImage(RENDERING_RESOURCES& rendering_resource, uint32_t& swap_chain_image_index)
+    bool Vulkan::AcquireNextImage(uint32_t& swapchain_image_index, VkSemaphore semaphore)
     {
         // On attend la find de la génération de l'image avant de la présenter
-        VkResult result = vkWaitForFences(this->device, 1, &rendering_resource.graphics_command_buffer.fence, VK_FALSE, 1000000000);
+        /*VkResult result = vkWaitForFences(this->device, 1, &rendering_resource.graphics_command_buffer.fence, VK_FALSE, 1000000000);
         if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
             #if defined(DISPLAY_LOGS)
             std::cout << "DrawScene => vkWaitForFences : Timeout" << std::endl;
             #endif
             return false;
         }
-        vkResetFences(this->device, 1, &rendering_resource.graphics_command_buffer.fence);
+        vkResetFences(this->device, 1, &rendering_resource.graphics_command_buffer.fence);*/
 
-        result = vkAcquireNextImageKHR(this->device, this->swap_chain.handle, UINT64_MAX, rendering_resource.swap_chain_semaphore, VK_NULL_HANDLE, &swap_chain_image_index);
+        VkResult result = vkAcquireNextImageKHR(this->device, this->swap_chain.handle, UINT64_MAX, semaphore, VK_NULL_HANDLE, &swapchain_image_index);
         switch(result) {
             #if defined(DISPLAY_LOGS)
             case VK_ERROR_OUT_OF_HOST_MEMORY:
@@ -2215,7 +2218,7 @@ namespace Engine
         return true;
     }
 
-    bool Vulkan::PresentImage(RENDERING_RESOURCES& rendering_resource, uint32_t swap_chain_image_index)
+    bool Vulkan::PresentImage(RENDERING_RESOURCES& resources, VkSemaphore semaphore, uint32_t swap_chain_image_index)
     {
         VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
@@ -2224,13 +2227,13 @@ namespace Engine
         submit_info.pNext = nullptr;
         submit_info.commandBufferCount = 1;
         submit_info.waitSemaphoreCount = 1;
-        submit_info.pCommandBuffers = &rendering_resource.graphics_command_buffer.handle;
+        submit_info.pCommandBuffers = &resources.graphics_command_buffer.handle;
         submit_info.signalSemaphoreCount = 1;
-        submit_info.pSignalSemaphores = &rendering_resource.renderpass_semaphore;
-        submit_info.pWaitSemaphores = &rendering_resource.swap_chain_semaphore;
+        submit_info.pSignalSemaphores = &resources.semaphore;
+        submit_info.pWaitSemaphores = &semaphore;
         submit_info.pWaitDstStageMask = &wait_dst_stage_mask;
 
-        VkResult result = vkQueueSubmit(this->graphics_queue.handle, 1, &submit_info, rendering_resource.graphics_command_buffer.fence);
+        VkResult result = vkQueueSubmit(this->graphics_queue.handle, 1, &submit_info, resources.graphics_command_buffer.fence);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             std::cout << "DrawScene => vkQueueSubmit : Failed" << std::endl;
@@ -2242,7 +2245,7 @@ namespace Engine
         present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         present_info.pNext = nullptr;
         present_info.waitSemaphoreCount = 1;
-        present_info.pWaitSemaphores = &rendering_resource.renderpass_semaphore;
+        present_info.pWaitSemaphores = &resources.semaphore;
         present_info.swapchainCount = 1;
         present_info.pSwapchains = &this->swap_chain.handle;
         present_info.pImageIndices = &swap_chain_image_index;

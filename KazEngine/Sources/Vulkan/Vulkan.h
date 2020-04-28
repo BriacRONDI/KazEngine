@@ -73,6 +73,11 @@ namespace Engine
                 VkDeviceSize size;
 
                 DATA_BUFFER() : handle(nullptr), memory(nullptr), size(0) {}
+                inline void Clear() {
+                    if(this->handle != VK_NULL_HANDLE) vkDestroyBuffer(Vulkan::GetDevice(), this->handle, nullptr);
+                    if(this->memory != VK_NULL_HANDLE) vkFreeMemory(Vulkan::GetDevice(), this->memory, nullptr); // vkUnmapMemory is implicit
+                    *this = {};
+                }
             };
 
             struct STAGING_BUFFER : DATA_BUFFER {
@@ -115,11 +120,10 @@ namespace Engine
 
             struct RENDERING_RESOURCES {
                 VkFramebuffer framebuffer;
-                VkSemaphore swap_chain_semaphore;
-                VkSemaphore renderpass_semaphore;
+                VkSemaphore semaphore;
                 Vulkan::COMMAND_BUFFER graphics_command_buffer;
 
-                RENDERING_RESOURCES() : framebuffer(nullptr), swap_chain_semaphore(nullptr), renderpass_semaphore(nullptr) {}
+                RENDERING_RESOURCES() : framebuffer(nullptr), semaphore(nullptr) {}
             };
 
             struct PIPELINE {
@@ -127,6 +131,11 @@ namespace Engine
                 VkPipeline handle;
 
                 PIPELINE() : layout(nullptr), handle(nullptr) {}
+                inline void Clear() {
+                    if(this->handle != nullptr) vkDestroyPipeline(Vulkan::GetDevice(), this->handle, nullptr);
+                    if(this->layout != nullptr) vkDestroyPipelineLayout(Vulkan::GetDevice(), this->layout, nullptr);
+                    *this = {};
+                }
             };
 
             enum VERTEX_BINDING_ATTRIBUTE : uint8_t {
@@ -168,10 +177,10 @@ namespace Engine
             // static inline COMMAND_BUFFER& GetTransferCommandBuffer() { return Vulkan::vulkan->transfer_command_buffer; }    // Récupère le buffer de commandes de transferts
             uint32_t ComputeUniformBufferAlignment(uint32_t buffer_size);                                                   // Calcule l'alignement correspondant à un Uniform Buffer
             VkDeviceSize ComputeRawDataAlignment(size_t data_size);                                                         // Calcule le segment de mémoire occupé par une donnée en tenant compte du nonCoherentAtomSize
-            bool AcquireNextImage(RENDERING_RESOURCES& rendering_resource, uint32_t& swap_chain_image_index);
-            bool PresentImage(RENDERING_RESOURCES& rendering_resource, uint32_t swap_chain_image_index);
+            bool AcquireNextImage(uint32_t& swapchain_image_index, VkSemaphore semaphore);
+            bool PresentImage(RENDERING_RESOURCES& rendering_resource, VkSemaphore semaphore, uint32_t swap_chain_image_index);
 
-            bool AllocateCommandBuffer(VkCommandPool& pool, uint32_t count, std::vector<VkCommandBuffer>& buffer, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+            bool AllocateCommandBuffer(VkCommandPool& pool, std::vector<VkCommandBuffer>& buffers, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
             // Récupère la propriété minUniformBufferOffsetAlignment
             // static inline VkDeviceSize GetUboAlignment() { return Vulkan::vulkan->physical_device.properties.limits.minUniformBufferOffsetAlignment; }
@@ -196,6 +205,8 @@ namespace Engine
             // Création d'un command buffer
             bool CreateCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY, bool create_fence = true);
 
+            void ReleaseCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers);
+
             // Envoi de données vers un data buffer
             size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, VkDeviceSize data_size, VkDeviceSize destination_offset);
 
@@ -204,11 +215,11 @@ namespace Engine
             size_t SendToBuffer(IMAGE_BUFFER& buffer, Tools::IMAGE_MAP const& image);
 
             // Applique une birrière de changement de queue family à un data buffer
-            bool TransitionBufferQueueFamily(
+            /*bool TransitionBufferQueueFamily(
                               DATA_BUFFER& buffer, COMMAND_BUFFER command_buffer, DEVICE_QUEUE queue,
                               VkAccessFlags source_mask, VkAccessFlags dest_mask,
                               uint32_t source_queue_index, uint32_t dest_queue_index,
-                              VkPipelineStageFlags source_stage, VkPipelineStageFlags dest_stage);
+                              VkPipelineStageFlags source_stage, VkPipelineStageFlags dest_stage);*/
 
             // Création d'un buffer d'image
             IMAGE_BUFFER CreateImageBuffer(VkImageUsageFlags usage, VkImageAspectFlags aspect, uint32_t width, uint32_t height, VkFormat format = VK_FORMAT_R8G8B8A8_UNORM);
@@ -323,10 +334,10 @@ namespace Engine
             
             // bool InitMainBuffers();                                                                             // Initialisation les buffers principaux
             // void ReleaseMainBuffers();                                                                          // Détruit les buffers principaux
-            /* bool TransitionImageLayout(IMAGE_BUFFER& buffer,
+            bool TransitionImageLayout(IMAGE_BUFFER& buffer,
                                        VkAccessFlags source_mask, VkAccessFlags dest_mask,
                                        VkImageLayout old_layout, VkImageLayout new_layout,
-                                       VkPipelineStageFlags source_stage, VkPipelineStageFlags dest_stage);     // Change le layout d'un buffer d'image */
+                                       VkPipelineStageFlags source_stage, VkPipelineStageFlags dest_stage);     // Change le layout d'un buffer d'image
 
             //////////////////////
             // HELPER FUNCTIONS //
@@ -348,7 +359,6 @@ namespace Engine
 
             // Resources
             bool MemoryTypeFromProperties(uint32_t type_bits, VkFlags requirements_mask, uint32_t &type_index);
-            void ReleaseCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers);
 
             // Divers
             bool OnWindowSizeChanged();
