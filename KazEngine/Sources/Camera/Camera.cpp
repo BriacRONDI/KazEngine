@@ -30,6 +30,11 @@ namespace Engine
         // this->camera.projection     = Matrix4x4::OrthographicProjectionMatrix(-5.0f, 5.0f, -5.0f, 5.0f, 0.0f, 30.0f);
         this->camera.position       = {0.0f, 0.0f, 0.0f};
         this->rts_mode              = true;
+        
+        auto binding = DescriptorSet::CreateSimpleBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
+        this->chunk = DataBank::GetManagedBuffer().ReserveChunk(Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(CAMERA_UBO)));
+        this->descriptor.resize(DataBank::GetManagedBuffer().GetInstanceCount());
+        for(uint8_t i=0; i<DataBank::GetManagedBuffer().GetInstanceCount(); i++) this->descriptor[i].Create({binding}, {DataBank::GetManagedBuffer().GetBufferInfos(this->chunk, i)});
 
         this->frustum.Setup(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
         Mouse::GetInstance().AddListener(this);
@@ -43,9 +48,10 @@ namespace Engine
         Mouse::GetInstance().RemoveListener(this);
     }
 
-    void Camera::Update()
+    void Camera::Update(uint8_t frame_index)
     {
         if(Mouse::GetInstance().IsClipped() && this->rts_mode) this->RtsScroll();
+        DataBank::GetManagedBuffer().WriteData(&this->camera, sizeof(Camera::CAMERA_UBO), this->chunk.offset, frame_index);
     }
 
     void Camera::RtsScroll()
@@ -107,7 +113,7 @@ namespace Engine
             int32_t delta_ix = this->mouse_origin.X - x;
             int32_t delta_iy = y - this->mouse_origin.Y;
 
-            float sensitivity = 0.5f;
+            float sensitivity = 0.005f;
             float delta_fx = static_cast<float>(delta_ix) * sensitivity;
             float delta_fy = static_cast<float>(delta_iy) * sensitivity;
 
@@ -115,8 +121,8 @@ namespace Engine
             if(this->moving_horizontal_angle < 0) this->moving_horizontal_angle += Maths::F_2_PI;
 
             this->moving_vertical_angle = this->vertical_angle + delta_fy;
-            if(this->moving_vertical_angle > 90.0f) this->moving_vertical_angle = Maths::F_PI_4;
-            if(this->moving_vertical_angle < -90.0f) this->moving_vertical_angle = -Maths::F_PI_4;
+            if(this->moving_vertical_angle > Maths::F_PI_2) this->moving_vertical_angle = Maths::F_PI_2;
+            if(this->moving_vertical_angle < -Maths::F_PI_2) this->moving_vertical_angle = -Maths::F_PI_2;
 
             this->rotation = Maths::Matrix4x4::RotationMatrix(this->moving_vertical_angle, {1.0f, 0.0f, 0.0f})
                            * Maths::Matrix4x4::RotationMatrix(this->moving_horizontal_angle, {0.0f, 1.0f, 0.0f});
@@ -168,7 +174,7 @@ namespace Engine
                 int32_t delta_ix = this->mouse_origin.X - position.X;
                 int32_t delta_iy = position.Y - this->mouse_origin.Y;
 
-                float sensitivity = 0.5f;
+                float sensitivity = 0.005f;
                 float delta_fx = static_cast<float>(delta_ix) * sensitivity;
                 float delta_fy = static_cast<float>(delta_iy) * sensitivity;
 
@@ -178,8 +184,8 @@ namespace Engine
                 if(this->horizontal_angle < 0) this->horizontal_angle += Maths::F_2_PI;
 
                 this->vertical_angle += delta_fy;
-                if(this->vertical_angle > Maths::F_PI_4) this->vertical_angle = Maths::F_PI_4;
-                if(this->vertical_angle < -Maths::F_PI_4) this->vertical_angle = -Maths::F_PI_4;
+                if(this->vertical_angle > Maths::F_PI_2) this->vertical_angle = Maths::F_PI_2;
+                if(this->vertical_angle < -Maths::F_PI_2) this->vertical_angle = -Maths::F_PI_2;
         
             }else if(button == MOUSE_BUTTON::MOUSE_BUTTON_MIDDLE) {
 

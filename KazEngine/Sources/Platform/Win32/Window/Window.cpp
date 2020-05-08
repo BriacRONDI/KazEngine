@@ -72,8 +72,8 @@ namespace Engine
 
             // Windowed style
             dwExStyle = WS_EX_APPWINDOW | WS_EX_WINDOWEDGE;
-            dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-            // dwStyle = WS_OVERLAPPEDWINDOW;
+            // dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+            dwStyle = WS_OVERLAPPEDWINDOW;
 
             // Update state
             this->WindowState = IWindowListener::E_WINDOW_STATE::WINDOW_STATE_WINDOWED;
@@ -102,6 +102,75 @@ namespace Engine
 
         // On ajoute la fenêtre à la liste
         Window::WindowList[this->hWnd] = this;
+    }
+
+    bool Window::ToggleFullScreen()
+    {
+        if(this->WindowState == IWindowListener::E_WINDOW_STATE::WINDOW_STATE_FULLSCREEN) {
+
+            RECT rect = {
+                static_cast<LONG>(this->mem_rect.X),
+                static_cast<LONG>(this->mem_rect.Y),
+                static_cast<LONG>(this->mem_rect.Width),
+                static_cast<LONG>(this->mem_rect.Height)
+            };
+
+            SetWindowLongPtr(this->hWnd, GWL_STYLE, WS_OVERLAPPEDWINDOW);
+            SetWindowLongPtr(this->hWnd, GWL_EXSTYLE, WS_EX_APPWINDOW | WS_EX_WINDOWEDGE);
+            SetWindowPos(this->hWnd, HWND_NOTOPMOST, rect.left, rect.top, rect.right, rect.bottom, SWP_SHOWWINDOW);
+            
+            if(Mouse::GetInstance().IsClipped()) {
+                RECT client_rect;
+                POINT client_origin = {0, 0};
+                if(GetClientRect(this->hWnd, &client_rect) && ClientToScreen(this->hWnd, &client_origin)) {
+                    Point<uint32_t> clip_offset = {static_cast<uint32_t>(client_origin.x), static_cast<uint32_t>(client_origin.y)};
+                    Area<uint32_t> clip_size = {static_cast<uint32_t>(client_rect.right), static_cast<uint32_t>(client_rect.bottom)};
+                    Mouse::GetInstance().Clip(clip_offset, clip_size);
+                }
+            }
+
+            this->WindowState = IWindowListener::E_WINDOW_STATE::WINDOW_STATE_WINDOWED;
+
+        }else{
+
+            RECT rect;
+            GetWindowRect(this->hWnd, &rect);
+            this->mem_rect = {
+                static_cast<uint32_t>(rect.left),
+                static_cast<uint32_t>(rect.top),
+                static_cast<uint32_t>(rect.right - rect.left),
+                static_cast<uint32_t>(rect.bottom - rect.top)
+            };
+
+            SetWindowLongPtr(this->hWnd, GWL_STYLE, WS_POPUP);
+            SetWindowLongPtr(this->hWnd, GWL_EXSTYLE, WS_EX_APPWINDOW);
+
+            rect = {0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)};
+            SetWindowPos(this->hWnd, HWND_TOPMOST, 0, 0, rect.right, rect.bottom, SWP_SHOWWINDOW);
+
+            if(Mouse::GetInstance().IsClipped())
+                Mouse::GetInstance().Clip({}, {static_cast<uint32_t>(rect.right), static_cast<uint32_t>(rect.bottom)});
+
+            this->WindowState = IWindowListener::E_WINDOW_STATE::WINDOW_STATE_FULLSCREEN;
+
+            // Enable fullscreen, change screen resolution if needed
+            /*DEVMODE dmScreenSettings = {};
+            dmScreenSettings.dmSize         = sizeof(dmScreenSettings);
+            dmScreenSettings.dmPelsWidth	= rect.right;
+            dmScreenSettings.dmPelsHeight	= rect.bottom;
+            dmScreenSettings.dmBitsPerPel	= 32;
+            dmScreenSettings.dmFields       = DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT;
+            int state = ChangeDisplaySettings(&dmScreenSettings, CDS_FULLSCREEN);
+
+            if(state == DISP_CHANGE_SUCCESSFUL) {
+                this->WindowState = IWindowListener::E_WINDOW_STATE::WINDOW_STATE_FULLSCREEN;
+                return state == DISP_CHANGE_SUCCESSFUL;
+            }else{
+                return false;
+            }*/
+        }
+
+        return true;
     }
 
     /**
@@ -147,8 +216,9 @@ namespace Engine
     void Window::Center()
     {
         RECT rect;
-        GetWindowRect(this->hWnd, &rect);
-        SetWindowPos(this->hWnd, NULL, (GetSystemMetrics(SM_CXSCREEN) - rect.right) / 2, (GetSystemMetrics(SM_CYSCREEN) - rect.bottom) / 2, 0, 0, SWP_NOSIZE);
+        ::GetWindowRect(this->hWnd, &rect);
+        SetWindowPos(this->hWnd, NULL, (GetSystemMetrics(SM_CYSCREEN) - rect.bottom) / 2, (GetSystemMetrics(SM_CYSCREEN) - rect.bottom) / 2, 0, 0, SWP_NOSIZE);
+        
     }
 
     /**
@@ -229,11 +299,11 @@ namespace Engine
             //La fenêtre est fermée par l'utilisateur
             case WM_CLOSE :
                 PostQuitMessage(0);
-                break;
+                return TRUE;
 
             //La fenêtre est détruite
             case WM_DESTROY :
-                return FALSE;
+                return TRUE;
 
             //La fenêtre est est cours de redimensionnement
             case WM_SIZING :
@@ -291,7 +361,7 @@ namespace Engine
                         }
                     }
                 }
-                break;
+                return TRUE;
             }
 
             //La fenêtre est redimensionnée
@@ -324,9 +394,20 @@ namespace Engine
                             Listener->StateChanged(IWindowListener::E_WINDOW_STATE::WINDOW_STATE_MAXIMIZED);
                         }
                         //On notifie les listeners de la nouvelle taille de la fenêtre
-                        Area<uint32_t> NewSize = {LOWORD(lParam), HIWORD(lParam)};
-                        Listener->SizeChanged(NewSize);
+                        Listener->SizeChanged({LOWORD(lParam), HIWORD(lParam)});
                     }
+                }
+                return TRUE;
+            }
+
+            case WM_SYSCOMMAND :
+            {
+                if(wParam == SC_KEYMENU) {
+                    if(lParam == VK_RETURN) {
+                        Window* self = Window::WindowList[hwnd];
+                        if(self != nullptr) self->ToggleFullScreen();
+                    }
+                    return TRUE;
                 }
                 break;
             }
@@ -335,17 +416,25 @@ namespace Engine
             case WM_KEYDOWN :
                 if(wParam == VK_ESCAPE) Mouse::GetInstance().UnClip();
                 else if(Mouse::GetInstance().IsClipped()) Keyboard::GetInstance().PressKey(static_cast<unsigned char>(wParam));
-                break;
+                return TRUE;
 
             // Relâchement d'une touche du clavier
             case WM_KEYUP :
                 if(Mouse::GetInstance().IsClipped()) Keyboard::GetInstance().ReleaseKey(static_cast<unsigned char>(wParam));
-                break;
+                return TRUE;
 
             // La souris de séplace sur la fenêtre
             case WM_MOUSEMOVE :
                 if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseMove(LOWORD(lParam), HIWORD(lParam));
-                break;
+                return TRUE;
+
+            case WM_MOUSELEAVE :
+                if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().UnClip();
+                return TRUE;
+
+            case WM_KILLFOCUS :
+                if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().UnClip();
+                return TRUE;
 
             // La molette est utilisée
             case WM_MOUSEWHEEL :
@@ -353,22 +442,22 @@ namespace Engine
                     if(GET_WHEEL_DELTA_WPARAM(wParam) > 0) Mouse::GetInstance().MouseWheelUp();
                     else Mouse::GetInstance().MouseWheelDown();
                 }
-                break;
+                return TRUE;
 
             // Bouton gauche de la souris enfoncé
             case WM_LBUTTONDOWN :
                 if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseButtonDown(IMouseListener::MOUSE_BUTTON_LEFT);
-                break;
+                return TRUE;
 
             // Bouton droit de la souris enfoncé
             case WM_RBUTTONDOWN :
                 if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseButtonDown(IMouseListener::MOUSE_BUTTON_RIGHT);
-                break;
+                return TRUE;
 
             // Bouton central de la souris enfoncé
             case WM_MBUTTONDOWN :
                 if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseButtonDown(IMouseListener::MOUSE_BUTTON_MIDDLE);
-                break;
+                return TRUE;
 
             // Bouton gauche de la souris relâché
             case WM_LBUTTONUP :
@@ -383,23 +472,19 @@ namespace Engine
                 }else{
                     Mouse::GetInstance().MouseButtonUp(IMouseListener::MOUSE_BUTTON_LEFT);
                 }
-                break;
+                return TRUE;
 
             // Bouton droit de la souris relâché
             case WM_RBUTTONUP :
                 if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseButtonUp(IMouseListener::MOUSE_BUTTON_RIGHT);
-                break;
+                return TRUE;
 
             // Bouton central de la souris relâché
             case WM_MBUTTONUP :
                 if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseButtonUp(IMouseListener::MOUSE_BUTTON_MIDDLE);
-                break;
-
-            //Message non géré
-            default :
-                return DefWindowProc(hwnd, uMsg, wParam, lParam);
+                return TRUE;
         }
 
-        return FALSE;
+        return DefWindowProc(hwnd, uMsg, wParam, lParam);;
     }
 }

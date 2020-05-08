@@ -5,23 +5,23 @@ namespace Model
     /**
      * Calcul le masque déterminant la pipeline à utiliser pour afficher le mesh
      */
-    /*void Mesh::UpdateRenderMask(std::map<std::string, Mesh::MATERIAL> const& materials)
+    void Mesh::UpdateRenderMask(std::map<std::string, MATERIAL> const& materials)
     {
         // Tous les modèles ont des sommets
-        this->render_mask = Renderer::POSITION_VERTEX;
+        this->render_mask = RENDER_MASK::RENDER_POSITION;
 
         // Normales
         // if(!this->normal_buffer.empty()) this->render_mask |= Renderer::NORMAL_VERTEX;
 
         // UV
-        if(!this->uv_buffer.empty()) this->render_mask |= Renderer::UV_VERTEX;
+        if(!this->uv_buffer.empty()) this->render_mask |= RENDER_MASK::RENDER_UV;
 
         // Matériaux
-        if(!this->materials.empty()) this->render_mask |= Renderer::MATERIAL;
+        // if(!this->materials.empty()) this->render_mask |= RENDER_MASK::RENDER_MATERIAL;
 
         // Squelette
-        if(this->deformers.size() == 1) this->render_mask |= Renderer::SINGLE_BONE;
-        if(this->deformers.size() > 1) this->render_mask |= Renderer::SKELETON;
+        if(this->deformers.size() == 1) this->render_mask |= RENDER_MASK::RENDER_SINGLE_BONE;
+        if(this->deformers.size() > 1) this->render_mask |= RENDER_MASK::RENDER_SKELETON;
 
         // Textures
         for(auto& material : this->materials) {
@@ -31,17 +31,19 @@ namespace Model
                 // dans ce cas on ignore la texture, seul le matériau sera pris en compte
                 if(this->uv_buffer.empty()) return;
 
-                this->render_mask |= Renderer::TEXTURE;
+                this->render_mask |= RENDER_MASK::RENDER_TEXTURE;
                 return;
             }
         }
-    }*/
+
+        return;
+    }
 
     /**
      * Construit le VBO à envoyer sur la carte graphique,
      * dans le cas d'un mesh découpé en sous-parties.
      */
-    std::unique_ptr<char> Mesh::BuildSubMeshVBO(size_t& output_size)
+    std::unique_ptr<char> Mesh::BuildSubMeshVBO(size_t& output_size, size_t& index_buffer_offset)
     {
         //////////////////////////
         // Calcul de la taille  //
@@ -135,7 +137,7 @@ namespace Model
             // Un mesh découpé en sous-parties ne contiendra pas d'index buffer global,
             // Cependant, nous avons besoin de connaitre la position des index buffers des sous-parties
             // Chaque index buffer sera collé l'un à l'autre formant un gros buffer dont on souhaite conserver l'offset
-            this->index_buffer_offset = this->vertex_buffer_offset + offset;
+            index_buffer_offset = offset;
 
             // Index Buffer : Pour chaque matériau on aura un index buffer afin de séparer le mesh en sous-parties
             // Chacune de ces sous-parties sera alors affichée séparément avec son matériau propre
@@ -144,7 +146,7 @@ namespace Model
                 // Déclaration de la sous-partie du mesh
                 SUB_MESH sub_mesh;
                 sub_mesh.index_count = static_cast<uint32_t>(material.second.size() * 3);
-                sub_mesh.first_index = static_cast<uint32_t>((offset - this->index_buffer_offset - this->vertex_buffer_offset) / sizeof(uint32_t));
+                sub_mesh.first_index = static_cast<uint32_t>((offset - index_buffer_offset) / sizeof(uint32_t));
                 this->sub_meshes.push_back(std::pair<std::string, SUB_MESH>(material.first, sub_mesh));
             
                 for(auto& face_index : material.second) {
@@ -162,11 +164,11 @@ namespace Model
      * Construit le VBO à envoyer sur la carte graphique
      * en fonction des éléments constituants le mesh
      */
-    std::unique_ptr<char> Mesh::BuildVBO(size_t& output_size)
+    std::unique_ptr<char> Mesh::BuildVBO(size_t& output_size, size_t& index_buffer_offset)
     {
         // Si le mesh est divisé en sous-parties, on appelle BuildSubMeshVBO
         if(this->materials.size() > 1 && !this->materials[0].second.empty())
-            return this->BuildSubMeshVBO(output_size);
+            return this->BuildSubMeshVBO(output_size, index_buffer_offset);
 
         //////////////////////////
         // Calcul de la taille  //
@@ -254,9 +256,11 @@ namespace Model
         }
 
         // Index Buffer
-        if(this->uv_index.empty() && !this->index_buffer.empty()) {
-            this->index_buffer_offset = this->vertex_buffer_offset + offset;
+        if(index_buffer_size > 0) {
+            index_buffer_offset = offset;
             std::memcpy(output.get() + offset, this->index_buffer.data(), index_buffer_size);
+        }else{
+            index_buffer_offset = UINT64_MAX;
         }
 
         // Fin
@@ -381,10 +385,6 @@ namespace Model
      */
     size_t Mesh::Deserialize(const char* data)
     {
-        // Initialisation des affsets
-        this->vertex_buffer_offset = 0;
-        this->index_buffer_offset = 0;
-
         // Nettoyage des sub meshes
         this->sub_meshes.clear();
 
@@ -518,4 +518,5 @@ namespace Model
         if(name_length) this->texture = std::string(data + offset, data + offset + name_length);
         return offset + name_length;
     }
+
 }

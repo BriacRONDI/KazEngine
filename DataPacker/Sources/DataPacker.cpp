@@ -173,6 +173,20 @@ namespace DataPacker
         Packer::UpdatePackSize(memory, package, parent_path, size_change);
     }
 
+    void Packer::SetNodeType(std::vector<char>& memory, std::string const& path, DATA_TYPE type)
+    {
+        // Read data table
+        std::vector<DATA> package;
+        if(memory.size() > 0) package = Packer::UnpackMemory(memory);
+        else return;
+
+        // Find data in table
+        DATA& pack = Packer::FindPackedItem(package, path);
+
+        // Change type
+        memory[pack.position] = type;
+    }
+
     void Packer::RemoveNode(std::vector<char>& memory, std::string const& path)
     {
         // If path is root, just clear all data

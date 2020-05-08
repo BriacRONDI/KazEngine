@@ -2,13 +2,15 @@
 
 #include <map>
 #include <vector>
-
-#include "../../../Maths/Sources/Maths.h"
+#include <Maths.h>
 #include "../Deformer/Deformer.h"
+
+#if defined(DISPLAY_LOGS)
+#include <iostream>
+#endif
 
 namespace Model
 {
-
     class Mesh
     {
         public :
@@ -36,6 +38,18 @@ namespace Model
                 Maths::Vector3 far_right_top_point;
             };
 
+            enum RENDER_MASK : uint16_t {
+                RENDER_INVALID          = 0b0000'0000'0000'0000,
+                RENDER_POSITION         = 0b0000'0000'0000'0001,
+                RENDER_NORMAL           = 0b0000'0000'0000'0010,
+                RENDER_UV               = 0b0000'0000'0000'0100,
+                RENDER_COLOR            = 0b0000'0000'0000'1000,
+                RENDER_MATERIAL         = 0b0000'0000'0010'0000,
+                RENDER_TEXTURE          = 0b0000'0000'0100'0000,
+                RENDER_SKELETON         = 0b0000'0000'1000'0000,
+                RENDER_SINGLE_BONE      = 0b0000'0001'0000'0000
+            };
+
             std::string name;
             std::vector<Maths::Vector3> vertex_buffer;
             std::vector<uint32_t> index_buffer;
@@ -46,22 +60,11 @@ namespace Model
             std::vector<std::pair<std::string, SUB_MESH>> sub_meshes;
             std::vector<Deformer> deformers;
             std::string skeleton;
-            HIT_BOX hit_box;
-
-            size_t vertex_buffer_offset   = 0;
-            size_t index_buffer_offset    = 0;
-            uint32_t skeleton_buffer_offset     = UINT32_MAX;
-            uint16_t render_mask                = 0;
-
-            inline size_t GetVertexBufferSize() { return this->vertex_buffer.size() * sizeof(Maths::Vector3); }
-            inline size_t GetUvBufferSize() { return this->uv_buffer.size() * sizeof(Maths::Vector2); }
-            inline size_t GetUvIndexBufferSize() { return this->uv_index.size() * sizeof(uint32_t); }
-            inline size_t GetIndexBufferSize() { return this->index_buffer.size() * sizeof(uint32_t); }
-            inline void UpdateIndexBufferOffset(size_t move) { if(this->index_buffer_offset > 0) this->index_buffer_offset += move; }
-
-            std::unique_ptr<char> BuildVBO(size_t& output_size);
+            uint16_t render_mask;
+            HIT_BOX* hit_box = nullptr;
             
-            // void UpdateRenderMask(std::map<std::string, Mesh::MATERIAL> const& materials = {});
+            std::unique_ptr<char> BuildVBO(size_t& output_size, size_t& index_buffer_offset);
+            void UpdateRenderMask(std::map<std::string, MATERIAL> const& materials);
             std::unique_ptr<char> Serialize(uint32_t& output_size);
             size_t Deserialize(const char* data);
 
@@ -71,7 +74,7 @@ namespace Model
             ~Mesh(){}
             #endif
 
-        private :
+        protected :
 
             struct SERIALIZED_HEADER {
                 uint8_t name_length;
@@ -86,6 +89,10 @@ namespace Model
             };
 
             // Helpers
-            std::unique_ptr<char> BuildSubMeshVBO(size_t& output_size);
+            std::unique_ptr<char> BuildSubMeshVBO(size_t& output_size, size_t& index_buffer_offset);
+            inline size_t GetVertexBufferSize() { return this->vertex_buffer.size() * sizeof(Maths::Vector3); }
+            inline size_t GetUvBufferSize() { return this->uv_buffer.size() * sizeof(Maths::Vector2); }
+            inline size_t GetUvIndexBufferSize() { return this->uv_index.size() * sizeof(uint32_t); }
+            inline size_t GetIndexBufferSize() { return this->index_buffer.size() * sizeof(uint32_t); }
     };
 }

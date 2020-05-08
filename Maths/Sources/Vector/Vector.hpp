@@ -78,11 +78,11 @@ namespace Maths
             /// Explicit values constructor
             /// {@
             #if VECTOR_N == 2
-            inline VEC_TYPE(float x, float y) : x(x), y(x) {}
+            inline VEC_TYPE(float x, float y) : x(x), y(y) {}
             #elif VECTOR_N == 3
-            inline VEC_TYPE(float x, float y, float z) : x(x), y(x), z(z) {}
+            inline VEC_TYPE(float x, float y, float z) : x(x), y(y), z(z) {}
             #elif VECTOR_N == 4
-            inline VEC_TYPE(float x, float y, float z, float w) : x(x), y(x), z(z), w(w) {}
+            inline VEC_TYPE(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {}
             #endif
             /// @}
 

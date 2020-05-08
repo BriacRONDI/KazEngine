@@ -3,7 +3,7 @@
 #include "../../DescriptorSet/DescriptorSet.h"
 #include "../../ManagedBuffer/ManagedBuffer.h"
 #include "../../Camera/Camera.h"
-#include <DataPacker.h>
+#include "../../DataBank/DataBank.h"
 #include <Maths.h>
 
 namespace Engine
@@ -20,27 +20,28 @@ namespace Engine
             };
             
             void Clear();
-            Map(VkCommandPool command_pool, std::vector<ManagedBuffer>& uniform_buffers);
+            Map(VkCommandPool command_pool);
             inline ~Map() { this->Clear(); }
             VkCommandBuffer GetCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer);
+            inline MAP_UBO& GetUniformBuffer() { return this->properties; }
+            void Update(uint8_t frame_index);
+            inline void Refresh() { for(int i=0; i<this->need_update.size(); i++) this->need_update[i] = true; }
 
         private :
 
             std::vector<bool> need_update;
             uint32_t index_buffer_offet;
+            MAP_UBO properties;
+            Vulkan::DATA_CHUNK map_ubo_chunk;
+            Vulkan::DATA_CHUNK map_vbo_chunk;
 
             VkCommandPool command_pool;
             std::vector<VkCommandBuffer> command_buffers;
-            std::vector<Vulkan::COMMAND_BUFFER> transfer_buffers;
-            std::vector<DescriptorSet> map_descriptors;
+            std::vector<DescriptorSet> descriptors;
             DescriptorSet texture_descriptor;
-            std::vector<ManagedBuffer>& uniform_buffers;
             Vulkan::PIPELINE pipeline;
 
-            std::vector<Vulkan::STAGING_BUFFER> staging_buffers;
-            std::vector<ManagedBuffer> vertex_buffers;
-
-            bool UpdateVertexBuffer(ManagedBuffer& vertex_buffer, Vulkan::COMMAND_BUFFER const& command_buffer);
+            bool UpdateVertexBuffer(uint8_t frame_index);
             bool CreatePipeline();
     };
 }

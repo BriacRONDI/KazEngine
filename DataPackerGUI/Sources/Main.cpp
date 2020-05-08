@@ -184,6 +184,38 @@ LRESULT WINAPI WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                     DataPackerGUI::FileManager::GetInstance().GetLinkedTreeView().EditLabel(item);
                     return TRUE;
                 }
+
+                case ID_SETTYPE_IMAGE :
+                {
+                    DataPackerGUI::TreeView& treeview = DataPackerGUI::FileManager::GetInstance().GetLinkedTreeView();
+                    std::string path = treeview.GetPath(treeview.GetSelectedItem());
+                    DataPackerGUI::FileManager::GetInstance().SetNodeType(path, DataPacker::Packer::DATA_TYPE::IMAGE_FILE);
+                    return TRUE;
+                }
+
+                case ID_SETTYPE_MESH :
+                {
+                    DataPackerGUI::TreeView& treeview = DataPackerGUI::FileManager::GetInstance().GetLinkedTreeView();
+                    std::string path = treeview.GetPath(treeview.GetSelectedItem());
+                    DataPackerGUI::FileManager::GetInstance().SetNodeType(path, DataPacker::Packer::DATA_TYPE::MESH_DATA);
+                    return TRUE;
+                }
+
+                case ID_SETTYPE_BONETREE :
+                {
+                    DataPackerGUI::TreeView& treeview = DataPackerGUI::FileManager::GetInstance().GetLinkedTreeView();
+                    std::string path = treeview.GetPath(treeview.GetSelectedItem());
+                    DataPackerGUI::FileManager::GetInstance().SetNodeType(path, DataPacker::Packer::DATA_TYPE::BONE_TREE);
+                    return TRUE;
+                }
+
+                case ID_SETTYPE_MATERIAL :
+                {
+                    DataPackerGUI::TreeView& treeview = DataPackerGUI::FileManager::GetInstance().GetLinkedTreeView();
+                    std::string path = treeview.GetPath(treeview.GetSelectedItem());
+                    DataPackerGUI::FileManager::GetInstance().SetNodeType(path, DataPacker::Packer::DATA_TYPE::MATERIAL_DATA);
+                    return TRUE;
+                }
             } 
         }
     } 

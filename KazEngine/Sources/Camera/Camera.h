@@ -6,6 +6,8 @@
 #include "./Frustum/Frustum.h"
 #include "../Platform/Common/Mouse/Mouse.h"
 #include "../Vulkan/Vulkan.h"
+#include "../DataBank/DataBank.h"
+#include "../DescriptorSet/DescriptorSet.h"
 
 #if defined(DISPLAY_LOGS)
 #include <iostream>
@@ -29,17 +31,16 @@ namespace Engine
             static inline Camera& GetInstance() { return *Camera::instance; }
 
             inline CAMERA_UBO& GetUniformBuffer() { return this->camera; }  // Récupère la transformation finale
-            void SetPosition(Maths::Vector3 const& position);                      // Modifie la position
-            void Rotate(Maths::Vector3 const& rotation);                           // Rotation de la camera
+            void SetPosition(Maths::Vector3 const& position);               // Modifie la position
+            void Rotate(Maths::Vector3 const& rotation);                    // Rotation de la camera
             inline Frustum const& GetFrustum() { return this->frustum; }    // Récupère le frustum
-            void Update();                                                  // Mise à jour de la caméra
+            void Update(uint8_t frame_index);                                                  // Mise à jour de la caméra
             inline Maths::Vector3 GetFrontVector() const { return {-this->camera.view[2], -this->camera.view[6], -this->camera.view[10]}; }
             inline Maths::Vector3 GetRightVector() const { return {this->camera.view[0], this->camera.view[4], this->camera.view[8]}; }    
             inline Maths::Vector3 GetUpVector() const { return {-this->camera.view[1], -this->camera.view[5], -this->camera.view[9]}; }
             inline float GetNearClipDistance() const { return this->near_clip_distance; }
             inline float GetFarClipDistance() const { return this->far_clip_distance; }
-
-            Maths::Matrix4x4 rotation;                     // Matrice de rotation
+            inline DescriptorSet& GetDescriptorSet(uint8_t frame_index) { return this->descriptor[frame_index]; }
 
             ///////////////////////////
             ///    IMouseListener    //
@@ -73,8 +74,11 @@ namespace Engine
 
             Maths::Matrix4x4 translation;           // Matrice de translation
             Maths::Vector3 position;                // Position de la caméra
+            Maths::Matrix4x4 rotation;              // Matrice de rotation
 
             Frustum frustum;                        // Frustum de la caméra
+            std::vector<DescriptorSet> descriptor;
+            Vulkan::DATA_CHUNK chunk;
 
             Camera();
             virtual ~Camera();

@@ -94,6 +94,13 @@ namespace DataPackerGUI
             void SetItemName(HTREEITEM handle, std::string const& name);
 
             /**
+             * Set the image of an item
+             * @param handle Reference to item
+             * @param image Desired image index
+             */
+            void SetItemImage(HTREEITEM handle, int image);
+
+            /**
              * Remove specified item and all its children
              * @param handle Reference to item
              */

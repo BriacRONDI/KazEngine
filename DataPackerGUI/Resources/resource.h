@@ -42,6 +42,11 @@
 #define ID_CREATE_ROOT_FOLDER           40023
 #define ID_FICHIER_QUITTER              40024
 #define ID_FILE_LEAVE                   40025
+#define ID__SETTYPE                     40026
+#define ID_SETTYPE_IMAGE                40027
+#define ID_SETTYPE_MESH                 40028
+#define ID_SETTYPE_MATERIAL             40029
+#define ID_SETTYPE_BONETREE             40030
 
 // Next default values for new objects
 // 
@@ -49,7 +54,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        115
-#define _APS_NEXT_COMMAND_VALUE         40026
+#define _APS_NEXT_COMMAND_VALUE         40031
 #define _APS_NEXT_CONTROL_VALUE         1002
 #define _APS_NEXT_SYMED_VALUE           101
 #endif

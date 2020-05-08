@@ -256,13 +256,13 @@ namespace Model
      * @param mesh_ubo_offsets[out] Renvoie la liste des offsets des données associées à chaque mesh (ces données sont toutes contenus dans le buffer offsets)
      * @param alignment[in] Alignement mémoire des bone offsets (minUniformBufferOffsetAlignment)
      */
-    void Bone::BuildUBO(std::vector<char>& skeleton, std::vector<char>& offsets, std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment)
+    void Bone::BuildUBO(std::vector<char>& skeleton, std::vector<char>& offsets, std::vector<char>& offsets_ids, std::map<std::string, std::pair<uint32_t, uint32_t>>& dynamic_offsets, uint32_t alignment)
     {
         this->BuildSkeletonSBO(skeleton, IDENTITY_MATRIX, Bone::MAX_BONES_PER_UBO);
 
         std::map<std::string, std::map<uint8_t, Maths::Matrix4x4*>> prepared_bone_offsets_ubo;
-        this->PrepareOffsetUbo(static_cast<uint8_t>(skeleton.size() / sizeof(Maths::Matrix4x4)), prepared_bone_offsets_ubo);
-        this->BuildOffsetsUBO(offsets, prepared_bone_offsets_ubo, mesh_ubo_offsets, alignment);
+        this->PrepareOffsetSBO(static_cast<uint8_t>(skeleton.size() / sizeof(Maths::Matrix4x4)), prepared_bone_offsets_ubo);
+        this->BuildOffsetsSBO(offsets, offsets_ids, prepared_bone_offsets_ubo, dynamic_offsets, alignment);
     }
 
     /**
@@ -271,11 +271,11 @@ namespace Model
      * @param mesh_ubo_offsets[out] Renvoie la liste des offsets des données associées à chaque mesh (ces données sont toutes contenus dans le buffer offsets)
      * @param alignment[in] Alignement mémoire des bone offsets (minUniformBufferOffsetAlignment)
      */
-    void Bone::BuildBoneOffsetsUBO(std::vector<char>& offsets, std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment)
+    void Bone::BuildBoneOffsetsSBO(std::vector<char>& offsets, std::vector<char>& offsets_ids, std::map<std::string, std::pair<uint32_t, uint32_t>>& dynamic_offsets, uint32_t alignment)
     {
         std::map<std::string, std::map<uint8_t, Maths::Matrix4x4*>> prepared_bone_offsets_ubo;
-        this->PrepareOffsetUbo(Bone::MAX_BONES_PER_UBO, prepared_bone_offsets_ubo);
-        this->BuildOffsetsUBO(offsets, prepared_bone_offsets_ubo, mesh_ubo_offsets, alignment);
+        this->PrepareOffsetSBO(Bone::MAX_BONES_PER_UBO, prepared_bone_offsets_ubo);
+        this->BuildOffsetsSBO(offsets, offsets_ids, prepared_bone_offsets_ubo, dynamic_offsets, alignment);
     }
 
     /**
@@ -283,14 +283,14 @@ namespace Model
      * @param max_count[in] limite de bone offsets pour un mesh
      * @param prepared_ubo[out] Clé : nom du mesh, Valeur : std::map => Clé : indice du bone, Valeur bone offset du mesh
      */
-    void Bone::PrepareOffsetUbo(uint8_t max_count, std::map<std::string, std::map<uint8_t, Maths::Matrix4x4*>>& prepared_ubo)
+    void Bone::PrepareOffsetSBO(uint8_t max_count, std::map<std::string, std::map<uint8_t, Maths::Matrix4x4*>>& prepared_ubo)
     {
         if(this->index < max_count && !this->offsets.empty())
             for(auto& offset : this->offsets)
                 prepared_ubo[offset.first][this->index] = &offset.second;
 
         for(auto& child : this->children)
-            child.PrepareOffsetUbo(max_count, prepared_ubo);
+            child.PrepareOffsetSBO(max_count, prepared_ubo);
     }
 
     /**
@@ -298,35 +298,42 @@ namespace Model
      * il faut multiplier chacun des bones auxquels il est associé à cette matrice
      * @param offsets[out] Buffer contenant les offsets des bones
      * @param prepared_bone_offsets_ubo[in] résultat de @ref PrepareOffsetUbo
-     * @param mesh_ubo_offsets[out] Renvoie la liste des offsets des données associées à chaque mesh (ces données sont toutes contenus dans le buffer offsets)
+     * @param mesh_ubo_count[out] Renvoie la liste des offsets des données associées à chaque mesh (ces données sont toutes contenus dans le buffer offsets)
      * @param alignment[in] Alignement mémoire des bone offsets (minUniformBufferOffsetAlignment)
      */
-    void Bone::BuildOffsetsUBO(std::vector<char>& offsets, std::map<std::string, std::map<uint8_t, Maths::Matrix4x4*>> const& prepared_bone_offsets_ubo,
-                               std::map<std::string, uint32_t>& mesh_ubo_offsets, uint32_t alignment)
+    void Bone::BuildOffsetsSBO(std::vector<char>& offsets, std::vector<char>& offsets_ids, std::map<std::string, std::map<uint8_t, Maths::Matrix4x4*>> const& prepared_bone_offsets_ubo,
+                               std::map<std::string, std::pair<uint32_t, uint32_t>>& dynamic_offsets, uint32_t alignment)
     {
-        // Calcul de la taille du buffer final
-        uint32_t output_size = 0;
-        for(auto const& item : prepared_bone_offsets_ubo) {
-            uint32_t buffer_size = static_cast<uint32_t>(sizeof(uint32_t) * 4 * Bone::MAX_BONES_PER_UBO + sizeof(Maths::Matrix4x4) * item.second.size());
-            if(alignment > 0) buffer_size = static_cast<uint32_t>((buffer_size + alignment - 1) & ~(alignment - 1));
-            output_size += buffer_size;
-        }
+        uint32_t offsets_output_size = 0;
 
-        // Création du buffer de sortie
-        offsets.resize(output_size);
-
-        uint32_t write_offset = 0;
         for(auto const& item : prepared_bone_offsets_ubo) {
+
+            uint32_t offsets_buffer_size = static_cast<uint32_t>(sizeof(Maths::Matrix4x4) * item.second.size());
+            if(alignment > 0)  offsets_buffer_size = static_cast<uint32_t>((offsets_buffer_size + alignment - 1) & ~(alignment - 1));
+            offsets_output_size += offsets_buffer_size;
+
+            size_t matrix_offset = offsets.size();
+            size_t ids_offset = offsets_ids.size();
+            offsets.resize(offsets_output_size);
+
+            dynamic_offsets[item.first] = {static_cast<uint32_t>(matrix_offset), static_cast<uint32_t>(ids_offset)};
+
             uint32_t offset_index = 0;
-            mesh_ubo_offsets[item.first] = write_offset;
+            uint8_t id_max = 0;
             for(auto const& bone : item.second) {
-                *reinterpret_cast<uint32_t*>(offsets.data() + write_offset + bone.first * sizeof(uint32_t) * 4) = offset_index;
-                *reinterpret_cast<Maths::Matrix4x4*>(offsets.data() + write_offset + sizeof(uint32_t) * 4 * Bone::MAX_BONES_PER_UBO + offset_index * sizeof(Maths::Matrix4x4)) = *bone.second;
+                *reinterpret_cast<Maths::Matrix4x4*>(offsets.data() + matrix_offset + offset_index * sizeof(Maths::Matrix4x4)) = *bone.second;
+
+                if(bone.first > id_max || !offsets_ids.size()) {
+                    id_max = bone.first;
+                    uint32_t id_segment_size = (id_max + 1) * sizeof(uint32_t);
+                    if(alignment > 0) id_segment_size = static_cast<uint32_t>((id_segment_size + alignment - 1) & ~(alignment - 1));
+                    offsets_ids.resize(ids_offset + id_segment_size);
+                }
+
+                *reinterpret_cast<uint32_t*>(offsets_ids.data() + ids_offset + sizeof(uint32_t) * bone.first) = offset_index;
+
                 offset_index++;
             }
-            uint32_t buffer_size = static_cast<uint32_t>(sizeof(uint32_t) * 4 * Bone::MAX_BONES_PER_UBO + sizeof(Maths::Matrix4x4) * item.second.size());
-            if(alignment > 0) buffer_size = static_cast<uint32_t>((buffer_size + alignment - 1) & ~(alignment - 1));
-            write_offset += buffer_size;
         }
     }
 
@@ -381,7 +388,7 @@ namespace Model
         }
 
         // Écriture du bone
-        if(this->index < max_count) {
+        if(this->index < max_count && !this->offsets.empty()) {
             uint32_t skeleton_offset = base_offset + this->index * sizeof(Maths::Matrix4x4);
             if(skeleton.size() < skeleton_offset + sizeof(Maths::Matrix4x4)) skeleton.resize(skeleton_offset + sizeof(Maths::Matrix4x4));
             *reinterpret_cast<Maths::Matrix4x4*>(skeleton.data() + skeleton_offset) = bone_transfromation;
@@ -418,7 +425,7 @@ namespace Model
         return total_duration;
     }
 
-    void Bone::BuildAnimationSBO(std::vector<char>& skeleton, std::string const& animation, uint16_t& frame_count, uint32_t& bone_per_frame, uint8_t frames_per_second)
+    void Bone::BuildAnimationSBO(std::vector<char>& skeleton, std::string const& animation, uint32_t& frame_count, uint32_t& bone_per_frame, uint8_t frames_per_second)
     {
         std::chrono::milliseconds total_duration = this->GetAnimationTotalDuration(animation);
         std::chrono::milliseconds time_per_frame(1000 / frames_per_second);
@@ -427,7 +434,7 @@ namespace Model
             final_duration =  final_duration + time_per_frame - std::chrono::milliseconds(final_duration.count() % time_per_frame.count());
 
         this->BuildSkeletonSBO(skeleton, IDENTITY_MATRIX, Bone::MAX_BONES_PER_UBO, std::chrono::milliseconds(0), animation, 0);
-        frame_count = static_cast<uint16_t>(final_duration /  time_per_frame);
+        frame_count = static_cast<uint32_t>(final_duration /  time_per_frame);
         bone_per_frame = static_cast<uint32_t>(skeleton.size() / sizeof(Maths::Matrix4x4));
         for(uint16_t i=1; i<frame_count; i++)
             this->BuildSkeletonSBO(skeleton, IDENTITY_MATRIX, Bone::MAX_BONES_PER_UBO, time_per_frame * i, animation, static_cast<uint32_t>(skeleton.size()));

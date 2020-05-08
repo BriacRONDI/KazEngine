@@ -99,13 +99,13 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;DISPLAY_LOGS;VK_USE_PLATFORM_WIN32_KHR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\VulkanSDK\1.2.135.0\Include;$(SolutionDir)LogManager\Sources;$(SolutionDir)Maths\Sources;$(SolutionDir)Tools\Sources;$(SolutionDir)DataPacker\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\VulkanSDK\1.2.135.0\Include;$(SolutionDir)LogManager\Sources;$(SolutionDir)Maths\Sources;$(SolutionDir)Tools\Sources;$(SolutionDir)DataPacker\Sources;$(SolutionDir)EngineModel\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>D:\VulkanSDK\1.2.135.0\Lib;$(SolutionDir)$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;Tools.lib;LogManager.lib;DataPacker.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;Tools.lib;EngineModel.lib;LogManager.lib;DataPacker.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -132,7 +132,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;VK_USE_PLATFORM_WIN32_KHR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\VulkanSDK\1.2.135.0\Include;$(SolutionDir)LogManager\Sources;$(SolutionDir)Maths\Sources;$(SolutionDir)Tools\Sources;$(SolutionDir)DataPacker\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\VulkanSDK\1.2.135.0\Include;$(SolutionDir)LogManager\Sources;$(SolutionDir)Maths\Sources;$(SolutionDir)Tools\Sources;$(SolutionDir)DataPacker\Sources;$(SolutionDir)EngineModel\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
@@ -141,21 +141,29 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>D:\VulkanSDK\1.2.135.0\Lib;$(SolutionDir)$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;Tools.lib;DataPacker.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>vulkan-1.lib;Tools.lib;EngineModel.lib;DataPacker.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Sources\Interaction\Interaction.cpp" />
+    <ClCompile Include="Sources\Interaction\Interaction.h" />
     <ClCompile Include="Sources\Camera\Camera.cpp" />
     <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
     <ClCompile Include="Sources\Core\Core.cpp" />
     <ClCompile Include="Sources\DescriptorSet\DescriptorSet.cpp" />
     <ClCompile Include="Sources\Main.cpp" />
     <ClCompile Include="Sources\ManagedBuffer\ManagedBuffer.cpp" />
+    <ClCompile Include="Sources\Drawable\Drawable.cpp" />
+    <ClCompile Include="Sources\DataBank\DataBank.cpp" />
     <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp" />
     <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp" />
     <ClCompile Include="Sources\Platform\Win32\Console\Console.cpp" />
     <ClCompile Include="Sources\Platform\Win32\Window\Window.cpp" />
+    <ClCompile Include="Sources\Scene\EntityRender\EntityRender.cpp" />
+    <ClCompile Include="Sources\Scene\Entity\Entity.cpp" />
     <ClCompile Include="Sources\Scene\Map\Map.cpp" />
+    <ClCompile Include="Sources\Platform\Common\Timer\Timer.cpp" />
+    <ClCompile Include="Sources\UserInterface\UserInterface.cpp" />
     <ClCompile Include="Sources\Vulkan\Vulkan.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -170,6 +178,9 @@
     <ClInclude Include="Sources\DescriptorSet\DescriptorSet.h" />
     <ClInclude Include="Sources\Engine.h" />
     <ClInclude Include="Sources\ManagedBuffer\ManagedBuffer.h" />
+    <ClInclude Include="Sources\Drawable\Drawable.h" />
+    <ClInclude Include="Sources\DataBank\DataBank.h" />
+    <ClInclude Include="Sources\Platform\Common\Timer\ITimerListener.h" />
     <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h" />
     <ClInclude Include="Sources\Platform\Common\Window\IWindowListener.h" />
     <ClInclude Include="Sources\Platform\Common\Window\Window.h" />
@@ -178,7 +189,11 @@
     <ClInclude Include="Sources\Platform\Common\Mouse\IMouseListener.h" />
     <ClInclude Include="Sources\Platform\Common\Mouse\Mouse.h" />
     <ClInclude Include="Sources\Platform\Win32\Console\Console.h" />
+    <ClInclude Include="Sources\Scene\EntityRender\EntityRender.h" />
+    <ClInclude Include="Sources\Scene\Entity\Entity.h" />
     <ClInclude Include="Sources\Scene\Map\Map.h" />
+    <ClInclude Include="Sources\Platform\Common\Timer\Timer.h" />
+    <ClInclude Include="Sources\UserInterface\UserInterface.h" />
     <ClInclude Include="Sources\Vulkan\Vulkan.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

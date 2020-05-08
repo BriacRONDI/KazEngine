@@ -8,7 +8,7 @@
 namespace Engine
 {
     /**
-     * Cette interface permet à une classe d'écouter les évènements en provenance d'une fenêtre
+     * Allow a client object to recieve window messages
      */
     class IWindowListener
     {
@@ -22,17 +22,17 @@ namespace Engine
             };
 
             /**
-             * Changement d'état
+             * Window state changed
              */
             virtual void StateChanged(E_WINDOW_STATE window_state) = 0;
 
             /**
-             * Redimentionnement de la fenêtre
+             * Window has benn resized
              */
             virtual void SizeChanged(Area<uint32_t> size) = 0;
 
             /**
-             * Destructeur virtuel
+             * Virtual destructor
              */
             virtual ~IWindowListener(){}
     };

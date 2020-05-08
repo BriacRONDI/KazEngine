@@ -16,8 +16,8 @@ namespace Engine
         this->Listeners.clear();
     }
 
-    /*
-     * La souris se déplace
+    /**
+     * The mouse is moving over screen
      */
     void Mouse::MouseMove(unsigned int x, unsigned int y)
     {
@@ -29,8 +29,8 @@ namespace Engine
             listener->MouseMove(x, y);
     }
 
-    /*
-     * Le bouton "button" est enfoncé
+    /**
+     * A button is pushed
      */
     void Mouse::MouseButtonDown(IMouseListener::MOUSE_BUTTON button)
     {
@@ -42,8 +42,8 @@ namespace Engine
             listener->MouseButtonDown(button);
     }
 
-    /*
-     * Le bouton "button" est relâché
+    /**
+     * A button is released
      */
     void Mouse::MouseButtonUp(IMouseListener::MOUSE_BUTTON button)
     {
@@ -55,8 +55,8 @@ namespace Engine
             listener->MouseButtonUp(button);
     }
 
-    /*
-     * La molette est tournée vers le haut
+    /**
+     * The mouse wheel is scrolled up
      */
     void Mouse::MouseWheelUp()
     {
@@ -65,8 +65,8 @@ namespace Engine
             listener->MouseWheelUp();
     }
 
-    /*
-     * La molette est tournée vers le bas
+    /**
+     * The mouse wheel is scrolled down
      */
     void Mouse::MouseWheelDown()
     {
@@ -76,7 +76,7 @@ namespace Engine
     }
 
     /**
-     * Renvoie la position de la souris
+     * Get the mouse cursor position
      */
     Point<uint32_t> const& Mouse::GetPosition()
     {
@@ -84,7 +84,7 @@ namespace Engine
     }
 
     /**
-     * Indique si le bouton est enfoncé
+     * CHeck if a mouse button is pressed
      */
     bool Mouse::IsButtonPressed(IMouseListener::MOUSE_BUTTON button)
     {
@@ -92,7 +92,7 @@ namespace Engine
     }
 
     /**
-     * Contraint la souris à rester dans une zone de l'écran
+     * Confines the cursor to a rectangular area on the screen
      */
     void Mouse::Clip(Point<uint32_t> const& clip_origin, Area<uint32_t> const& clip_size)
     {
@@ -109,7 +109,7 @@ namespace Engine
     }
 
     /**
-     * Libère la souris lorsqu'elle est contrainte à rester dans une zone de l'écran
+     * Free cursor movement
      */
     void Mouse::UnClip()
     {

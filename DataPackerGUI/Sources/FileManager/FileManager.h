@@ -70,6 +70,13 @@ namespace DataPackerGUI
             /// Complete rebuild of TreeView from raw data
             void RefreshTreeView();
 
+            /**
+             * Change the data type of the specified node
+             * @param path Object location
+             * @param type New type
+             */
+            void SetNodeType(std::string const& path, DataPacker::Packer::DATA_TYPE type);
+
             ///////////////////////
             // ITreeViewListener //
             ///////////////////////

@@ -3,6 +3,11 @@
 SETLOCAL
 CALL :COMPILE map.vert
 CALL :COMPILE map.frag
+CALL :COMPILE textured_model.vert
+CALL :COMPILE textured_model.frag
+CALL :COMPILE dynamic_model.vert
+CALL :COMPILE interface.vert
+CALL :COMPILE interface.frag
 pause
 
 :COMPILE

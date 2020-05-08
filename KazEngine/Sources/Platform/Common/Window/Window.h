@@ -82,9 +82,9 @@ namespace Engine
             IWindowListener::E_WINDOW_STATE GetWindowState();
             Surface GetSurface();
             static bool Loop();
-            inline Area<uint32_t> const& GetSize() { return this->Size; }
             void SetTitle(std::string const& title);
             static void SetMouseCursor(CURSOR_TYPE cursor);
+            bool ToggleFullScreen();
 
             void Center();
             void Hide();
@@ -92,11 +92,11 @@ namespace Engine
 
         private:
 
-            // Le ratio de la fenêtre est figé
+            // Lock width/height ratio when resize
             float LockRatio = 4.0f / 3.0f;
 
-            // Taille de la fenêtre
-            Area<uint32_t> Size;
+            // Window position and size
+            Rect<uint32_t> mem_rect;
 
             #if defined(VK_USE_PLATFORM_WIN32_KHR)
             HWND hWnd;                                                          // Windows API HWND

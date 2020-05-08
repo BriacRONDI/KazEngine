@@ -13,4 +13,12 @@ namespace Engine
         T X;
         T Y;
     };
+
+    template <typename T>
+    struct Rect {
+        T X;
+        T Y;
+        T Width;
+        T Height;
+    };
 }

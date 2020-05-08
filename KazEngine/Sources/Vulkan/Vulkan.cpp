@@ -1544,7 +1544,7 @@ namespace Engine
         // Staging buffer
         std::vector<uint32_t> queue_families = {Vulkan::GetGraphicsQueue().index};
         if(Vulkan::GetGraphicsQueue().index != Vulkan::GetTransferQueue().index) queue_families.push_back(Vulkan::GetTransferQueue().index);
-        if(!Vulkan::GetInstance().CreateDataBuffer(this->transfer_staging, 1024 * 1024 * 5,
+        if(!Vulkan::GetInstance().CreateDataBuffer(this->transfer_staging, 1024 * 1024 * 20,
                                                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                                                    queue_families)) return false;
 
@@ -1928,8 +1928,6 @@ namespace Engine
         if(nonCoherentAtomSize * multiple == data_size) flush_size = data_size;
         else flush_size = nonCoherentAtomSize * (multiple + 1);
 
-        // std::memcpy(reinterpret_cast<char*>(staging_buffer.pointer) + destination_offset, data, data_size);
-
         // Flush staging buffer
         VkMappedMemoryRange flush_range = {};
         flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -1986,6 +1984,86 @@ namespace Engine
         }
 
         return flush_size;
+    }
+
+    size_t Vulkan::SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<DATA_CHUNK> chunks)
+    {
+        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
+        VkResult result = vkWaitForFences(this->device, 1, &command_buffer.fence, VK_FALSE, 1000000000);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "SendToBuffer[data] => vkWaitForFences : Timeout" << std::endl;
+            #endif
+            return 0;
+        }
+        vkResetFences(this->device, 1, &command_buffer.fence);
+
+        ////////////////////////////////
+        //   Copie des données vers   //
+        //      le staging buffer     //
+        ////////////////////////////////
+
+        // Flush staging buffer
+        VkMappedMemoryRange flush_range = {};
+        flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        flush_range.pNext = nullptr;
+        flush_range.memory = staging_buffer.memory;
+        flush_range.offset = 0;
+        flush_range.size = VK_WHOLE_SIZE;
+        vkFlushMappedMemoryRanges(this->device, 1, &flush_range);
+
+        ///////////////////////////////////////////
+        //       Envoi des données vers          //
+        //   la mémoire de la carte graphique    //
+        ///////////////////////////////////////////
+
+        // Préparation de la copie de l'image depuis le staging buffer vers un vertex buffer
+        VkCommandBufferBeginInfo command_buffer_begin_info = {};
+        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        command_buffer_begin_info.pNext = nullptr; 
+        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        command_buffer_begin_info.pInheritanceInfo = nullptr;
+
+        vkBeginCommandBuffer(command_buffer.handle, &command_buffer_begin_info);
+
+        size_t bytes_sent = 0;
+        for(auto& chunk : chunks) {
+            VkBufferCopy buffer_copy_info = {};
+            buffer_copy_info.srcOffset = chunk.offset;
+            buffer_copy_info.dstOffset = chunk.offset;
+            buffer_copy_info.size = chunk.range;
+
+            vkCmdCopyBuffer(command_buffer.handle, staging_buffer.handle, buffer.handle, 1, &buffer_copy_info);
+            bytes_sent += chunk.range;
+        }
+
+        vkEndCommandBuffer(command_buffer.handle);
+
+        // Exécution de la commande de copie
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.pNext = nullptr;
+        submit_info.waitSemaphoreCount = 0;
+        submit_info.pWaitSemaphores = nullptr;
+        submit_info.pWaitDstStageMask = nullptr;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffer.handle;
+        submit_info.signalSemaphoreCount = 0;
+        submit_info.pSignalSemaphores = nullptr;
+
+        result = vkQueueSubmit(this->transfer_queue.handle, 1, &submit_info, command_buffer.fence);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            switch(result) {
+                case VK_ERROR_OUT_OF_HOST_MEMORY : std::cout << "SendToBuffer[data] => vkQueueSubmit : VK_ERROR_OUT_OF_HOST_MEMORY" << std::endl;
+                case VK_ERROR_OUT_OF_DEVICE_MEMORY : std::cout << "SendToBuffer[data] => vkQueueSubmit : VK_ERROR_OUT_OF_DEVICE_MEMORY" << std::endl;
+                case VK_ERROR_DEVICE_LOST : std::cout << "SendToBuffer[data] => vkQueueSubmit : VK_ERROR_DEVICE_LOST" << std::endl;
+            }
+            #endif
+            return 0;
+        }
+
+        return bytes_sent;
     }
 
     /**
@@ -2119,6 +2197,13 @@ namespace Engine
         return buffer_size;
     }
 
+    uint32_t Vulkan::ComputeStorageBufferAlignment(uint32_t buffer_size)
+    {
+        size_t min_ubo_alignement = this->physical_device.properties.limits.minStorageBufferOffsetAlignment;
+        if(min_ubo_alignement > 0) buffer_size = static_cast<uint32_t>((buffer_size + min_ubo_alignement - 1) & ~(min_ubo_alignement - 1));
+        return buffer_size;
+    }
+
     /**
     * Lorsque la fenêtre est redimensionnée la swap chain doit être reconstruite
     */
@@ -2204,6 +2289,7 @@ namespace Engine
             #endif
 
             case VK_SUCCESS:
+                break;
             case VK_SUBOPTIMAL_KHR:
                 break;
             case VK_ERROR_OUT_OF_DATE_KHR:
@@ -2298,6 +2384,7 @@ namespace Engine
                     offset += sizeof(Maths::Vector3);
                     break;
 
+                case VERTEX_BINDING_ATTRIBUTE::POSITION_2D :
                 case VERTEX_BINDING_ATTRIBUTE::UV :
                     attribute.format = VK_FORMAT_R32G32_SFLOAT;
                     offset += sizeof(Maths::Vector2);
@@ -2337,7 +2424,8 @@ namespace Engine
                                 std::vector<VkVertexInputAttributeDescription> const& vertex_attribute_descriptions,
                                 std::vector<VkPushConstantRange> const& push_constant_rages,
                                 PIPELINE& pipeline,
-                                VkPolygonMode polygon_mode)
+                                VkPolygonMode polygon_mode,
+                                VkPrimitiveTopology topology)
     {
         VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo = {};
         pPipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2408,7 +2496,7 @@ namespace Engine
         input_assembly_state.pNext = nullptr;
         input_assembly_state.flags = 0;
         input_assembly_state.primitiveRestartEnable = VK_FALSE;
-        input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+        input_assembly_state.topology = topology;
 
         if(polygon_mode == VK_POLYGON_MODE_LINE) input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
 

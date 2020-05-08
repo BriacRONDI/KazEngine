@@ -145,6 +145,13 @@ BEGIN
     BEGIN
         MENUITEM "Delete",                      ID_DELETE_BINARY
         MENUITEM "Rename",                      ID_RENAME_BINARY
+        POPUP "Set type"
+        BEGIN
+            MENUITEM "Image",                       ID_SETTYPE_IMAGE
+            MENUITEM "Mesh",                        ID_SETTYPE_MESH
+            MENUITEM "Material",                    ID_SETTYPE_MATERIAL
+            MENUITEM "Bone tree",                   ID_SETTYPE_BONETREE
+        END
     END
 END
 

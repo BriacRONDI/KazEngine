@@ -182,6 +182,17 @@ namespace DataPackerGUI
         TreeView_SetItem(this->hwnd, &item);
     }
 
+    void TreeView::SetItemImage(HTREEITEM handle, int image)
+    {
+        TV_ITEM item = {};
+        item.hItem = handle;
+        item.mask = TVIF_IMAGE | TVIF_SELECTEDIMAGE;
+        item.iImage = image;
+        item.iSelectedImage = image;
+
+        TreeView_SetItem(this->hwnd, &item);
+    }
+
     std::string TreeView::GetItemName(HTREEITEM handle)
     {
         std::wstring pszText(64, 0);

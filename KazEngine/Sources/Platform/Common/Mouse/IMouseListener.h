@@ -3,7 +3,7 @@
 namespace Engine
 {
     /**
-     * Cette interface permet à une classe d'écouter les évènements en provenance de la souris
+     * Mouse events listener
      */
     class IMouseListener
     {
@@ -15,32 +15,36 @@ namespace Engine
             };
 
             /**
-             * Déplacement de la souris
+             * Mouse move
+             * @param x Mouse cursor position on X axis
+             * @param x Mouse cursor position on Y axis
              */
             virtual void MouseMove(unsigned int x, unsigned int y) = 0;
 
             /**
-             * Bouton enfoncé
+             * Bouton pushed
+             * @param button Mouse button pushed
              */
             virtual void MouseButtonDown(MOUSE_BUTTON button) = 0;
 
             /**
-             * Bouton relâché
+             * Bouton released
+             * @param button Mouse button pushed
              */
             virtual void MouseButtonUp(MOUSE_BUTTON button) = 0;
 
             /**
-             * Molette haut
+             * Mouse wheel scrolled up
              */
             virtual void MouseWheelUp() = 0;
 
             /**
-             * Molette bas
+             * Mouse wheel scrolled down
              */
             virtual void MouseWheelDown() = 0;
 
             /**
-             * Destructeur virtuel
+             * Virtual desctructor
              */
             virtual ~IMouseListener(){};
     };

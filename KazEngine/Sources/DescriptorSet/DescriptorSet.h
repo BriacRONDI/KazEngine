@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../Vulkan/Vulkan.h"
+#include "../ManagedBuffer/ManagedBuffer.h"
 
 namespace Engine
 {
@@ -9,22 +10,27 @@ namespace Engine
         public :
             
             DescriptorSet();
-            ~DescriptorSet();
+            inline ~DescriptorSet() { this->Clear(); }
+            void Clear();
             static VkDescriptorSetLayoutBinding CreateSimpleBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage_flags);
             bool Create(std::vector<VkDescriptorSetLayoutBinding> const& layout_bindings, std::vector<VkDescriptorBufferInfo> const& buffers_infos);
             bool Create(Tools::IMAGE_MAP const& image);
-            inline VkDescriptorSet Get() { return this->descriptor_set; }
+            bool Prepare(std::vector<VkDescriptorSetLayoutBinding> const& layout_bindings, uint32_t max_sets = 1);
+            uint32_t Allocate(std::vector<VkDescriptorBufferInfo> const& buffers_infos);
+            bool PrepareBindlessTexture(uint32_t texture_count = 32);
+            int32_t AllocateTexture(Tools::IMAGE_MAP const& image);
+            inline VkDescriptorSet Get(uint32_t id = 0) { return this->sets[0]; }
 
             inline VkDescriptorSetLayout GetLayout() { return this->layout; }
 
         private :
-            
+
             VkDescriptorPool pool;
             VkDescriptorSetLayout layout;
-            VkDescriptorSet descriptor_set;
+            std::vector<VkDescriptorSet> sets;
             VkSampler sampler;
-
-            Vulkan::IMAGE_BUFFER image_buffer;
+            std::vector<Vulkan::IMAGE_BUFFER> image_buffers;
+            std::vector<VkDescriptorSetLayoutBinding> layout_bindings;
 
             bool CreateSampler();
     };

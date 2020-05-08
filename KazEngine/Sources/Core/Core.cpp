@@ -7,69 +7,71 @@ namespace Engine
         // Map
         if(this->map != nullptr) delete this->map;
 
+        // Entity Render
+        if(this->entity_render != nullptr) delete this->entity_render;
+
         // Camera
         Camera::DestroyInstance();
 
         if(Vulkan::HasInstance()) {
             vkDeviceWaitIdle(Vulkan::GetDevice());
 
-            // Uniform buffers
-            this->core_buffers.clear();
+            // Stop listening to window events
+            Vulkan::GetInstance().GetDrawWindow()->RemoveListener(this);
 
-            // Staging buffers
-            for(auto& staging_buffer : this->staging_buffers) staging_buffer.Clear();
-            this->staging_buffers.clear();
+            // Transfer command buffers
+            for(auto& buffer : this->transfer_buffers)
+                if(buffer.fence != nullptr) vkDestroyFence(Vulkan::GetDevice(), buffer.fence, nullptr);
 
             // Rendering resources
             this->DestroyRenderingResources();
         }
 
+        // DataBank
+        DataBank::DestroyInstance();
+
         this->graphics_command_pool = nullptr;
         this->map                   = nullptr;
+        this->entity_render         = nullptr;
     }
 
     bool Core::Initialize()
     {
+        // Clean all objects
         this->Clear();
-        Camera::CreateInstance();
+        
+        // Listen to window events
+        Vulkan::GetInstance().GetDrawWindow()->AddListener(this);
 
+        // Create a storage for engine objects
+        DataBank::CreateInstance();
+
+        // Alocate vulkan resources
         if(!this->AllocateRenderingResources()) return false;
 
+        // Allocate transfer command buffers
         uint8_t frame_count = Vulkan::GetConcurrentFrameCount();
-        std::vector<uint32_t> queue_families = {Vulkan::GetGraphicsQueue().index};
-        if(Vulkan::GetGraphicsQueue().index != Vulkan::GetTransferQueue().index) queue_families.push_back(Vulkan::GetTransferQueue().index);
-
-        this->core_buffers.resize(frame_count);
-        this->staging_buffers.resize(frame_count);
-
-        for(uint8_t i=0; i<frame_count; i++) {
-
-            // Allocate staging buffers
-            if(!Vulkan::GetInstance().CreateDataBuffer(this->staging_buffers[i], 1024 * 1024 * 5,
-                                                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-                                                       queue_families)) {
-                this->Clear();
-                return false;
-            }
-
-            constexpr auto offset = 0;
-            VkResult result = vkMapMemory(Vulkan::GetDevice(), this->staging_buffers[i].memory, offset, 1024 * 1024 * 5, 0, (void**)&this->staging_buffers[i].pointer);
-            if(result != VK_SUCCESS) {
-                #if defined(DISPLAY_LOGS)
-                std::cout << "Core::Initialize => vkMapMemory(staging_buffer) : Failed" << std::endl;
-                #endif
-                return false;
-            }
-
-            // Allocate core buffers (vertex, uniform, index)
-            if(!this->core_buffers[i].Create(this->staging_buffers[i], 1024 * 1024 * 5, MULTI_USAGE_BUFFER_MASK, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)) {
-                this->Clear();
-                return false;
-            }
+        this->transfer_buffers.resize(frame_count);
+        if(!Vulkan::GetInstance().CreateCommandBuffer(this->graphics_command_pool, this->transfer_buffers)) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "Core::Initialize() => CreateCommandBuffer [transfer] : Failed" << std::endl;
+            #endif
         }
 
-        this->map = new Map(this->graphics_command_pool, this->core_buffers);
+        // Allocate data buffers
+        DataBank::GetManagedBuffer().Allocate(SIZE_MEGABYTE(20), MULTI_USAGE_BUFFER_MASK, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                     frame_count, true, {Vulkan::GetGraphicsQueue().index});
 
+        // Initialize Camera
+        Camera::CreateInstance();
+
+        // Create the map
+        this->map = new Map(this->graphics_command_pool);
+
+        // Create a renderer for entities
+        this->entity_render = new EntityRender(this->graphics_command_pool);
+
+        // Success
         return true;
     }
 
@@ -128,12 +130,6 @@ namespace Engine
 
     bool Core::BuildRenderPass(uint32_t swap_chain_image_index)
     {
-        VkCommandBufferBeginInfo command_buffer_begin_info;
-        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        command_buffer_begin_info.pNext = nullptr;
-        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        command_buffer_begin_info.pInheritanceInfo = nullptr;
-
         Vulkan::RENDERING_RESOURCES const& resources = this->resources[swap_chain_image_index];
         VkCommandBuffer command_buffer = resources.graphics_command_buffer.handle;
         VkFramebuffer frame_buffer = resources.framebuffer;
@@ -146,6 +142,12 @@ namespace Engine
             return false;
         }
         vkResetFences(Vulkan::GetDevice(), 1, &resources.graphics_command_buffer.fence);
+
+        VkCommandBufferBeginInfo command_buffer_begin_info;
+        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        command_buffer_begin_info.pNext = nullptr;
+        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        command_buffer_begin_info.pInheritanceInfo = nullptr;
 
         result = vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
         if(result != VK_SUCCESS) {
@@ -175,15 +177,11 @@ namespace Engine
         vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
         // Exécution des render passes secondaires
-        /*VkCommandBuffer command_buffers[2] = {
-            this->main_render_pass_command_buffers[swap_chain_image_index],
-            Map::GetInstance().BuildCommandBuffer(swap_chain_image_index, frame_buffer)
+        VkCommandBuffer command_buffers[2] = {
+            this->entity_render->GetCommandBuffer(swap_chain_image_index, frame_buffer),
+            this->map->GetCommandBuffer(swap_chain_image_index, frame_buffer)
         };
-        vkCmdExecuteCommands(command_buffer, 2, command_buffers);*/
-        // vkCmdExecuteCommands(command_buffer, 1, &this->main_render_pass_command_buffers[swap_chain_image_index]);
-
-        VkCommandBuffer map_buffer = this->map->GetCommandBuffer(swap_chain_image_index, frame_buffer);
-        vkCmdExecuteCommands(command_buffer, 1, &map_buffer);
+        vkCmdExecuteCommands(command_buffer, 2, command_buffers);
 
         // Fin de la render pass primaire
         vkCmdEndRenderPass(command_buffer);
@@ -219,26 +217,60 @@ namespace Engine
         return true;
     }
 
+    void Core::StateChanged(E_WINDOW_STATE window_state)
+    {
+    }
+
+    void Core::SizeChanged(Area<uint32_t> size)
+    {
+        Vulkan::GetInstance().OnWindowSizeChanged();
+
+        // On recréé la matrice de projection en cas de changement de ratio
+        auto& surface = Vulkan::GetDrawSurface();
+        float aspect_ratio = static_cast<float>(surface.width) / static_cast<float>(surface.height);
+        Camera::GetInstance().GetUniformBuffer().projection = Maths::Matrix4x4::PerspectiveProjectionMatrix(aspect_ratio, 60.0f, 0.1f, 2000.0f);
+
+        // Reconstruction du Frame Buffer et des Command Buffers
+        this->RebuildFrameBuffers();
+
+        // Force rebuild map command buffer
+        this->map->Refresh();
+    }
+
     void Core::Loop()
     {
         static uint32_t current_semaphore_index = (current_semaphore_index + 1) % this->swap_chain_semaphores.size();
         VkSemaphore semaphore = this->swap_chain_semaphores[current_semaphore_index];
 
+        // Acquire image
         uint32_t swap_chain_image_index;
         if(!Vulkan::GetInstance().AcquireNextImage(swap_chain_image_index, semaphore)) return;
-        Vulkan::RENDERING_RESOURCES resources = this->resources[swap_chain_image_index];
 
+        // Update global timer
+        Timer::Update();
+
+        // Update uniform buffer
+        Camera::GetInstance().Update(swap_chain_image_index);
+        this->map->Update(swap_chain_image_index);
+        this->entity_render->Update(swap_chain_image_index);
+        DataBank::GetManagedBuffer().Flush(this->transfer_buffers[swap_chain_image_index], swap_chain_image_index);
+
+        // Build image
         this->BuildRenderPass(swap_chain_image_index);
 
-        if(!Vulkan::GetInstance().PresentImage(resources, semaphore, swap_chain_image_index)) {
+        // Present image
+        if(!Vulkan::GetInstance().PresentImage(this->resources[swap_chain_image_index], semaphore, swap_chain_image_index)) {
 
-            // On recréé la matrice de projection en cas de changement de ration
-            // auto& surface = Vulkan::GetDrawSurface();
-            // float aspect_ratio = static_cast<float>(surface.width) / static_cast<float>(surface.height);
-            // Camera::GetInstance().GetUniformBuffer().projection = Matrix4x4::PerspectiveProjectionMatrix(aspect_ratio, 60.0f, 0.1f, 100.0f);
+            // On recréé la matrice de projection en cas de changement de ratio
+            auto& surface = Vulkan::GetDrawSurface();
+            float aspect_ratio = static_cast<float>(surface.width) / static_cast<float>(surface.height);
+            Camera::GetInstance().GetUniformBuffer().projection = Maths::Matrix4x4::PerspectiveProjectionMatrix(aspect_ratio, 60.0f, 0.1f, 2000.0f);
 
             // Reconstruction du Frame Buffer et des Command Buffers
             this->RebuildFrameBuffers();
+
+            // Force rebuild map command buffer
+            this->map->Refresh();
         }
     }
 }

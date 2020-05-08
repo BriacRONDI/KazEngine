@@ -5,158 +5,171 @@ namespace Engine
     void ManagedBuffer::Clear()
     {
         if(Vulkan::HasInstance()) {
-            if(this->buffer.memory != VK_NULL_HANDLE) vkFreeMemory(Vulkan::GetDevice(), this->buffer.memory, nullptr);
-            if(this->buffer.handle != VK_NULL_HANDLE) vkDestroyBuffer(Vulkan::GetDevice(), this->buffer.handle, nullptr);
+            for(uint8_t i=0; i<this->instance_count; i++) {
+                this->buffers[i].Clear();
+                this->staging_buffers[i].Clear();
+            }
         }
 
-        this->sub_buffer.clear();
         this->free_chunks.clear();
-        this->buffer = {};
-        this->need_flush = false;
-        this->flush_range_start = 0;
-        this->flush_range_end = 0;
-        this->chunck_alignment = 0;
+        this->staging_buffers.clear();
+        this->buffers.clear();
+        this->flush_chunks.clear();
+
+        this->next_free_chunk_id    = 0;
+        this->instance_count        = 0;
     }
 
-    bool ManagedBuffer::Create(Vulkan::STAGING_BUFFER staging_buffer, VkDeviceSize size, VkBufferUsageFlags usage,
-                               VkFlags requirement, std::vector<uint32_t> const& queue_families)
+    bool ManagedBuffer::Allocate(VkDeviceSize size, VkBufferUsageFlags usage, VkFlags requirement, uint8_t instance_count,
+                                 bool allocate_staging_buffer, std::vector<uint32_t> const& queue_families)
     {
-        if(!Vulkan::GetInstance().CreateDataBuffer(this->buffer, size, usage, requirement, queue_families)) {
-            this->Clear();
-            return false;
-        }
+        this->Clear();
 
-        this->staging_buffer = staging_buffer;
+        this->instance_count = instance_count;
+        this->free_chunks.push_back({0, size});
 
-        return true;
-    }
+        this->staging_buffers.resize(instance_count);
+        this->buffers.resize(instance_count);
+        this->flush_chunks.resize(instance_count);
 
-    inline void ManagedBuffer::UpdateFlushRange(size_t start_offset, size_t data_size)
-    {
-        size_t end_offset = start_offset + data_size;
-        this->need_flush = true;
-        if(start_offset < this->flush_range_start) this->flush_range_start = start_offset;
-        if(end_offset > this->flush_range_end) this->flush_range_end = end_offset;
-    }
+        for(uint8_t i=0; i<instance_count; i++) {
+            if(allocate_staging_buffer && !ManagedBuffer::AllocateStagingBuffer(this->staging_buffers[i], queue_families, size)) {
+                this->Clear();
+                return false;
+            }
 
-    void ManagedBuffer::WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize global_offset)
-    {
-        std::memcpy(this->staging_buffer.pointer + global_offset, data, data_size);
-        this->UpdateFlushRange(global_offset, data_size);
-    }
-
-    void ManagedBuffer::WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize relative_offset, uint8_t sub_buffer_id)
-    {
-        size_t start_offset = relative_offset + this->sub_buffer[sub_buffer_id].offset;
-        std::memcpy(this->staging_buffer.pointer + start_offset, data, data_size);
-        this->UpdateFlushRange(start_offset, data_size);
-    }
-
-    bool ManagedBuffer::Flush(Vulkan::COMMAND_BUFFER const& command_buffer)
-    {
-        if(this->need_flush) {
-            size_t bytes_sent = Vulkan::GetInstance().SendToBuffer(this->buffer, command_buffer, this->staging_buffer,
-                                                                   this->flush_range_end - this->flush_range_start, this->flush_range_start);
-
-            if(!bytes_sent) {
-                this->need_flush = false;
-                this->flush_range_start = 0;
-                this->flush_range_end = 0;
+            if(!Vulkan::GetInstance().CreateDataBuffer(this->buffers[i], size, usage, requirement, queue_families)) {
+                this->Clear();
                 return false;
             }
         }
 
-        this->need_flush = false;
-        this->flush_range_start = 0;
-        this->flush_range_end = 0;
         return true;
     }
 
-    bool ManagedBuffer::ReserveChunk(VkDeviceSize& offset, size_t size)
+    bool ManagedBuffer::AllocateStagingBuffer(Vulkan::STAGING_BUFFER& staging_buffer, std::vector<uint32_t> queue_families, VkDeviceSize size)
     {
-        if(!this->free_chunks.size()) return false;
-
-        VkDeviceSize claimed_range = size;
-        if(this->chunck_alignment > 0) claimed_range = static_cast<uint32_t>((size + this->chunck_alignment - 1) & ~(this->chunck_alignment - 1));
-
-        for(auto chunk = this->free_chunks.begin(); chunk<this->free_chunks.end(); chunk++) {
-            if(chunk->range > claimed_range) {
-                offset = chunk->offset;
-                chunk->offset += static_cast<uint32_t>(claimed_range);
-                chunk->range -= claimed_range;
-                return true;
-            }else if(chunk->range == claimed_range) {
-                offset = chunk->offset;
-                this->free_chunks.erase(chunk);
-                return true;
-            }
+        if(!Vulkan::GetInstance().CreateDataBuffer(staging_buffer, size,
+                                                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                                   queue_families)) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "ManagedBuffer::AllocateStagingBuffer => CreateDataBuffer : Failed" << std::endl;
+            #endif
+            return false;
         }
 
-        return false;
+        VkResult result = vkMapMemory(Vulkan::GetDevice(), staging_buffer.memory, 0, size, 0, (void**)&staging_buffer.pointer);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "ManagedBuffer::AllocateStagingBuffer => vkMapMemory : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        std::memset(staging_buffer.pointer, '\0', staging_buffer.size);
+
+        return true;
     }
 
-    bool ManagedBuffer::ReserveChunk(uint32_t& offset, size_t size, uint8_t sub_buffer_id)
+    inline void ManagedBuffer::UpdateFlushRange(size_t start_offset, size_t data_size, uint8_t instance_id)
     {
-        if(!this->free_chunks.size()) return false;
+        std::vector<Vulkan::DATA_CHUNK>& chunks = this->flush_chunks[instance_id];
+
+        auto contiguous_before = chunks.end();
+        auto contiguous_after = chunks.end();
+
+        for(auto chunk_it = chunks.begin(); chunk_it != chunks.end(); chunk_it++) {
+
+            if(chunk_it->offset + chunk_it->range == start_offset) contiguous_before = chunk_it;
+            if(chunk_it->offset == start_offset + data_size) contiguous_after = chunk_it;
+            if(contiguous_before != chunks.end() && contiguous_after != chunks.end()) break;
+        }
+
+        if(contiguous_before != chunks.end() && contiguous_after != chunks.end()) {
+            contiguous_before->range += data_size + contiguous_after->range;
+            chunks.erase(contiguous_after);
+        } else if(contiguous_before != chunks.end()) {
+            contiguous_before->range += data_size;
+        } else if(contiguous_after != chunks.end()) {
+            contiguous_after->range += data_size;
+            contiguous_after->offset -= data_size;
+        } else {
+            chunks.push_back({start_offset, data_size});
+        }
+    }
+
+    void ManagedBuffer::WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize global_offset, uint8_t instance_id)
+    {
+        std::memcpy(this->staging_buffers[instance_id].pointer + global_offset, data, data_size);
+        this->UpdateFlushRange(global_offset, data_size, static_cast<uint8_t>(instance_id));
+    }
+
+    bool ManagedBuffer::Flush(Vulkan::COMMAND_BUFFER const& command_buffer)
+    {
+        for(uint8_t i=0; i<this->instance_count; i++)
+            if(!this->Flush(command_buffer, i)) return false;
+
+        return true;
+    }
+
+    bool ManagedBuffer::Flush(Vulkan::COMMAND_BUFFER const& command_buffer, uint8_t instance_id)
+    {
+        if(!this->flush_chunks[instance_id].empty()) {
+            size_t bytes_sent = Vulkan::GetInstance().SendToBuffer(this->buffers[instance_id], command_buffer, this->staging_buffers[instance_id],
+                                                                   this->flush_chunks[instance_id]);
+            if(!bytes_sent) return false;
+            this->flush_chunks[instance_id].clear();
+        }
+        
+        return true;
+    }
+
+    Vulkan::DATA_CHUNK ManagedBuffer::ReserveChunk(size_t size)
+    {
+        if(!this->free_chunks.size()) return {};
 
         VkDeviceSize claimed_range = size;
-        if(this->chunck_alignment > 0) claimed_range = static_cast<uint32_t>((size + this->chunck_alignment - 1) & ~(this->chunck_alignment - 1));
+        // if(this->chunck_alignment > 0) claimed_range = static_cast<uint32_t>((size + this->chunck_alignment - 1) & ~(this->chunck_alignment - 1));
 
-        for(auto chunk = this->free_chunks.begin(); chunk<this->free_chunks.end(); chunk++) {
-
-            VkDeviceSize available_range;
-            if(chunk->offset + chunk->range < this->sub_buffer[sub_buffer_id].offset
-            || chunk->offset > this->sub_buffer[sub_buffer_id].offset + this->sub_buffer[sub_buffer_id].range) {
-                // Le chunk ne se trouve pas dans la zone du sub-buffer, on passe au suivant
-                continue;
-            }else{
-
-                // Taille du segment disponible à l'allocation
-                available_range = chunk->range;
-
-                // Le chunk démarre avant le sub-buffer
-                if(chunk->offset < this->sub_buffer[sub_buffer_id].offset)
-                    available_range -= this->sub_buffer[sub_buffer_id].offset - chunk->offset;
-
-                // Le chunk se termine après le sub-buffer
-                if(chunk->offset + chunk->range > this->sub_buffer[sub_buffer_id].offset + this->sub_buffer[sub_buffer_id].range)
-                    available_range -= (chunk->offset + chunk->range) - (this->sub_buffer[sub_buffer_id].offset + this->sub_buffer[sub_buffer_id].range);
-            }
-
-            if(available_range >= claimed_range) {
-                
-                bool split_chunk = false;
-                CHUNK new_chunk;
-
-                // Le chunk démarre avant le sub-buffer
-                if(chunk->offset < this->sub_buffer[sub_buffer_id].offset) {
-                    new_chunk.offset = chunk->offset;
-                    new_chunk.range = this->sub_buffer[sub_buffer_id].offset - chunk->offset;
-                    chunk->offset = this->sub_buffer[sub_buffer_id].offset;
-                    chunk->range -= new_chunk.range;
-                    split_chunk = true;
-                }
-
-                offset = static_cast<uint32_t>(chunk->offset - this->sub_buffer[sub_buffer_id].offset);
-                if(chunk->range == claimed_range) {
-
-                    // Le chunk est occupé en totalité, il est détruit
-                    this->free_chunks.erase(chunk);
-                }else{
-
-                    // Le chunk est réduit en taille
-                    chunk->offset += static_cast<uint32_t>(claimed_range);
-                    chunk->range -= claimed_range;
-                }
-
-                // Le chunk a été séparé en deux
-                if(split_chunk) this->free_chunks.push_back(new_chunk);
-
-                // Le chunk est réservé
-                return true;
+        for(auto iter = this->free_chunks.begin(); iter != this->free_chunks.end(); iter++) {
+            Vulkan::DATA_CHUNK& chunk = *iter;
+            if(chunk.range > claimed_range) {
+                Vulkan::DATA_CHUNK result = {chunk.offset, size};
+                chunk.offset += static_cast<uint32_t>(claimed_range);
+                chunk.range -= claimed_range;
+                return result;
+            }else if(chunk.range == claimed_range) {
+                Vulkan::DATA_CHUNK result = {chunk.offset, size};
+                this->free_chunks.erase(iter);
+                return result;
             }
         }
 
-        return false;
+        return {};
+    }
+
+    void ManagedBuffer::FreeChunk(Vulkan::DATA_CHUNK freed)
+    {
+        auto contiguous_before = this->free_chunks.end();
+        auto contiguous_after = this->free_chunks.end();
+
+        for(auto chunk_it = this->free_chunks.begin(); chunk_it != this->free_chunks.end(); chunk_it++) {
+
+            if(chunk_it->offset + chunk_it->range == freed.offset) contiguous_before = chunk_it;
+            if(chunk_it->offset == freed.offset + freed.range) contiguous_after = chunk_it;
+            if(contiguous_before != this->free_chunks.end() && contiguous_after != this->free_chunks.end()) break;
+        }
+
+        if(contiguous_before != this->free_chunks.end() && contiguous_after != this->free_chunks.end()) {
+            contiguous_before->range += freed.range + contiguous_after->range;
+            this->free_chunks.erase(contiguous_after);
+        } else if(contiguous_before != this->free_chunks.end()) {
+            contiguous_before->range += freed.range;
+        } else if(contiguous_after != this->free_chunks.end()) {
+            contiguous_after->range += freed.range;
+            contiguous_after->offset -= freed.range;
+        } else {
+            this->free_chunks.push_back(freed);
+        }
     }
 }

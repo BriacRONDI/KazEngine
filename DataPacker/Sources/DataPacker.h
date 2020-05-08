@@ -129,6 +129,14 @@ namespace DataPacker
             static DATA_TYPE GetNodeType(std::vector<char>& memory, std::string const& path);
 
             /**
+             * Change the type of the specified node
+             * @param memory Data buffer
+             * @param path Specified node
+             * @param type New type
+             */
+            static void SetNodeType(std::vector<char>& memory, std::string const& path, DATA_TYPE type);
+
+            /**
              * Search for serialized data inside a packaged buffer at desired location
              * @param package Packaged buffer
              * @param path Search location

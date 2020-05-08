@@ -296,21 +296,6 @@ namespace DataPackerGUI
                     package_ptr.release();
                     this->need_save = true;
 
-                /*} else if(extension == L"kea") {
-
-                    // Get file name without extension
-                    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-                    std::string filename = converter.to_bytes(Tools::GetFileName(path.substr(0, ext_pos))).data();
-
-                    // Get file content
-                    std::vector<char> kea_data = Tools::GetBinaryFileContents(path);
-
-                    // Copy data to destination path
-                    std::unique_ptr<char> package_ptr(kea_data.data());
-                    DataPacker::Packer::PackToMemory(this->data, dest_path, DataPacker::Packer::DATA_TYPE::MODEL_TREE, filename, package_ptr, static_cast<uint32_t>(kea_data.size()));
-                    package_ptr.release();
-                    this->need_save = true;*/
-
                 } else {
 
                     // Get file name without extension
@@ -372,5 +357,19 @@ namespace DataPackerGUI
         DataPacker::Packer::RemoveNode(this->data, path);
         this->need_save = true;
         this->UpdateTitle();
+    }
+
+    void FileManager::SetNodeType(std::string const& path, DataPacker::Packer::DATA_TYPE type)
+    {
+        DataPacker::Packer::SetNodeType(this->data, path, type);
+
+        int image = -1;
+        if(type == DataPacker::Packer::PARENT_NODE) image = 1;
+        else if(type == DataPacker::Packer::MESH_DATA) image = 2;
+        else if(type == DataPacker::Packer::MATERIAL_DATA) image = 3;
+        else if(type == DataPacker::Packer::IMAGE_FILE) image = 4;
+
+        HTREEITEM item = this->tree_view->FindItem(path);
+        this->tree_view->SetItemImage(item, image);
     }
 }

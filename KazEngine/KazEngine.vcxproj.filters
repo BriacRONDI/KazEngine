@@ -13,6 +13,14 @@
     <ClCompile Include="Sources\Camera\Camera.cpp" />
     <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
     <ClCompile Include="Sources\DescriptorSet\DescriptorSet.cpp" />
+    <ClCompile Include="Sources\Scene\Entity\Entity.cpp" />
+    <ClCompile Include="Sources\Drawable\Drawable.cpp" />
+    <ClCompile Include="Sources\Scene\EntityRender\EntityRender.cpp" />
+    <ClCompile Include="Sources\DataBank\DataBank.cpp" />
+    <ClCompile Include="Sources\Platform\Common\Timer\Timer.cpp" />
+    <ClCompile Include="Sources\Interaction\Interaction.cpp" />
+    <ClCompile Include="Sources\Interaction\Interaction.h" />
+    <ClCompile Include="Sources\UserInterface\UserInterface.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Sources\Vulkan\ListOfFunctions.inl" />
@@ -36,5 +44,12 @@
     <ClInclude Include="Sources\Camera\Frustum\Frustum.h" />
     <ClInclude Include="Sources\DescriptorSet\DescriptorSet.h" />
     <ClInclude Include="Sources\Engine.h" />
+    <ClInclude Include="Sources\Scene\Entity\Entity.h" />
+    <ClInclude Include="Sources\Drawable\Drawable.h" />
+    <ClInclude Include="Sources\Scene\EntityRender\EntityRender.h" />
+    <ClInclude Include="Sources\DataBank\DataBank.h" />
+    <ClInclude Include="Sources\Platform\Common\Timer\Timer.h" />
+    <ClInclude Include="Sources\Platform\Common\Timer\ITimerListener.h" />
+    <ClInclude Include="Sources\UserInterface\UserInterface.h" />
   </ItemGroup>
 </Project>

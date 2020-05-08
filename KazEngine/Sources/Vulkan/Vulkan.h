@@ -74,8 +74,8 @@ namespace Engine
 
                 DATA_BUFFER() : handle(nullptr), memory(nullptr), size(0) {}
                 inline void Clear() {
-                    if(this->handle != VK_NULL_HANDLE) vkDestroyBuffer(Vulkan::GetDevice(), this->handle, nullptr);
-                    if(this->memory != VK_NULL_HANDLE) vkFreeMemory(Vulkan::GetDevice(), this->memory, nullptr); // vkUnmapMemory is implicit
+                    if(this->handle != nullptr) vkDestroyBuffer(Vulkan::GetDevice(), this->handle, nullptr);
+                    if(this->memory != nullptr) vkFreeMemory(Vulkan::GetDevice(), this->memory, nullptr); // vkUnmapMemory is implicit
                     *this = {};
                 }
             };
@@ -144,7 +144,13 @@ namespace Engine
                 COLOR           = 2,
                 NORMAL          = 3,
                 BONE_WEIGHTS    = 4,
-                BONE_IDS        = 5
+                BONE_IDS        = 5,
+                POSITION_2D     = 6
+            };
+
+            struct DATA_CHUNK {
+                VkDeviceSize offset;
+                VkDeviceSize range;
             };
 
             ///////////////////////////////
@@ -167,23 +173,20 @@ namespace Engine
             static inline VkDevice& GetDevice(){ return Vulkan::vulkan->device; }                                           // Récupère le device de l'instance vulkan
             static inline Surface& GetDrawSurface() { return Vulkan::vulkan->draw_surface; }                                // Récupère la surface d'affichage
             static inline VkRenderPass GetRenderPass() { return Vulkan::vulkan->render_pass; }                              // Récupère la render pass
-            // static inline VkCommandPool GetCommandPool() { return Vulkan::vulkan->main_command_pool; }                      // Récupère le command pool principal
             static inline uint8_t GetConcurrentFrameCount() { return Vulkan::vulkan->concurrent_frame_count; }              // Récupère le nombre d'images de la swapchain
             static inline SWAP_CHAIN& GetSwapChain() { return Vulkan::vulkan->swap_chain; }                                 // Récupère la swap chain
             static inline DEVICE_QUEUE& GetGraphicsQueue() { return Vulkan::vulkan->graphics_queue; }                       // Récupère la graphics queue
             static inline DEVICE_QUEUE& GetPresentQueue() { return Vulkan::vulkan->present_queue; }                         // Récupère la present queue
             static inline DEVICE_QUEUE& GetTransferQueue() { return Vulkan::vulkan->transfer_queue; }                       // Récupère la transfer queue
-            // static inline COMMAND_BUFFER& GetMainCommandBuffer() { return Vulkan::vulkan->main_command_buffer; }            // Récupère le buffer de commandes pricinpal
-            // static inline COMMAND_BUFFER& GetTransferCommandBuffer() { return Vulkan::vulkan->transfer_command_buffer; }    // Récupère le buffer de commandes de transferts
             uint32_t ComputeUniformBufferAlignment(uint32_t buffer_size);                                                   // Calcule l'alignement correspondant à un Uniform Buffer
+            uint32_t ComputeStorageBufferAlignment(uint32_t buffer_size);
             VkDeviceSize ComputeRawDataAlignment(size_t data_size);                                                         // Calcule le segment de mémoire occupé par une donnée en tenant compte du nonCoherentAtomSize
             bool AcquireNextImage(uint32_t& swapchain_image_index, VkSemaphore semaphore);
             bool PresentImage(RENDERING_RESOURCES& rendering_resource, VkSemaphore semaphore, uint32_t swap_chain_image_index);
 
             bool AllocateCommandBuffer(VkCommandPool& pool, std::vector<VkCommandBuffer>& buffers, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
-            // Récupère la propriété minUniformBufferOffsetAlignment
-            // static inline VkDeviceSize GetUboAlignment() { return Vulkan::vulkan->physical_device.properties.limits.minUniformBufferOffsetAlignment; }
+            bool OnWindowSizeChanged();
 
             // Récupère les limites de la carte graphique
             static inline VkPhysicalDeviceLimits const& GetDeviceLimits() { return Vulkan::vulkan->physical_device.properties.limits; }
@@ -209,7 +212,7 @@ namespace Engine
 
             // Envoi de données vers un data buffer
             size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, VkDeviceSize data_size, VkDeviceSize destination_offset);
-
+            size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<DATA_CHUNK> chunks);
             // Envoi d'une image vers un buffer d'image
             // bool SendToBuffer(IMAGE_BUFFER& buffer, const void* data, VkDeviceSize data_size, uint32_t width, uint32_t height);
             size_t SendToBuffer(IMAGE_BUFFER& buffer, Tools::IMAGE_MAP const& image);
@@ -223,6 +226,11 @@ namespace Engine
 
             // Création d'un buffer d'image
             IMAGE_BUFFER CreateImageBuffer(VkImageUsageFlags usage, VkImageAspectFlags aspect, uint32_t width, uint32_t height, VkFormat format = VK_FORMAT_R8G8B8A8_UNORM);
+
+            bool TransitionImageLayout(IMAGE_BUFFER& buffer,
+                                       VkAccessFlags source_mask, VkAccessFlags dest_mask,
+                                       VkImageLayout old_layout, VkImageLayout new_layout,
+                                       VkPipelineStageFlags source_stage, VkPipelineStageFlags dest_stage);     // Change le layout d'un buffer d'image
 
             // Création d'un buffer de données
             bool CreateDataBuffer(DATA_BUFFER& buffer, VkDeviceSize size, VkBufferUsageFlags usage, VkFlags requirement, std::vector<uint32_t> const& queue_families = {});
@@ -238,10 +246,10 @@ namespace Engine
                                 std::vector<VkVertexInputAttributeDescription> const& vertex_attribute_descriptions,
                                 std::vector<VkPushConstantRange> const& push_constant_rages,
                                 PIPELINE& pipeline,
-                                VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL);
+                                VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL,
+                                VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 
-            // Reconstruit le staging buffer avec une nouvelle taille
-            // bool ResizeStagingBuffer(VkDeviceSize size);
+            inline Window* GetDrawWindow() { return this->draw_window; }
 
         private:
 
@@ -331,13 +339,7 @@ namespace Engine
             bool CreateRenderPass();                                                                            // Création de la render pass
             bool AllocateTransferResources();
             void ReleaseTransferResources();
-            
-            // bool InitMainBuffers();                                                                             // Initialisation les buffers principaux
-            // void ReleaseMainBuffers();                                                                          // Détruit les buffers principaux
-            bool TransitionImageLayout(IMAGE_BUFFER& buffer,
-                                       VkAccessFlags source_mask, VkAccessFlags dest_mask,
-                                       VkImageLayout old_layout, VkImageLayout new_layout,
-                                       VkPipelineStageFlags source_stage, VkPipelineStageFlags dest_stage);     // Change le layout d'un buffer d'image
+           
 
             //////////////////////
             // HELPER FUNCTIONS //
@@ -361,7 +363,6 @@ namespace Engine
             bool MemoryTypeFromProperties(uint32_t type_bits, VkFlags requirements_mask, uint32_t &type_index);
 
             // Divers
-            bool OnWindowSizeChanged();
             void ReleaseDepthBuffer();
 
             ///////////////////////
