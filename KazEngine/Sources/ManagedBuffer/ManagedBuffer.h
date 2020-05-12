@@ -26,6 +26,7 @@ namespace Engine
             bool Flush(Vulkan::COMMAND_BUFFER const& command_buffer);
             bool Flush(Vulkan::COMMAND_BUFFER const& command_buffer, uint8_t instance_id);
             Vulkan::DATA_CHUNK ReserveChunk(size_t size);
+            Vulkan::DATA_CHUNK ReserveChunk(size_t size, VkDeviceSize alignment);
             void FreeChunk(Vulkan::DATA_CHUNK freed);
             inline uint8_t GetInstanceCount() const { return this->instance_count; }
 

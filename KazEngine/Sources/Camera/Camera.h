@@ -41,6 +41,8 @@ namespace Engine
             inline float GetNearClipDistance() const { return this->near_clip_distance; }
             inline float GetFarClipDistance() const { return this->far_clip_distance; }
             inline DescriptorSet& GetDescriptorSet(uint8_t frame_index) { return this->descriptor[frame_index]; }
+            inline void Freeze() { this->frozen = true; }
+            inline void UnFreeze() { this->frozen = false; }
 
             ///////////////////////////
             ///    IMouseListener    //
@@ -59,6 +61,7 @@ namespace Engine
             float far_clip_distance;
 
             bool rts_mode;
+            bool frozen;
             bool rts_is_scrolling[2] = {false, false};
             float rts_scroll_speed = 2.5f / 1000.0f;
             float rts_scroll_initial_position[2];

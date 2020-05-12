@@ -121,7 +121,9 @@ namespace Engine
             struct RENDERING_RESOURCES {
                 VkFramebuffer framebuffer;
                 VkSemaphore semaphore;
-                Vulkan::COMMAND_BUFFER graphics_command_buffer;
+                VkFence fence;
+                std::vector<VkCommandBuffer> comand_buffers;
+                // Vulkan::COMMAND_BUFFER graphics_command_buffer;
 
                 RENDERING_RESOURCES() : framebuffer(nullptr), semaphore(nullptr) {}
             };
@@ -178,6 +180,7 @@ namespace Engine
             static inline DEVICE_QUEUE& GetGraphicsQueue() { return Vulkan::vulkan->graphics_queue; }                       // Récupère la graphics queue
             static inline DEVICE_QUEUE& GetPresentQueue() { return Vulkan::vulkan->present_queue; }                         // Récupère la present queue
             static inline DEVICE_QUEUE& GetTransferQueue() { return Vulkan::vulkan->transfer_queue; }                       // Récupère la transfer queue
+            static inline VkFormat GetDepthFormat() { return Vulkan::vulkan->depth_format; }
             uint32_t ComputeUniformBufferAlignment(uint32_t buffer_size);                                                   // Calcule l'alignement correspondant à un Uniform Buffer
             uint32_t ComputeStorageBufferAlignment(uint32_t buffer_size);
             VkDeviceSize ComputeRawDataAlignment(size_t data_size);                                                         // Calcule le segment de mémoire occupé par une donnée en tenant compte du nonCoherentAtomSize
@@ -185,6 +188,7 @@ namespace Engine
             bool PresentImage(RENDERING_RESOURCES& rendering_resource, VkSemaphore semaphore, uint32_t swap_chain_image_index);
 
             bool AllocateCommandBuffer(VkCommandPool& pool, std::vector<VkCommandBuffer>& buffers, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+            VkFence CreateFence();
 
             bool OnWindowSizeChanged();
 
@@ -247,7 +251,8 @@ namespace Engine
                                 std::vector<VkPushConstantRange> const& push_constant_rages,
                                 PIPELINE& pipeline,
                                 VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL,
-                                VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+                                VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                                bool blend_state = false);
 
             inline Window* GetDrawWindow() { return this->draw_window; }
 
@@ -303,6 +308,7 @@ namespace Engine
 
             // Depth Buffer
             IMAGE_BUFFER depth_buffer;
+            VkFormat depth_format;
 
             // Render Pass
             VkRenderPass render_pass;

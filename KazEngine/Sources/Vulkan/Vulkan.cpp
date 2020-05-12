@@ -56,15 +56,6 @@ namespace Engine
     #endif
 
     /**
-     * Permet d'accéder à l'instance du singleton
-     */
-    /*Vulkan& Vulkan::GetInstance()
-    {
-        if(Vulkan::vulkan == nullptr) Vulkan::vulkan = new Vulkan();
-        return *Vulkan::vulkan;
-    }*/
-
-    /**
      * Constructeur
      */
     Vulkan::Vulkan()
@@ -84,6 +75,7 @@ namespace Engine
         this->render_pass               = VK_NULL_HANDLE;
         this->concurrent_frame_count    = 0;
         this->creating_swap_chain       = false;
+        this->depth_format              = VK_FORMAT_UNDEFINED;
     }
 
     /**
@@ -260,6 +252,9 @@ namespace Engine
         // Récupère le handle des device queues
         this->GetDeviceQueues();
 
+        // On recherche le meilleur format d'image pour le depth buffer
+        this->depth_format = this->FindDepthFormat();
+
         // Création de la swap chain
         if(init_status == INIT_RETURN_CODE::SUCCESS && !this->CreateSwapChain())
             init_status = INIT_RETURN_CODE::SWAP_CHAIN_CREATION_FAILURE;
@@ -282,7 +277,7 @@ namespace Engine
                 VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
                 this->draw_surface.width,
                 this->draw_surface.height,
-                this->FindDepthFormat()
+                this->depth_format
             );
 
             if(this->depth_buffer.view == VK_NULL_HANDLE)
@@ -1129,7 +1124,7 @@ namespace Engine
         attachment[0].finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         attachment[0].flags = 0;
 
-        attachment[1].format = this->FindDepthFormat();
+        attachment[1].format = this->depth_format;
         attachment[1].samples = VK_SAMPLE_COUNT_1_BIT;
         attachment[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachment[1].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -1453,24 +1448,33 @@ namespace Engine
 
         // Création des fences
         if(create_fence) {
-            VkFenceCreateInfo fence_create_info = {};
-            fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-            fence_create_info.pNext = nullptr;
-            fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+            for(auto& command_buffer : command_buffers) {
 
-            for(size_t i=0; i<command_buffers.size(); i++) {
-
-                VkResult result = vkCreateFence(this->device, &fence_create_info, nullptr, &command_buffers[i].fence);
-                if(result != VK_SUCCESS) {
-                    #if defined(DISPLAY_LOGS)
-                    std::cout << "CreateCommandBuffer => vkCreateFence : Failed" << std::endl;
-                    #endif
-                    return false;
-                }
+                command_buffer.fence = this->CreateFence();
+                if(command_buffer.fence == nullptr) return false;
             }
         }
 
         return true;
+    }
+
+    VkFence Vulkan::CreateFence()
+    {
+        VkFenceCreateInfo fence_create_info = {};
+        fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fence_create_info.pNext = nullptr;
+        fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        VkFence fence;
+        VkResult result = vkCreateFence(this->device, &fence_create_info, nullptr, &fence);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "Vulkan::CreateFence() => vkCreateFence : Failed" << std::endl;
+            #endif
+            return nullptr;
+        }
+
+        return fence;
     }
 
     /*
@@ -2225,7 +2229,7 @@ namespace Engine
                 VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT,
                 this->draw_surface.width,
                 this->draw_surface.height,
-                this->FindDepthFormat());
+                this->depth_format);
 
         // Recréation de la Swap Chain
         this->CreateSwapChain();
@@ -2311,15 +2315,15 @@ namespace Engine
         VkSubmitInfo submit_info = {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit_info.pNext = nullptr;
-        submit_info.commandBufferCount = 1;
+        submit_info.commandBufferCount = static_cast<uint32_t>(resources.comand_buffers.size());
         submit_info.waitSemaphoreCount = 1;
-        submit_info.pCommandBuffers = &resources.graphics_command_buffer.handle;
+        submit_info.pCommandBuffers = resources.comand_buffers.data();
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = &resources.semaphore;
         submit_info.pWaitSemaphores = &semaphore;
         submit_info.pWaitDstStageMask = &wait_dst_stage_mask;
 
-        VkResult result = vkQueueSubmit(this->graphics_queue.handle, 1, &submit_info, resources.graphics_command_buffer.fence);
+        VkResult result = vkQueueSubmit(this->graphics_queue.handle, 1, &submit_info, resources.fence);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             std::cout << "DrawScene => vkQueueSubmit : Failed" << std::endl;
@@ -2425,7 +2429,8 @@ namespace Engine
                                 std::vector<VkPushConstantRange> const& push_constant_rages,
                                 PIPELINE& pipeline,
                                 VkPolygonMode polygon_mode,
-                                VkPrimitiveTopology topology)
+                                VkPrimitiveTopology topology,
+                                bool blend_state)
     {
         VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo = {};
         pPipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -2517,22 +2522,29 @@ namespace Engine
 
         if(polygon_mode == VK_POLYGON_MODE_LINE) rasterization_state.cullMode = VK_CULL_MODE_NONE;
 
-        VkPipelineColorBlendAttachmentState att_state[1];
-        att_state[0].colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-        att_state[0].blendEnable = VK_FALSE;
-        att_state[0].alphaBlendOp = VK_BLEND_OP_ADD;
-        att_state[0].colorBlendOp = VK_BLEND_OP_ADD;
-        att_state[0].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-        att_state[0].dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-        att_state[0].srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        att_state[0].dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        VkPipelineColorBlendAttachmentState blend_attachment;
+        blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        blend_attachment.colorBlendOp = VK_BLEND_OP_ADD;
+        blend_attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        blend_attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+        blend_attachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+        if(blend_state) {
+            blend_attachment.blendEnable = VK_TRUE;
+		    blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+		    blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        }else{
+            blend_attachment.blendEnable = VK_FALSE;
+		    blend_attachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+		    blend_attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+        }
 
         VkPipelineColorBlendStateCreateInfo color_blend_state;
         color_blend_state.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
         color_blend_state.pNext = nullptr;
         color_blend_state.flags = 0;
         color_blend_state.attachmentCount = 1;
-        color_blend_state.pAttachments = att_state;
+        color_blend_state.pAttachments = &blend_attachment;
         color_blend_state.logicOpEnable = VK_FALSE;
         color_blend_state.logicOp = VK_LOGIC_OP_COPY;
         color_blend_state.blendConstants[0] = 0.0f;

@@ -148,8 +148,46 @@ namespace Engine
         return {};
     }
 
+    Vulkan::DATA_CHUNK ManagedBuffer::ReserveChunk(size_t size, VkDeviceSize alignment)
+    {
+        if(!this->free_chunks.size()) return {};
+
+        VkDeviceSize claimed_range = (size + alignment - 1) & ~(alignment - 1);
+
+        for(auto iter = this->free_chunks.begin(); iter != this->free_chunks.end(); iter++) {
+            Vulkan::DATA_CHUNK& chunk = *iter;
+
+            VkDeviceSize aligned_offset = (chunk.offset + alignment - 1) & ~(alignment - 1);
+            if(aligned_offset == chunk.offset) {
+                if(chunk.range > claimed_range) {
+                    Vulkan::DATA_CHUNK result = {chunk.offset, size};
+                    chunk.offset += static_cast<uint32_t>(claimed_range);
+                    chunk.range -= claimed_range;
+                    return result;
+                }else if(chunk.range == claimed_range) {
+                    Vulkan::DATA_CHUNK result = {chunk.offset, size};
+                    this->free_chunks.erase(iter);
+                    return result;
+                }
+            }else{
+                VkDeviceSize new_range = aligned_offset - chunk.offset;
+                VkDeviceSize available_range = chunk.range - new_range;
+                if(available_range >= claimed_range) {
+                    
+                    Vulkan::DATA_CHUNK result = {aligned_offset, claimed_range};
+                    chunk.range = new_range;
+                    if(available_range != claimed_range) this->free_chunks.push_back({aligned_offset + claimed_range, available_range - claimed_range});
+                    return result;
+                }
+            }
+        }
+
+        return {};
+    }
+
     void ManagedBuffer::FreeChunk(Vulkan::DATA_CHUNK freed)
     {
+        if(!freed.range) return;
         auto contiguous_before = this->free_chunks.end();
         auto contiguous_after = this->free_chunks.end();
 

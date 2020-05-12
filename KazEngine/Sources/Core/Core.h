@@ -7,6 +7,7 @@
 #include "../Scene/EntityRender/EntityRender.h"
 #include "../DataBank/DataBank.h"
 #include "../Platform/Common/Timer/Timer.h"
+#include "../UserInterface/UserInterface.h"
 
 #if defined(DISPLAY_LOGS)
 #include <iostream>
@@ -41,6 +42,7 @@ namespace Engine
             std::vector<Vulkan::RENDERING_RESOURCES> resources;
             Map* map;
             EntityRender* entity_render;
+            UserInterface* user_interface;
             std::vector<VkSemaphore> swap_chain_semaphores;
             std::vector<Vulkan::COMMAND_BUFFER> transfer_buffers;
 

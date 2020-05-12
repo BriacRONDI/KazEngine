@@ -1,5 +1,6 @@
 #include <memory>
 #include <array>
+#include <initializer_list>
 
 #if !defined(DEGREES_TO_RADIANS)
 #define DEGREES_TO_RADIANS 0.01745329251994329576923690768489f
@@ -85,8 +86,6 @@ namespace Maths
             inline VEC_TYPE(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {}
             #endif
             /// @}
-
-            //Vector<N>(std::array<double, 3> const& other);
 
             /// Get reference or Set Vector3[i]
             inline float& operator[](uint32_t index){ return this->value[index]; }

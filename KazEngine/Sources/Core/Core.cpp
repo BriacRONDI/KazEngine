@@ -4,6 +4,9 @@ namespace Engine
 {
     void Core::Clear()
     {
+        // User Interface
+        if(this->user_interface != nullptr) delete this->user_interface;
+
         // Map
         if(this->map != nullptr) delete this->map;
 
@@ -31,6 +34,7 @@ namespace Engine
         DataBank::DestroyInstance();
 
         this->graphics_command_pool = nullptr;
+        this->user_interface        = nullptr;
         this->map                   = nullptr;
         this->entity_render         = nullptr;
     }
@@ -71,6 +75,11 @@ namespace Engine
         // Create a renderer for entities
         this->entity_render = new EntityRender(this->graphics_command_pool);
 
+        // Create the user interface
+        this->user_interface = new UserInterface(this->graphics_command_pool);
+        for(uint8_t i=0; i<frame_count; i++)
+            this->resources[i].comand_buffers.push_back(this->user_interface->BuildCommandBuffer(i, this->resources[i].framebuffer));
+
         // Success
         return true;
     }
@@ -94,8 +103,11 @@ namespace Engine
 
         // Graphics Command Buffers
         std::vector<Vulkan::COMMAND_BUFFER> graphics_buffers(frame_count);
-        if(!Vulkan::GetInstance().CreateCommandBuffer(this->graphics_command_pool, graphics_buffers)) return false;
-        for(uint32_t i=0; i<this->resources.size(); i++) this->resources[i].graphics_command_buffer = graphics_buffers[i];
+        if(!Vulkan::GetInstance().CreateCommandBuffer(this->graphics_command_pool, graphics_buffers, VK_COMMAND_BUFFER_LEVEL_PRIMARY, false)) return false;
+        for(uint32_t i=0; i<this->resources.size(); i++) {
+            this->resources[i].comand_buffers.push_back(graphics_buffers[i].handle);
+            this->resources[i].fence = Vulkan::GetInstance().CreateFence();
+        }
 
         // SwapChain semaphores
         this->swap_chain_semaphores.resize(frame_count);
@@ -111,10 +123,10 @@ namespace Engine
         for(auto& semaphore : this->swap_chain_semaphores) vkDestroySemaphore(Vulkan::GetDevice(), semaphore, nullptr);
         this->swap_chain_semaphores.clear();
 
-        // Graphics Command Buffers
-        std::vector<Vulkan::COMMAND_BUFFER> graphics_buffers(this->resources.size());
-        for(uint32_t i=0; i<this->resources.size(); i++) graphics_buffers[i] = this->resources[i].graphics_command_buffer;
-        Vulkan::GetInstance().ReleaseCommandBuffer(this->graphics_command_pool, graphics_buffers);
+        for(auto& resource : this->resources)
+            if(resource.fence != nullptr) vkDestroyFence(Vulkan::GetDevice(), resource.fence, nullptr);
+            
+        if(this->graphics_command_pool != nullptr) vkDestroyCommandPool(Vulkan::GetDevice(), this->graphics_command_pool, nullptr);
 
         for(uint32_t i=0; i<this->resources.size(); i++) {
             
@@ -131,17 +143,17 @@ namespace Engine
     bool Core::BuildRenderPass(uint32_t swap_chain_image_index)
     {
         Vulkan::RENDERING_RESOURCES const& resources = this->resources[swap_chain_image_index];
-        VkCommandBuffer command_buffer = resources.graphics_command_buffer.handle;
+        VkCommandBuffer command_buffer = resources.comand_buffers[0];
         VkFramebuffer frame_buffer = resources.framebuffer;
 
-        VkResult result = vkWaitForFences(Vulkan::GetDevice(), 1, &resources.graphics_command_buffer.fence, VK_FALSE, 1000000000);
+        VkResult result = vkWaitForFences(Vulkan::GetDevice(), 1, &resources.fence, VK_FALSE, 1000000000);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
-            std::cout << "PresentImage => vkWaitForFences : Timeout" << std::endl;
+            std::cout << "Core::BuildRenderPass => vkWaitForFences : Timeout" << std::endl;
             #endif
             return false;
         }
-        vkResetFences(Vulkan::GetDevice(), 1, &resources.graphics_command_buffer.fence);
+        vkResetFences(Vulkan::GetDevice(), 1, &resources.fence);
 
         VkCommandBufferBeginInfo command_buffer_begin_info;
         command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -233,8 +245,9 @@ namespace Engine
         // Reconstruction du Frame Buffer et des Command Buffers
         this->RebuildFrameBuffers();
 
-        // Force rebuild map command buffer
+        // Force rebuild external command buffers
         this->map->Refresh();
+        this->user_interface->Refresh();
     }
 
     void Core::Loop()
@@ -253,10 +266,12 @@ namespace Engine
         Camera::GetInstance().Update(swap_chain_image_index);
         this->map->Update(swap_chain_image_index);
         this->entity_render->Update(swap_chain_image_index);
+        this->user_interface->Update(swap_chain_image_index);
         DataBank::GetManagedBuffer().Flush(this->transfer_buffers[swap_chain_image_index], swap_chain_image_index);
 
         // Build image
         this->BuildRenderPass(swap_chain_image_index);
+        this->user_interface->BuildCommandBuffer(swap_chain_image_index, this->resources[swap_chain_image_index].framebuffer);
 
         // Present image
         if(!Vulkan::GetInstance().PresentImage(this->resources[swap_chain_image_index], semaphore, swap_chain_image_index)) {
@@ -269,8 +284,9 @@ namespace Engine
             // Reconstruction du Frame Buffer et des Command Buffers
             this->RebuildFrameBuffers();
 
-            // Force rebuild map command buffer
+            // Force rebuild command buffers
             this->map->Refresh();
+            this->user_interface->Refresh();
         }
     }
 }
