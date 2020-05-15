@@ -4,6 +4,7 @@
 #include <Maths.h>
 #include <Tools.h>
 #include "../Platform/Common/Window/Window.h"
+#include "../ManagedBuffer/Chunk/Chunk.h"
 
 #define ENGINE_VERSION VK_MAKE_VERSION(0, 0, 1)
 #define ENGINE_NAME "KazEngine"
@@ -150,10 +151,10 @@ namespace Engine
                 POSITION_2D     = 6
             };
 
-            struct DATA_CHUNK {
+            /*struct DATA_CHUNK {
                 VkDeviceSize offset;
                 VkDeviceSize range;
-            };
+            };*/
 
             ///////////////////////////////
             // Interface IWindowListener //
@@ -216,7 +217,7 @@ namespace Engine
 
             // Envoi de données vers un data buffer
             size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, VkDeviceSize data_size, VkDeviceSize destination_offset);
-            size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<DATA_CHUNK> chunks);
+            size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks);
             // Envoi d'une image vers un buffer d'image
             // bool SendToBuffer(IMAGE_BUFFER& buffer, const void* data, VkDeviceSize data_size, uint32_t width, uint32_t height);
             size_t SendToBuffer(IMAGE_BUFFER& buffer, Tools::IMAGE_MAP const& image);

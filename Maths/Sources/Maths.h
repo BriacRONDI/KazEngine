@@ -10,7 +10,7 @@
 #include "./Vector/Vector.hpp"
 
 #include "./Matrix/Matrix.hpp"
-#include "./Others/Others.h"
+#include "./Others/Others.hpp"
 
 namespace Maths
 {

@@ -76,14 +76,6 @@ namespace Engine
     }
 
     /**
-     * Get the mouse cursor position
-     */
-    Point<uint32_t> const& Mouse::GetPosition()
-    {
-        return this->position;
-    }
-
-    /**
      * CHeck if a mouse button is pressed
      */
     bool Mouse::IsButtonPressed(IMouseListener::MOUSE_BUTTON button)

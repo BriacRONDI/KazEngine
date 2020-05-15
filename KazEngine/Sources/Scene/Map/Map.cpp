@@ -5,18 +5,17 @@ namespace Engine
     void Map::Clear()
     {
         this->need_update.clear();
-        this->properties = {};
 
         if(Vulkan::HasInstance()) {
 
             vkDeviceWaitIdle(Vulkan::GetDevice());
 
             // Chunks
-            DataBank::GetManagedBuffer().FreeChunk(this->map_ubo_chunk);
+            DataBank::GetManagedBuffer().FreeChunk(this->entity_ids_chunk);
             DataBank::GetManagedBuffer().FreeChunk(this->map_vbo_chunk);
 
             // Descriptor Sets
-            for(auto& descriptor : this->descriptors) descriptor.Clear();
+            this->entities_descriptor.Clear();
             this->texture_descriptor.Clear();
 
             // Pipeline
@@ -28,9 +27,10 @@ namespace Engine
         }
 
         this->index_buffer_offet = 0;
+        this->selection          = {};
     }
 
-    Map::Map(VkCommandPool command_pool) : command_pool(command_pool)
+    Map::Map(VkCommandPool command_pool, Chunk entity_data_chunk) : command_pool(command_pool), entity_data_chunk(entity_data_chunk)
     {
         this->Clear();
 
@@ -47,7 +47,51 @@ namespace Engine
 
         this->map_vbo_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_KILOBYTE(5));
 
+        this->SetupDescriptorSets();
         this->CreatePipeline();
+    }
+
+    bool Map::SetupDescriptorSets()
+    {
+        std::vector<VkDescriptorSetLayoutBinding> bindings;
+        uint8_t instance_count = DataBank::GetManagedBuffer().GetInstanceCount();
+
+        /////////////
+        // TEXTURE //
+        /////////////
+
+        auto data_buffer = Tools::GetBinaryFileContents("data.kea");
+        auto image = DataBank::GetImageFromPackage(data_buffer, "/grass_tile2");
+        this->texture_descriptor.Create(image);
+
+        ////////////
+        // Entity //
+        ////////////
+
+        VkDeviceSize alignment = Vulkan::GetInstance().GetDeviceLimits().minUniformBufferOffsetAlignment;
+        this->entity_ids_chunk = DataBank::GetManagedBuffer().ReserveChunk(sizeof(uint32_t) * 10, alignment);
+
+        // Not enough memory
+        if(!this->entity_ids_chunk.range) return false;
+
+        bindings = {
+            DescriptorSet::CreateSimpleBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT),
+            DescriptorSet::CreateSimpleBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT)
+        };
+
+        bool success = this->entities_descriptor.Prepare(bindings, instance_count);
+        if(!success) return false;
+
+        for(uint8_t i=0; i<instance_count; i++) {
+            uint32_t id = this->entities_descriptor.Allocate({
+                DataBank::GetManagedBuffer().GetBufferInfos(this->entity_ids_chunk, i),
+                DataBank::GetManagedBuffer().GetBufferInfos(this->entity_data_chunk, i)
+            });
+
+            if(id == UINT32_MAX) return false;
+        }
+
+        return true;
     }
 
     bool Map::CreatePipeline()
@@ -56,24 +100,11 @@ namespace Engine
         shader_stages[0] = Vulkan::GetInstance().LoadShaderModule("./Shaders/map.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
         shader_stages[1] = Vulkan::GetInstance().LoadShaderModule("./Shaders/map.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
-        size_t chunk_size = Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(MAP_UBO));
-        this->map_ubo_chunk = DataBank::GetManagedBuffer().ReserveChunk(chunk_size);
-
-        auto binding = DescriptorSet::CreateSimpleBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
-        uint8_t frame_count = Vulkan::GetConcurrentFrameCount();
-        this->descriptors.resize(frame_count);
-        for(uint8_t i=0; i<this->descriptors.size(); i++) 
-            this->descriptors[i].Create({binding}, {DataBank::GetManagedBuffer().GetBufferInfos(this->map_ubo_chunk, i)});
-
         VkVertexInputBindingDescription vertex_binding_description;
         auto vertex_attribute_description = Vulkan::CreateVertexInputDescription({Vulkan::POSITION, Vulkan::UV}, vertex_binding_description);
-        
-        auto data_buffer = Tools::GetBinaryFileContents("data.kea");
-        auto image = DataBank::GetImageFromPackage(data_buffer, "/grass_tile2");
-        this->texture_descriptor.Create(image);
 
         bool success = Vulkan::GetInstance().CreatePipeline(
-            true, {Camera::GetInstance().GetDescriptorSet(0).GetLayout(), this->texture_descriptor.GetLayout(), this->descriptors[0].GetLayout()},
+            true, {Camera::GetInstance().GetDescriptorSet(0).GetLayout(), this->texture_descriptor.GetLayout(), this->entities_descriptor.GetLayout()},
             shader_stages, vertex_binding_description, vertex_attribute_description, {}, this->pipeline
         );
 
@@ -105,16 +136,27 @@ namespace Engine
         DataBank::GetManagedBuffer().WriteData(vertex_data.data(), this->index_buffer_offet, this->map_vbo_chunk.offset, frame_index);
 
         std::vector<uint32_t> index_buffer = {0, 2, 1, 0, 3, 2};
-        DataBank::GetManagedBuffer().WriteData(index_buffer.data(), index_buffer.size() * sizeof(uint32_t), this->map_vbo_chunk.offset + this->index_buffer_offet, frame_index);
+        DataBank::GetManagedBuffer().WriteData(index_buffer.data(), index_buffer.size() * sizeof(uint32_t),
+                                               this->map_vbo_chunk.offset + this->index_buffer_offet, frame_index);
 
         return true;
+    }
+
+    void Map::UpdateSelection(UNITS_SELECTION selection)
+    {
+        this->selection = selection;
+
+        DataBank::GetManagedBuffer().WriteData(&this->selection.count, sizeof(uint32_t), this->entity_ids_chunk.offset);
+        
+        if(!selection.ids.empty())
+            DataBank::GetManagedBuffer().WriteData(this->selection.ids.data(), sizeof(uint32_t) * this->selection.ids.size(),
+                                                   this->entity_ids_chunk.offset + sizeof(uint32_t) * 4);
     }
 
     void Map::Update(uint8_t frame_index)
     {
         if(!this->need_update[frame_index]) return;
         this->UpdateVertexBuffer(frame_index);
-        DataBank::GetManagedBuffer().WriteData(&this->properties, sizeof(MAP_UBO), this->map_ubo_chunk.offset, frame_index);
     }
 
     VkCommandBuffer Map::GetCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer)
@@ -123,6 +165,7 @@ namespace Engine
         if(!this->need_update[frame_index]) return command_buffer;
 
         this->need_update[frame_index] = false;
+        // vkResetCommandPool(Vulkan::GetDevice(), this->command_pool, 0);
 
         VkCommandBufferInheritanceInfo inheritance_info = {};
         inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
@@ -163,16 +206,16 @@ namespace Engine
 
 
         auto camera_set = Camera::GetInstance().GetDescriptorSet(frame_index).Get();
-        std::vector<VkDescriptorSet> bind_descriptor_sets = {camera_set, this->texture_descriptor.Get(), this->descriptors[frame_index].Get()};
+        std::vector<VkDescriptorSet> bind_descriptor_sets = {camera_set, this->texture_descriptor.Get(), this->entities_descriptor.Get()};
 
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline.handle);
 
-        // vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline.layout, 0, 1, &camera_set, 0, nullptr);
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline.layout, 0,
                                 static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(), 0, nullptr);
 
         vkCmdBindVertexBuffers(command_buffer, 0, 1, &DataBank::GetManagedBuffer().GetBuffer(frame_index).handle, &this->map_vbo_chunk.offset);
-        vkCmdBindIndexBuffer(command_buffer, DataBank::GetManagedBuffer().GetBuffer(frame_index).handle, this->map_vbo_chunk.offset + this->index_buffer_offet, VK_INDEX_TYPE_UINT32);
+        vkCmdBindIndexBuffer(command_buffer, DataBank::GetManagedBuffer().GetBuffer(frame_index).handle,
+                             this->map_vbo_chunk.offset + this->index_buffer_offet, VK_INDEX_TYPE_UINT32);
         vkCmdDrawIndexed(command_buffer, 6, 1, 0, 0, 0);
 
         result = vkEndCommandBuffer(command_buffer);

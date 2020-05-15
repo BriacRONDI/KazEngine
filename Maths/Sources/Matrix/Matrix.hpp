@@ -91,6 +91,16 @@ namespace Maths
                 };
             }
 
+            inline Vector4 operator*(Vector3 const& vertex) const
+            {
+                return {
+                    this->value[0] * vertex[0] + this->value[4] * vertex[1] + this->value[8]  * vertex[2] + this->value[12],
+                    this->value[1] * vertex[0] + this->value[5] * vertex[1] + this->value[9]  * vertex[2] + this->value[13],
+                    this->value[2] * vertex[0] + this->value[6] * vertex[1] + this->value[10] * vertex[2] + this->value[14],
+                    this->value[3] * vertex[0] + this->value[7] * vertex[1] + this->value[11] * vertex[2] + this->value[15]
+                };
+            }
+
             static inline Matrix4x4 PerspectiveProjectionMatrix(float const aspect_ratio, float const field_of_view, float const near_clip, float const far_clip)
             {
                 float f = 1.0f / std::tan(field_of_view * 0.5f * DEGREES_TO_RADIANS);
@@ -149,6 +159,22 @@ namespace Maths
                     0.0f,
                     1.0f
                 });
+            }
+
+            static inline Matrix4x4 RotationMatrix(Vector3 const& direction, Vector3 const& up = {0.0f, 1.0f, 0.0f})
+            {
+                Vector3 xaxis = up.Cross(direction);
+                xaxis.Normalize();
+
+                Vector3 yaxis = direction.Cross(xaxis);
+                yaxis.Normalize();
+
+                return {
+                    xaxis.x,       xaxis.y,     xaxis.z,       0.0f,
+                    yaxis.x,       yaxis.y,     yaxis.z,       0.0f,
+                    -direction.x, -direction.y, -direction.z,  0.0f,
+                    0.0f,          0.0f,        0.0f,          1.0f
+                };
             }
 
             static inline Matrix4x4 RotationMatrix(float angle, Vector3 const& axis, bool normalize_axis, bool to_radians)

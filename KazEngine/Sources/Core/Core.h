@@ -18,7 +18,7 @@
 
 namespace Engine
 {
-    class Core : public IWindowListener
+    class Core : public IWindowListener, public IUserInteraction
     {
         public :
 
@@ -32,8 +32,15 @@ namespace Engine
             // IWindowListener //
             /////////////////////
 
-            virtual void StateChanged(E_WINDOW_STATE window_state);
+            virtual inline void StateChanged(E_WINDOW_STATE window_state) {};
             virtual void SizeChanged(Area<uint32_t> size);
+
+            //////////////////////
+            // IUserInteraction //
+            //////////////////////
+
+            virtual void SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
+            virtual void ToggleSelection(Point<uint32_t> mouse_position);
 
         private :
 

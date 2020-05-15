@@ -42,6 +42,27 @@ namespace Engine
         return layout_binding;
     }
 
+    /*std::vector<DescriptorSet::DESCRIPTOR_SET_BINDING> DescriptorSet::CreateBindings(std::vector<BINDING_INFOS> infos)
+    {
+        std::vector<DESCRIPTOR_SET_BINDING> return_value;
+
+        for(uint32_t i=0; i<infos.size(); i++) {
+            
+            VkDescriptorSetLayoutBinding binding;
+            binding.binding = i;
+            binding.descriptorType = infos[i].type;
+            binding.stageFlags = infos[i].stage;
+            binding.descriptorCount = 1;
+            binding.pImmutableSamplers = nullptr;
+
+            Vulkan::DATA_CHUNK chunk = DataBank::GetInstance().GetManagedBuffer().ReserveChunk(infos[i].size);
+
+            return_value.push_back({binding, chunk});
+        }
+
+        return return_value;
+    }*/
+
     bool DescriptorSet::CreateSampler()
     {
         VkSamplerCreateInfo sampler_create_info = {};
@@ -388,6 +409,139 @@ namespace Engine
         #endif
 
         return set_id;
+    }
+
+    bool DescriptorSet::Create(std::vector<BINDING_INFOS> infos, uint32_t max_sets)
+    {
+        this->Clear();
+        this->bindings.resize(infos.size());
+
+        std::vector<VkDescriptorSetLayoutBinding> layout_bindings;
+        for(uint32_t i=0; i<infos.size(); i++) {
+            
+            this->bindings[i].layout.binding = i;
+            this->bindings[i].layout.descriptorType = infos[i].type;
+            this->bindings[i].layout.stageFlags = infos[i].stage;
+            this->bindings[i].layout.descriptorCount = 1;
+            this->bindings[i].layout.pImmutableSamplers = nullptr;
+
+            VkDeviceSize alignment = 0;
+            switch(this->bindings[i].layout.descriptorType) {
+                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER :
+                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC :
+                    alignment = Vulkan::GetInstance().GetDeviceLimits().minUniformBufferOffsetAlignment;
+                    break;
+
+                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
+                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC :
+                    alignment = Vulkan::GetInstance().GetDeviceLimits().minStorageBufferOffsetAlignment;
+                    break;
+            }
+
+            this->bindings[i].chunks.resize(max_sets);
+            for(uint32_t j=0; j<max_sets; j++) {
+                this->bindings[i].chunks[j] = DataBank::GetInstance().GetManagedBuffer().ReserveChunk(infos[i].size, alignment);
+                if(!this->bindings[i].chunks[j].range) {
+                    this->Clear();
+                    return false;
+                }
+            }
+            layout_bindings.push_back(this->bindings[i].layout);
+        }
+
+        ////////////////////////
+        // Création du layout //
+        ////////////////////////
+
+        VkDescriptorSetLayoutCreateInfo descriptor_layout;
+        descriptor_layout.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptor_layout.flags = 0;
+        descriptor_layout.pNext = nullptr;
+        descriptor_layout.bindingCount = static_cast<uint32_t>(layout_bindings.size());
+        descriptor_layout.pBindings = layout_bindings.data();
+
+        VkResult result = vkCreateDescriptorSetLayout(Vulkan::GetDevice(), &descriptor_layout, nullptr, &this->layout);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "DescriptorSet::PrepareDescriptor => vkCreateDescriptorSetLayout : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        //////////////////////
+        // Création du pool //
+        //////////////////////
+
+        std::vector<VkDescriptorPoolSize> pool_sizes(layout_bindings.size());
+        for(uint8_t i=0; i<pool_sizes.size(); i++) {
+            pool_sizes[i].type = layout_bindings[i].descriptorType;
+            pool_sizes[i].descriptorCount = layout_bindings[i].descriptorCount * max_sets;
+        }
+
+		VkDescriptorPoolCreateInfo poolInfo = {};
+		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		poolInfo.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
+		poolInfo.pPoolSizes = pool_sizes.data();
+        poolInfo.maxSets = max_sets;
+
+		result = vkCreateDescriptorPool(Vulkan::GetDevice(), &poolInfo, nullptr, &this->pool);
+		if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "DescriptorSet::PrepareDescriptor => vkCreateDescriptorPool : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        ///////////////////////////////////
+        // Allocation du Descriptor Sets //
+        ///////////////////////////////////
+
+        std::vector<VkDescriptorSetLayout> layouts(max_sets, this->layout);
+        VkDescriptorSetAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.pNext = nullptr;
+        alloc_info.descriptorPool = this->pool;
+        alloc_info.descriptorSetCount = max_sets;
+        alloc_info.pSetLayouts = layouts.data();
+
+        this->sets.resize(max_sets);
+        result = vkAllocateDescriptorSets(Vulkan::GetDevice(), &alloc_info, this->sets.data());
+        if(result != VK_SUCCESS) {
+            this->Clear();
+            #if defined(DISPLAY_LOGS)
+            std::cout <<"DescriptorSet::Create => vkAllocateDescriptorSets : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        ///////////////////////////////////
+        // Mise à jour du Descriptor Set //
+        ///////////////////////////////////
+
+        std::vector<VkWriteDescriptorSet> writes(this->bindings.size() * max_sets);
+        for(uint8_t i=0; i<bindings.size(); i++) {
+            for(uint32_t j=0; j<max_sets; j++) {
+                writes[i * max_sets + j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writes[i * max_sets + j].pNext = nullptr;
+                writes[i * max_sets + j].dstBinding = this->bindings[i].layout.binding;
+                writes[i * max_sets + j].dstArrayElement = 0;
+                writes[i * max_sets + j].descriptorCount = this->bindings[i].layout.descriptorCount;
+                writes[i * max_sets + j].descriptorType = this->bindings[i].layout.descriptorType;
+                writes[i * max_sets + j].pTexelBufferView = nullptr;
+                writes[i * max_sets + j].pImageInfo = nullptr;
+                writes[i * max_sets + j].dstSet = this->sets[j];
+                writes[i * max_sets + j].pBufferInfo = &DataBank::GetInstance().GetManagedBuffer().GetBufferInfos(this->bindings[i].chunks[j], j);
+            }
+        }
+
+        // Mise à jour
+        vkUpdateDescriptorSets(Vulkan::GetDevice(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+
+        #if defined(DISPLAY_LOGS)
+        std::cout <<"DescriptorSet::Create : Success" << std::endl;
+        #endif
+
+        return true;
     }
 
     bool DescriptorSet::PrepareBindlessTexture(uint32_t texture_count)

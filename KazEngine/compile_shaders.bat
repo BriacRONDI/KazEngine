@@ -8,6 +8,8 @@ CALL :COMPILE textured_model.frag
 CALL :COMPILE dynamic_model.vert
 CALL :COMPILE interface.vert
 CALL :COMPILE interface.frag
+CALL :COMPILE cross.vert
+CALL :COMPILE cross.frag
 pause
 
 :COMPILE

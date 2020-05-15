@@ -25,7 +25,7 @@ namespace Engine
             void MouseButtonUp(IMouseListener::MOUSE_BUTTON button);
             void MouseWheelUp();
             void MouseWheelDown();
-            Point<uint32_t> const& GetPosition();
+            inline Point<uint32_t>& GetPosition() { return this->position; }
             bool IsButtonPressed(IMouseListener::MOUSE_BUTTON button);
             void Clip(Point<uint32_t> const& clip_origin, Area<uint32_t> const& clip_size);
             void UnClip();

@@ -32,8 +32,9 @@ namespace Engine
         this->skeleton_descriptor.Clear();
         this->texture_descriptor.Clear();
 
-        this->entity_data_chunk             = {};
-        this->entity_ids_chunk              = {};
+        this->entity_data_chunk                 = {};
+        this->entity_ids_chunk                  = {};
+        this->next_drawable_bind_dynamic_offset = 0;
     }
 
     EntityRender::EntityRender(VkCommandPool command_pool) : command_pool(command_pool)
@@ -64,9 +65,8 @@ namespace Engine
         // Entity //
         ////////////
 
-        uint32_t entity_limit = 100;
-        this->entity_ids_chunk = DataBank::GetManagedBuffer().ReserveChunk(sizeof(uint32_t) * entity_limit);        // 100 entity id
-        this->entity_data_chunk = DataBank::GetManagedBuffer().ReserveChunk(Entity::GetUboSize() * entity_limit);   // 100 entity data
+        this->entity_ids_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_KILOBYTE(5));
+        this->entity_data_chunk = DataBank::GetManagedBuffer().ReserveChunk(Entity::GetUboSize() * 100);
 
         // Not enough memory
         if(!this->entity_ids_chunk.range || !this->entity_data_chunk.range) return false;
@@ -203,6 +203,33 @@ namespace Engine
             Model::Mesh::RENDER_POSITION | Model::Mesh::RENDER_UV | Model::Mesh::RENDER_TEXTURE | Model::Mesh::RENDER_SKELETON
         });
 
+        /////////////////
+        // Debug Cross //
+        /////////////////
+
+        shader_stages = {
+            Vulkan::GetInstance().LoadShaderModule("./Shaders/cross.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
+            Vulkan::GetInstance().LoadShaderModule("./Shaders/cross.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
+        };
+
+        vertex_attribute_description = Vulkan::CreateVertexInputDescription({Vulkan::POSITION}, vertex_binding_description);
+
+        success = Vulkan::GetInstance().CreatePipeline(
+            true, {camera_layout, entities_layout}, shader_stages,
+            vertex_binding_description, vertex_attribute_description, {}, pipeline,
+            VK_POLYGON_MODE_LINE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST
+        );
+
+        for(auto& stage : shader_stages) vkDestroyShaderModule(Vulkan::GetDevice(), stage.module, nullptr);
+        shader_stages.clear();
+        
+        if(!success) return false;
+        
+        this->render_groups.push_back({
+            pipeline,
+            Model::Mesh::RENDER_POSITION
+        });
+
         return true;
     }
 
@@ -301,7 +328,6 @@ namespace Engine
                 // Search for loaded mesh //
                 ////////////////////////////
 
-                bool mesh_found = false;
                 for(auto& drawable_bind : this->render_groups[i].drawables) {
                     if(drawable_bind.mesh.IsSameMesh(mesh)) {
 
@@ -311,104 +337,102 @@ namespace Engine
                                 this->entity_ids_chunk.offset + drawable_bind.dynamic_offsets[0] + id_offet);
                                 // this->entity_ids_chunk.offset + drawable_bind.entity_ids_dynamic_offset + id_offet);
                         drawable_bind.entities.push_back(&entity);
-                        mesh_found = true;
-                        break;
+                        
+                        // Finish
+                        this->entities.push_back(&entity);
+                        return true;
                     }
                 }
 
                 // No loaded mesh found
+                DRAWABLE_BIND new_bind;
 
-                if(!mesh_found) {
-                    DRAWABLE_BIND new_bind;
+                //////////////////
+                // Load Texture //
+                //////////////////
 
-                    //////////////////
-                    // Load Texture //
-                    //////////////////
-
-                    if(mesh->render_mask & Model::Mesh::RENDER_TEXTURE) {
-                        for(auto& material : mesh->materials) {
-                            if(DataBank::HasMaterial(material.first)) {
-                                if(!DataBank::GetMaterial(material.first).texture.empty()) {
-                                    if(!this->textures.count(DataBank::GetMaterial(material.first).texture)
-                                       && !this->LoadTexture(DataBank::GetMaterial(material.first).texture))
-                                            return false;
+                if(mesh->render_mask & Model::Mesh::RENDER_TEXTURE) {
+                    for(auto& material : mesh->materials) {
+                        if(DataBank::HasMaterial(material.first)) {
+                            if(!DataBank::GetMaterial(material.first).texture.empty()) {
+                                if(!this->textures.count(DataBank::GetMaterial(material.first).texture)
+                                    && !this->LoadTexture(DataBank::GetMaterial(material.first).texture))
+                                        return false;
                                     
-                                    new_bind.texture_id = this->textures[DataBank::GetMaterial(material.first).texture];
-                                }
-                            }else{
-                                #if defined(DISPLAY_LOGS)
-                                std::cout << "Dynamics::AddEntity() => Material[" + material.first + "] : Not in data bank" << std::endl;
-                                #endif
-                                return false;
+                                new_bind.texture_id = this->textures[DataBank::GetMaterial(material.first).texture];
                             }
+                        }else{
+                            #if defined(DISPLAY_LOGS)
+                            std::cout << "Dynamics::AddEntity() => Material[" + material.first + "] : Not in data bank" << std::endl;
+                            #endif
+                            return false;
                         }
                     }
-
-                    ///////////////
-                    // Load Mesh //
-                    ///////////////
-
-                    if(!new_bind.mesh.Load(mesh, this->textures)) {
-                        #if defined(DISPLAY_LOGS)
-                        std::cout << "Dynamics::AddEntity() => Drawable.Load(" + mesh->name + ") : Failed" << std::endl;
-                        #endif
-                        return false;
-                    }
-
-                    ///////////////////
-                    // Load Skeleton //
-                    ///////////////////
-
-                    if(mesh->render_mask & Model::Mesh::RENDER_SKELETON) {
-
-                        if(!this->skeletons.count(mesh->skeleton) && !this->LoadSkeleton(mesh->skeleton)) return false;
-
-                        // new_bind.skeleton_offsets_dynamic_offset = this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].first;
-                        // new_bind.skeleton_ids_dynamic_offset = this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].second;
-                        new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.end(), {
-                            this->skeletons[mesh->skeleton].skeleton_dynamic_offset,
-                            this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].first,
-                            this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].second,
-                            this->skeletons[mesh->skeleton].animations_data_dynamic_offset
-                        });
-                        new_bind.has_skeleton = true;
-                    }else{
-                        new_bind.has_skeleton = false;
-                    }
-
-                    ///////////////////////
-                    // Setup loaded mesh //
-                    ///////////////////////
-
-                    new_bind.entities.push_back(&entity);
-                    uint32_t buffer_size = Vulkan::GetInstance().ComputeUniformBufferAlignment(static_cast<uint32_t>(10 * sizeof(uint32_t)));
-                    // new_bind.entity_ids_dynamic_offset = buffer_size * i;
-                    new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.begin(), {buffer_size * i});
-                    // DataBank::GetManagedBuffer().WriteData(&entity.GetId(), sizeof(uint32_t), this->entity_ids_chunk.offset + new_bind.entity_ids_dynamic_offset);
-                    DataBank::GetManagedBuffer().WriteData(&entity.GetId(), sizeof(uint32_t), this->entity_ids_chunk.offset + new_bind.dynamic_offsets[0]);
-
-                    // Add loaded mesh
-                    this->render_groups[i].drawables.push_back(new_bind);
                 }
+
+                ///////////////
+                // Load Mesh //
+                ///////////////
+
+                if(!new_bind.mesh.Load(mesh, this->textures)) {
+                    #if defined(DISPLAY_LOGS)
+                    std::cout << "Dynamics::AddEntity() => Drawable.Load(" + mesh->name + ") : Failed" << std::endl;
+                    #endif
+                    return false;
+                }
+
+                ///////////////////
+                // Load Skeleton //
+                ///////////////////
+
+                if(mesh->render_mask & Model::Mesh::RENDER_SKELETON) {
+
+                    if(!this->skeletons.count(mesh->skeleton) && !this->LoadSkeleton(mesh->skeleton)) return false;
+
+                    new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.end(), {
+                        this->skeletons[mesh->skeleton].skeleton_dynamic_offset,
+                        this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].first,
+                        this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].second,
+                        this->skeletons[mesh->skeleton].animations_data_dynamic_offset
+                    });
+                    new_bind.has_skeleton = true;
+                }else{
+                    new_bind.has_skeleton = false;
+                }
+
+                ///////////////////////
+                // Setup loaded mesh //
+                ///////////////////////
+
+                new_bind.entities.push_back(&entity);
+                new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.begin(), {this->next_drawable_bind_dynamic_offset});
+                DataBank::GetManagedBuffer().WriteData(&entity.GetId(), sizeof(uint32_t), this->entity_ids_chunk.offset + new_bind.dynamic_offsets[0]);
+
+                this->next_drawable_bind_dynamic_offset += Vulkan::GetInstance().ComputeUniformBufferAlignment(static_cast<uint32_t>(10 * sizeof(uint32_t)));
+
+                // Add loaded mesh
+                this->render_groups[i].drawables.push_back(new_bind);
+
+                // Finish
+                this->entities.push_back(&entity);
+                return true;
             }
         }
 
-        this->entities.push_back(&entity);
-
-        return true;
+        return false;
     }
 
     void EntityRender::Update(uint8_t frame_index)
     {
         for(auto entity : this->entities) {
             entity->Update(this->entity_data_chunk.offset, frame_index);
-            // this->render_buffer.WriteData(&entity->properties, this->entity_ubo_size, this->entity_data_chunk.offset + entity->data_offset, frame_index);
         }
     }
 
     VkCommandBuffer EntityRender::GetCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer)
     {
         VkCommandBuffer command_buffer = this->command_buffers[frame_index];
+        // vkResetCommandPool(Vulkan::GetDevice(), this->command_pool, 0);
 
         VkCommandBufferInheritanceInfo inheritance_info = {};
         inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
@@ -454,28 +478,29 @@ namespace Engine
             auto pipeline = this->render_groups[i].pipeline;
             vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
 
-            std::vector<VkDescriptorSet> bind_descriptor_sets = {
-                this->texture_descriptor.Get(),
+            std::vector<VkDescriptorSet> bind_descriptor_sets_1 = {
+                // this->texture_descriptor.Get(),
                 Camera::GetInstance().GetDescriptorSet(frame_index).Get()
             };
 
+            if(this->render_groups[i].mask & Model::Mesh::RENDER_TEXTURE)
+                bind_descriptor_sets_1.insert(bind_descriptor_sets_1.begin(), this->texture_descriptor.Get());
+
+
             vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0,
-                                    static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(), 0, nullptr);
+                                    static_cast<uint32_t>(bind_descriptor_sets_1.size()), bind_descriptor_sets_1.data(), 0, nullptr);
 
             for(auto& bind : this->render_groups[i].drawables) {
             
-                std::vector<VkDescriptorSet> bind_descriptor_sets = {this->entities_descriptor.Get(frame_index)};
-                // std::vector<uint32_t> dynamic_offsets = {bind.entity_ids_dynamic_offset};
+                std::vector<VkDescriptorSet> bind_descriptor_sets_2 = {this->entities_descriptor.Get(frame_index)};
 
-                if(bind.has_skeleton) {
-                    bind_descriptor_sets.push_back(this->skeleton_descriptor.Get(frame_index));
-                    // dynamic_offsets.insert(dynamic_offsets.end(), {bind.skeleton_ids_dynamic_offset, bind.skeleton_offsets_dynamic_offset});
-                }
+                if(bind.has_skeleton)
+                    bind_descriptor_sets_2.push_back(this->skeleton_descriptor.Get(frame_index));
 
-                vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->render_groups[i].pipeline.layout, 2,
-                                static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(),
+                vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->render_groups[i].pipeline.layout,
+                                static_cast<uint32_t>(bind_descriptor_sets_1.size()),
+                                static_cast<uint32_t>(bind_descriptor_sets_2.size()), bind_descriptor_sets_2.data(),
                                 static_cast<uint32_t>(bind.dynamic_offsets.size()), bind.dynamic_offsets.data());
-                                // static_cast<uint32_t>(dynamic_offsets.size()), dynamic_offsets.data());
 
                 bind.mesh.Render(command_buffer, DataBank::GetManagedBuffer().GetBuffer(frame_index).handle,
                                  pipeline.layout, static_cast<uint32_t>(bind.entities.size()));
@@ -492,5 +517,93 @@ namespace Engine
 
         // Succès
         return command_buffer;
+    }
+
+    std::vector<Entity*> EntityRender::SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end)
+    {
+        auto& camera = Engine::Camera::GetInstance();
+        Area<float> const& near_plane_size = camera.GetFrustum().GetNearPlaneSize();
+        Maths::Vector3 camera_position = -camera.GetUniformBuffer().position;
+        Surface& draw_surface = Engine::Vulkan::GetDrawSurface();
+        Area<float> float_draw_surface = {static_cast<float>(draw_surface.width), static_cast<float>(draw_surface.height)};
+
+        float x1 = static_cast<float>(box_start.X) - float_draw_surface.Width / 2.0f;
+        float x2 = static_cast<float>(box_end.X) - float_draw_surface.Width / 2.0f;
+
+        float y1 = static_cast<float>(box_start.Y) - float_draw_surface.Height / 2.0f;
+        float y2 = static_cast<float>(box_end.Y) - float_draw_surface.Height / 2.0f;
+
+        x1 /= float_draw_surface.Width / 2.0f;
+        x2 /= float_draw_surface.Width / 2.0f;
+        y1 /= float_draw_surface.Height / 2.0f;
+        y2 /= float_draw_surface.Height / 2.0f;
+
+        float left_x = std::min<float>(x1, x2);
+        float right_x = std::max<float>(x1, x2);
+        float top_y = std::min<float>(y1, y2);
+        float bottom_y = std::max<float>(y1, y2);
+
+        Maths::Vector3 base_near = camera_position + camera.GetFrontVector() * camera.GetNearClipDistance();
+        Maths::Vector3 base_with = camera.GetRightVector() * near_plane_size.Width;
+        Maths::Vector3 base_height = camera.GetUpVector() * near_plane_size.Height;
+
+        Maths::Vector3 top_left_position = base_near + base_with * left_x - base_height * top_y;
+        Maths::Vector3 bottom_right_position = base_near + base_with * right_x - base_height * bottom_y;
+
+        Maths::Vector3 top_left_ray = (top_left_position - camera_position).Normalize();
+        Maths::Vector3 bottom_right_ray = (bottom_right_position - camera_position).Normalize();
+
+        Maths::Plane left_plane = {top_left_position, top_left_ray.Cross(-camera.GetUpVector())};
+        Maths::Plane right_plane = {bottom_right_position, bottom_right_ray.Cross(camera.GetUpVector())};
+        Maths::Plane top_plane = {top_left_position, top_left_ray.Cross(-camera.GetRightVector())};
+        Maths::Plane bottom_plane = {bottom_right_position, bottom_right_ray.Cross(camera.GetRightVector())};
+
+        std::vector<Entity*> return_value;
+        for(Entity* entity : this->entities) {
+            if(entity->InSelectBox(left_plane, right_plane, top_plane, bottom_plane)) {
+                entity->properties.selected = VK_TRUE;
+                return_value.push_back(entity);
+            }else{
+                entity->properties.selected = VK_FALSE;
+            }
+        }
+
+        return return_value;
+    }
+
+    Entity* EntityRender::ToggleSelection(Point<uint32_t> mouse_position)
+    {
+        auto& camera = Engine::Camera::GetInstance();
+        Area<float> const& near_plane_size = camera.GetFrustum().GetNearPlaneSize();
+        Maths::Vector3 camera_position = -camera.GetUniformBuffer().position;
+        Surface& draw_surface = Engine::Vulkan::GetDrawSurface();
+        Area<float> float_draw_surface = {static_cast<float>(draw_surface.width), static_cast<float>(draw_surface.height)};
+
+        Point<float> real_mouse = {
+            static_cast<float>(mouse_position.X) - float_draw_surface.Width / 2.0f,
+            static_cast<float>(mouse_position.Y) - float_draw_surface.Height / 2.0f
+        };
+
+        real_mouse.X /= float_draw_surface.Width / 2.0f;
+        real_mouse.Y /= float_draw_surface.Height / 2.0f;
+
+        Maths::Vector3 mouse_world_position = camera_position + camera.GetFrontVector() * camera.GetNearClipDistance() + camera.GetRightVector()
+                                            * near_plane_size.Width * real_mouse.X - camera.GetUpVector() * near_plane_size.Height * real_mouse.Y;
+        Maths::Vector3 mouse_ray = mouse_world_position - camera_position;
+        mouse_ray = mouse_ray.Normalize();
+
+        Entity* selected_entity = nullptr;
+        for(Entity* entity : this->entities) {
+            if(selected_entity != nullptr) {
+                entity->properties.selected = VK_FALSE;
+            }else if(entity->IntersectRay(camera_position, mouse_ray)) {
+                selected_entity = entity;
+                entity->properties.selected = VK_TRUE;
+            }else {
+                entity->properties.selected = VK_FALSE;
+            }
+        }
+
+        return selected_entity;
     }
 }

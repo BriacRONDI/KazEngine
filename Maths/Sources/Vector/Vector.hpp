@@ -1,6 +1,5 @@
 #include <memory>
 #include <array>
-#include <initializer_list>
 
 #if !defined(DEGREES_TO_RADIANS)
 #define DEGREES_TO_RADIANS 0.01745329251994329576923690768489f
@@ -102,7 +101,6 @@ namespace Maths
             /// Equality operator
             inline bool operator==(VEC_TYPE const& other) const { return this->value == other.value; }
 
-
             /// Base math operator
             /// @{
             #if VECTOR_N == 2
@@ -123,8 +121,8 @@ namespace Maths
             inline float Length() const { return std::sqrt(this->x * this->x + this->y * this->y + this->z * this->z); }
             inline float Dot(VEC_TYPE const& other) const { return this->x * other.x + this->y * other.y + this->z * other.z; }
             inline VEC_TYPE Cross(VEC_TYPE const& other) const { return {this->y * other.z - other.y * this->z, this->z * other.x - other.z * this->x, this->x * other.y - other.x * this->y }; }
-            static inline VEC_TYPE Min(VEC_TYPE const& a, VEC_TYPE const& b){ return { (a.x<b.x)?a.x:b.x, (a.y<b.y)?a.y:b.y, (a.z<b.z)?a.z:b.z }; }
-            static inline VEC_TYPE Max(VEC_TYPE const& a, VEC_TYPE const& b){ return { (a.x>b.x)?a.x:b.x, (a.y>b.y)?a.y:b.y, (a.z>b.z)?a.z:b.z }; }
+            static inline VEC_TYPE Min(VEC_TYPE const& a, VEC_TYPE const& b){ return { std::min<float>(a.x, b.x), std::min<float>(a.y, b.y), std::min<float>(a.z, b.z) }; }
+            static inline VEC_TYPE Max(VEC_TYPE const& a, VEC_TYPE const& b){ return { std::max<float>(a.x, b.x), std::max<float>(a.y, b.y), std::max<float>(a.z, b.z) }; }
             #elif VECTOR_N == 4
             inline VEC_TYPE operator*(VEC_TYPE const& other) const { return { this->x * other.x, this->y * other.y, this->z * other.z, this->w * other.w }; }
             inline VEC_TYPE operator*(float const scalar) const { return { this->x * scalar, this->y * scalar, this->z * scalar, this->w * scalar }; }
@@ -170,6 +168,8 @@ namespace Maths
     #elif VECTOR_N == 3
     inline VEC_TYPE operator/(float const scalar, VEC_TYPE const& vector) { return { scalar / vector.x, scalar / vector.y, scalar / vector.z }; }
     inline VEC_TYPE operator*(float const scalar, VEC_TYPE const& vector) { return { scalar * vector.x, scalar * vector.y, scalar * vector.z }; }
+    inline VEC_TYPE operator-(float const scalar, VEC_TYPE const& vector) { return { scalar - vector.x, scalar - vector.y, scalar - vector.z }; }
+    inline VEC_TYPE operator+(float const scalar, VEC_TYPE const& vector) { return { scalar + vector.x, scalar + vector.y, scalar + vector.z }; }
     #elif VECTOR_N == 4
     inline VEC_TYPE operator/(float const scalar, VEC_TYPE const& vector) { return { scalar / vector.x, scalar / vector.y, scalar / vector.z, scalar / vector.w }; }
     inline VEC_TYPE operator*(float const scalar, VEC_TYPE const& vector) { return { scalar * vector.x, scalar * vector.y, scalar * vector.z, scalar * vector.w }; }

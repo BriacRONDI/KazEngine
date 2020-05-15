@@ -668,6 +668,7 @@ namespace Engine
         features.fillModeNonSolid = VK_TRUE;
         #if defined(DISPLAY_LOGS)
         features.geometryShader = VK_TRUE;
+        features.wideLines = VK_TRUE;
         #endif
 
         // Activation de l'extension SwapChain
@@ -1445,6 +1446,7 @@ namespace Engine
             return false;
         }
         for(uint8_t i=0; i<command_buffers.size(); i++) command_buffers[i].handle = output_buffers[i];
+        // vkResetCommandPool(this->device, pool, 0);
 
         // Création des fences
         if(create_fence) {
@@ -1990,7 +1992,7 @@ namespace Engine
         return flush_size;
     }
 
-    size_t Vulkan::SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<DATA_CHUNK> chunks)
+    size_t Vulkan::SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks)
     {
         // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
         VkResult result = vkWaitForFences(this->device, 1, &command_buffer.fence, VK_FALSE, 1000000000);
@@ -2520,7 +2522,10 @@ namespace Engine
         rasterization_state.depthBiasSlopeFactor = 0.0f;
         rasterization_state.lineWidth = 1.0f;
 
-        if(polygon_mode == VK_POLYGON_MODE_LINE) rasterization_state.cullMode = VK_CULL_MODE_NONE;
+        if(polygon_mode == VK_POLYGON_MODE_LINE) {
+            rasterization_state.cullMode = VK_CULL_MODE_NONE;
+            rasterization_state.lineWidth = 2.0f;
+        }
 
         VkPipelineColorBlendAttachmentState blend_attachment;
         blend_attachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;

@@ -5,10 +5,12 @@
 #include "../DataBank/DataBank.h"
 #include "../Platform/Common/Mouse/Mouse.h"
 #include "../Camera/Camera.h"
+#include "IUserInteraction.h"
+#include <EventEmitter.hpp>
 
 namespace Engine
 {
-    class UserInterface : public IMouseListener
+    class UserInterface : public IMouseListener, public Tools::EventEmitter<IUserInteraction>
     {
         public :
 
@@ -16,7 +18,6 @@ namespace Engine
             inline ~UserInterface() { this->Clear(); }
             UserInterface(VkCommandPool command_pool);
             VkCommandBuffer BuildCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer);
-            // inline VkCommandBuffer GetCommandBuffer(uint8_t frame_index) { return this->command_buffers[frame_index]; }
             void Update(uint8_t frame_index);
             inline void Refresh() { for(int i=0; i<this->need_update.size(); i++) this->need_update[i] = true; }
 
@@ -44,10 +45,10 @@ namespace Engine
             DescriptorSet texture_descriptor;
             VkRenderPass render_pass;
             std::vector<bool> need_update;
-            Vulkan::DATA_CHUNK ui_vbo_chunk;
-            Vulkan::DATA_CHUNK mouse_square_chunk;
+            Chunk ui_vbo_chunk;
             MOUSE_SELECTION_SQUARE selection_square;
             DescriptorSet selection_descriptor;
+            std::vector<bool> update_selection_square;
 
             bool SetupPipeline();
             bool SetupRenderPass();

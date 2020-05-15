@@ -10,6 +10,7 @@ namespace Engine
         this->buffer_chunk = DataBank::GetManagedBuffer().ReserveChunk(vbo_size);
         if(this->index_buffer_offset != UINT64_MAX) this->index_buffer_offset += this->buffer_chunk.offset;
         this->vertex_count = static_cast<uint32_t>(mesh->index_buffer.size());
+        if(!this->vertex_count) this->vertex_count = static_cast<uint32_t>(mesh->vertex_buffer.size());
 
         for(auto& mesh_material : mesh->materials) {
 
@@ -56,7 +57,8 @@ namespace Engine
 
     void Drawable::Render(VkCommandBuffer command_buffer, VkBuffer buffer, VkPipelineLayout layout, uint32_t instance_count)
     {
-        vkCmdPushConstants(command_buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PUSH_CONSTANT_MATERIAL), &this->materials[0]);
+        if(!this->materials.empty())
+            vkCmdPushConstants(command_buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PUSH_CONSTANT_MATERIAL), &this->materials[0]);
 
         vkCmdBindVertexBuffers(command_buffer, 0, 1, &buffer, &this->buffer_chunk.offset);
 

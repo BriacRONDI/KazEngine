@@ -2,6 +2,15 @@
 
 namespace Model
 {
+    Mesh::~Mesh()
+    {
+        #if defined(DISPLAY_LOGS)
+        std::cout << "Mesh [" << this->name << "] : deleted" << std::endl;
+        #endif
+
+        if(this->hit_box != nullptr) delete this->hit_box;
+    }
+
     /**
      * Calcul le masque déterminant la pipeline à utiliser pour afficher le mesh
      */
@@ -519,4 +528,9 @@ namespace Model
         return offset + name_length;
     }
 
+    void Mesh::SetHitBox(HIT_BOX hit_box)
+    {
+        if(this->hit_box == nullptr) this->hit_box = new HIT_BOX;
+        *this->hit_box = hit_box;
+    }
 }

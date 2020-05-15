@@ -5,7 +5,10 @@ namespace Engine
     void Core::Clear()
     {
         // User Interface
-        if(this->user_interface != nullptr) delete this->user_interface;
+        if(this->user_interface != nullptr) {
+            this->user_interface->RemoveListener(this);
+            delete this->user_interface;
+        }
 
         // Map
         if(this->map != nullptr) delete this->map;
@@ -69,14 +72,15 @@ namespace Engine
         // Initialize Camera
         Camera::CreateInstance();
 
-        // Create the map
-        this->map = new Map(this->graphics_command_pool);
-
         // Create a renderer for entities
         this->entity_render = new EntityRender(this->graphics_command_pool);
 
+        // Create the map
+        this->map = new Map(this->graphics_command_pool, this->entity_render->GetEntityDataChunk());
+
         // Create the user interface
         this->user_interface = new UserInterface(this->graphics_command_pool);
+        this->user_interface->AddListener(this);
         for(uint8_t i=0; i<frame_count; i++)
             this->resources[i].comand_buffers.push_back(this->user_interface->BuildCommandBuffer(i, this->resources[i].framebuffer));
 
@@ -229,8 +233,20 @@ namespace Engine
         return true;
     }
 
-    void Core::StateChanged(E_WINDOW_STATE window_state)
+    void Core::SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end)
     {
+        std::vector<Entity*> entities = this->entity_render->SquareSelection(box_start, box_end);
+        std::vector<uint32_t> ids(entities.size() * 4);
+        for(uint32_t i=0; i<entities.size(); i++)
+            ids[i*4] = entities[i]->GetId();
+        this->map->UpdateSelection({static_cast<uint32_t>(entities.size()), ids});
+    }
+
+    void Core::ToggleSelection(Point<uint32_t> mouse_position)
+    {
+        Entity* entity = this->entity_render->ToggleSelection(mouse_position);
+        if(entity == nullptr) this->map->UpdateSelection({0, {}});
+        else this->map->UpdateSelection({1, {entity->GetId()}});
     }
 
     void Core::SizeChanged(Area<uint32_t> size)

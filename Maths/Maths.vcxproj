@@ -21,11 +21,9 @@
   <ItemGroup>
     <ClInclude Include="Sources\Maths.h" />
     <ClInclude Include="Sources\Matrix\Matrix.hpp" />
-    <ClInclude Include="Sources\Others\Others.h" />
+    <ClInclude Include="Sources\Others\Others.hpp" />
+    <ClInclude Include="Sources\Others\Plane.hpp" />
     <ClInclude Include="Sources\Vector\Vector.hpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="Sources\Others\Others.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

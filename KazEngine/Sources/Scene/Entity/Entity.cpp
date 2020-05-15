@@ -36,6 +36,7 @@ namespace Engine
         this->id = Entity::next_id;
         this->data_offset = this->id * Entity::ubo_size;
         this->properties.frame_id = 0;
+        this->properties.selected = 0;
         this->moving = false;
         this->base_move_speed = 5.0f / 1000.0f;
 
@@ -79,5 +80,39 @@ namespace Engine
         this->move_speed = this->base_move_speed * speed;
 
         this->PlayAnimation("Armature|Walk", 1.0f, true);
+    }
+
+    bool Entity::InSelectBox(Maths::Plane left_plane, Maths::Plane right_plane, Maths::Plane top_plane, Maths::Plane bottom_plane)
+    {
+        if(this->meshes == nullptr) return false;
+
+        for(auto& mesh : *this->meshes) {
+            if(mesh->hit_box != nullptr) {
+                Maths::Vector3 box_min = this->properties.matrix * mesh->hit_box->near_left_bottom_point;
+                Maths::Vector3 box_max = this->properties.matrix * mesh->hit_box->far_right_top_point;
+                if(Maths::aabb_inside_half_space(left_plane, box_min, box_max) && Maths::aabb_inside_half_space(right_plane, box_min, box_max)
+                && Maths::aabb_inside_half_space(top_plane, box_min, box_max) && Maths::aabb_inside_half_space(bottom_plane, box_min, box_max))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool Entity::IntersectRay(Maths::Vector3 const& ray_origin, Maths::Vector3 const& ray_direction)
+    {
+        if(this->meshes == nullptr) return false;
+
+        for(auto& mesh : *this->meshes) {
+            if(mesh->hit_box != nullptr) {
+                if(Maths::ray_box_aabb_intersect(ray_origin, ray_direction,
+                                                 this->properties.matrix * mesh->hit_box->near_left_bottom_point,
+                                                 this->properties.matrix * mesh->hit_box->far_right_top_point,
+                                                 -2000.0f, 2000.0f))
+                    return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -67,12 +67,8 @@ namespace Model
             void UpdateRenderMask(std::map<std::string, MATERIAL> const& materials);
             std::unique_ptr<char> Serialize(uint32_t& output_size);
             size_t Deserialize(const char* data);
-
-            #if defined(DISPLAY_LOGS)
-            ~Mesh(){ std::cout << "Mesh [" << this->name << "] : deleted" << std::endl; }
-            #else
-            ~Mesh(){}
-            #endif
+            void SetHitBox(HIT_BOX hit_box);
+            ~Mesh();
 
         protected :
 

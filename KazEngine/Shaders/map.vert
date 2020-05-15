@@ -18,5 +18,6 @@ void main()
 	mat4 MVP = camera.projection * camera.view;
 	vec4 position = MVP * vec4(inPos, 1.0);
 	gl_Position = position;
-	outPosition = position.xyz;
+	// outPosition = position.xyz;
+	outPosition = inPos;
 }

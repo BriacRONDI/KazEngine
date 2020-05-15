@@ -28,6 +28,6 @@ namespace Engine
             std::shared_ptr<Model::Mesh> mesh;
             uint32_t vertex_count               = 0;
             size_t index_buffer_offset          = 0;
-            Vulkan::DATA_CHUNK buffer_chunk;
+            Chunk buffer_chunk;
     };
 }

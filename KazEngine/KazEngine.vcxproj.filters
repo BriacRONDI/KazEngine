@@ -3,7 +3,6 @@
   <ItemGroup>
     <ClCompile Include="Sources\Main.cpp" />
     <ClCompile Include="Sources\Vulkan\Vulkan.cpp" />
-    <ClCompile Include="Sources\Platform\Win32\Console\Console.cpp" />
     <ClCompile Include="Sources\Platform\Win32\Window\Window.cpp" />
     <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp" />
     <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp" />
@@ -21,6 +20,7 @@
     <ClCompile Include="Sources\Interaction\Interaction.cpp" />
     <ClCompile Include="Sources\Interaction\Interaction.h" />
     <ClCompile Include="Sources\UserInterface\UserInterface.cpp" />
+    <ClCompile Include="Sources\ManagedBuffer\Chunk\Chunk.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Sources\Vulkan\ListOfFunctions.inl" />
@@ -32,7 +32,6 @@
     <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h" />
     <ClInclude Include="Sources\Platform\Common\Window\IWindowListener.h" />
     <ClInclude Include="Sources\Platform\Common\Window\Window.h" />
-    <ClInclude Include="Sources\Platform\Win32\Console\Console.h" />
     <ClInclude Include="Sources\Platform\Common\Keyboard\IKeyboardListener.h" />
     <ClInclude Include="Sources\Platform\Common\Keyboard\Keyboard.h" />
     <ClInclude Include="Sources\Platform\Common\Mouse\IMouseListener.h" />
@@ -51,5 +50,7 @@
     <ClInclude Include="Sources\Platform\Common\Timer\Timer.h" />
     <ClInclude Include="Sources\Platform\Common\Timer\ITimerListener.h" />
     <ClInclude Include="Sources\UserInterface\UserInterface.h" />
+    <ClInclude Include="Sources\UserInterface\IUserInteraction.h" />
+    <ClInclude Include="Sources\ManagedBuffer\Chunk\Chunk.h" />
   </ItemGroup>
 </Project>

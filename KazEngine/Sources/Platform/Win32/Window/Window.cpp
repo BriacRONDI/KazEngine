@@ -446,6 +446,7 @@ namespace Engine
 
             // Bouton gauche de la souris enfoncé
             case WM_LBUTTONDOWN :
+                Mouse::GetInstance().GetPosition() = {LOWORD(lParam), HIWORD(lParam)};
                 if(Mouse::GetInstance().IsClipped()) Mouse::GetInstance().MouseButtonDown(IMouseListener::MOUSE_BUTTON_LEFT);
                 return TRUE;
 

@@ -43,6 +43,7 @@ namespace Engine
             inline DescriptorSet& GetDescriptorSet(uint8_t frame_index) { return this->descriptor[frame_index]; }
             inline void Freeze() { this->frozen = true; }
             inline void UnFreeze() { this->frozen = false; }
+            inline bool IsRtsMode() { return this->rts_mode; }
 
             ///////////////////////////
             ///    IMouseListener    //
@@ -81,7 +82,7 @@ namespace Engine
 
             Frustum frustum;                        // Frustum de la caméra
             std::vector<DescriptorSet> descriptor;
-            Vulkan::DATA_CHUNK chunk;
+            Chunk chunk;
 
             Camera();
             virtual ~Camera();

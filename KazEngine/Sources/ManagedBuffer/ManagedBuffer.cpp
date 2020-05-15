@@ -11,12 +11,11 @@ namespace Engine
             }
         }
 
-        this->free_chunks.clear();
+        // this->free_chunks.clear();
         this->staging_buffers.clear();
         this->buffers.clear();
         this->flush_chunks.clear();
 
-        this->next_free_chunk_id    = 0;
         this->instance_count        = 0;
     }
 
@@ -26,7 +25,8 @@ namespace Engine
         this->Clear();
 
         this->instance_count = instance_count;
-        this->free_chunks.push_back({0, size});
+        this->chunk = {0, size};
+        // this->free_chunks.push_back({0, size});
 
         this->staging_buffers.resize(instance_count);
         this->buffers.resize(instance_count);
@@ -73,7 +73,7 @@ namespace Engine
 
     inline void ManagedBuffer::UpdateFlushRange(size_t start_offset, size_t data_size, uint8_t instance_id)
     {
-        std::vector<Vulkan::DATA_CHUNK>& chunks = this->flush_chunks[instance_id];
+        std::vector<Chunk>& chunks = this->flush_chunks[instance_id];
 
         auto contiguous_before = chunks.end();
         auto contiguous_after = chunks.end();
@@ -124,7 +124,7 @@ namespace Engine
         return true;
     }
 
-    Vulkan::DATA_CHUNK ManagedBuffer::ReserveChunk(size_t size)
+    /*Vulkan::DATA_CHUNK ManagedBuffer::ReserveChunk(size_t size)
     {
         if(!this->free_chunks.size()) return {};
 
@@ -146,9 +146,9 @@ namespace Engine
         }
 
         return {};
-    }
+    }*/
 
-    Vulkan::DATA_CHUNK ManagedBuffer::ReserveChunk(size_t size, VkDeviceSize alignment)
+    /*Vulkan::DATA_CHUNK ManagedBuffer::ReserveChunk(size_t size, VkDeviceSize alignment)
     {
         if(!this->free_chunks.size()) return {};
 
@@ -183,9 +183,9 @@ namespace Engine
         }
 
         return {};
-    }
+    }*/
 
-    void ManagedBuffer::FreeChunk(Vulkan::DATA_CHUNK freed)
+    /*void ManagedBuffer::FreeChunk(Vulkan::DATA_CHUNK freed)
     {
         if(!freed.range) return;
         auto contiguous_before = this->free_chunks.end();
@@ -209,5 +209,5 @@ namespace Engine
         } else {
             this->free_chunks.push_back(freed);
         }
-    }
+    }*/
 }
