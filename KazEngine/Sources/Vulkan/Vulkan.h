@@ -195,6 +195,8 @@ namespace Engine
 
             // Récupère les limites de la carte graphique
             static inline VkPhysicalDeviceLimits const& GetDeviceLimits() { return Vulkan::vulkan->physical_device.properties.limits; }
+            static inline VkDeviceSize UboAlignment() { return Vulkan::vulkan->physical_device.properties.limits.minUniformBufferOffsetAlignment; }
+            static inline VkDeviceSize SboAlignment() { return Vulkan::vulkan->physical_device.properties.limits.minStorageBufferOffsetAlignment; }
 
             // Création d'instance et chargement des fonctions principales
             INIT_RETURN_CODE Initialize(Engine::Window* draw_window, uint32_t application_version, std::string const& aplication_name, bool separate_transfer_queue = true);
@@ -221,6 +223,7 @@ namespace Engine
             // Envoi d'une image vers un buffer d'image
             // bool SendToBuffer(IMAGE_BUFFER& buffer, const void* data, VkDeviceSize data_size, uint32_t width, uint32_t height);
             size_t SendToBuffer(IMAGE_BUFFER& buffer, Tools::IMAGE_MAP const& image);
+            bool MoveData(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, VkDeviceSize data_size, VkDeviceSize source_offset, VkDeviceSize destination_offset);
 
             // Applique une birrière de changement de queue family à un data buffer
             /*bool TransitionBufferQueueFamily(

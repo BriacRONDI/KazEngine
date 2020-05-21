@@ -23,6 +23,11 @@ namespace Engine
             
             Entity();
             ~Entity();
+            inline Entity(Entity const& other) { *this = other; }
+            inline Entity(Entity&& other) { *this = std::move(other); }
+            Entity& operator=(Entity const& other);
+            Entity& operator=(Entity&& other);
+
             void AddMesh(std::shared_ptr<Model::Mesh> mesh);
             inline std::vector<std::shared_ptr<Model::Mesh>> const* GetMeshes() { return this->meshes; }
             inline uint32_t const& GetId() { return this->id; }

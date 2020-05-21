@@ -97,50 +97,96 @@ int main(int argc, char** argv)
     auto simple_guy_material = Engine::DataBank::GetMaterialFromPackage(data_buffer, "/SimpleGuy/AO");
     Engine::DataBank::AddMaterial(simple_guy_material, "AO");
 
-    Engine::Entity simple_guy1;
-    simple_guy1.AddMesh(simple_guy_mesh);
-    engine.GetEntityRender().AddEntity(simple_guy1);
-    simple_guy1.properties.matrix = Maths::Matrix4x4::TranslationMatrix({1.0, 0.0, -3.0});
+    Engine::Entity guy;
+    guy.AddMesh(simple_guy_mesh);
+    engine.GetEntityRender().AddEntity(guy);
 
-    Engine::Entity simple_guy2;
-    simple_guy2.AddMesh(simple_guy_mesh);
-    engine.GetEntityRender().AddEntity(simple_guy2);
-    simple_guy2.properties.matrix = Maths::Matrix4x4::TranslationMatrix({-1.0, 0.0, -3.0});
-
-    Engine::Entity simple_guy3;
-    simple_guy3.AddMesh(simple_guy_mesh);
-    engine.GetEntityRender().AddEntity(simple_guy3);
-    simple_guy3.properties.matrix = Maths::Matrix4x4::TranslationMatrix({1.0, 0.0, 3.0});
-
-    Engine::Entity simple_guy4;
-    simple_guy4.AddMesh(simple_guy_mesh);
-    engine.GetEntityRender().AddEntity(simple_guy4);
-    simple_guy4.properties.matrix = Maths::Matrix4x4::TranslationMatrix({-1.0, 0.0, 3.0});
-
-    Engine::Camera::GetInstance().SetPosition({0.0f, 5.0f, -5.0f});
+    Engine::Camera::GetInstance().SetPosition({0.0f, 69.0f, -37.0f});
     Engine::Camera::GetInstance().Rotate({0.0f, Maths::F_PI_4, 0.0f});
 
-    auto framerate_start = std::chrono::system_clock::now();
-    uint64_t frame_count = 0;
+    Engine::Timer framerate_timer, refresh_timer;
+    framerate_timer.Start(std::chrono::milliseconds(1000));
+    refresh_timer.Start(std::chrono::milliseconds(50));
+    uint32_t frame_count = 0;
+
+    uint32_t entity_count = 0;
+    Engine::Timer dynamic_entity_add_start;
+    dynamic_entity_add_start.Start(std::chrono::milliseconds(10));
+    std::vector<std::shared_ptr<Engine::Entity>> guys;
+
+    for(int i=0; i<5000; i++) {
+        auto new_entity = std::shared_ptr<Engine::Entity>(new Engine::Entity);
+        guys.resize(guys.size() + 1);
+        guys[guys.size()-1] = new_entity;
+        new_entity->AddMesh(simple_guy_mesh);
+        engine.GetEntityRender().AddEntity(*new_entity);
+        new_entity->PlayAnimation("Armature|Walk", 1.0f, true);
+    }
 
     // Main loop
     while(Engine::Window::Loop())
     {
-        static uint64_t fps = 0;
-        auto now = std::chrono::system_clock::now();
-        auto framerate_current_duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - framerate_start);
-        if(framerate_current_duration > std::chrono::milliseconds(1000)) {
-            framerate_start = now;
-            fps = frame_count;
-            frame_count = 0;
+        ///////////////
+        // FRAMERATE //
+        ///////////////
+        frame_count++;
+        if(refresh_timer.GetProgression() >= 1.0f) {
+            float fps = static_cast<float>((float)frame_count / framerate_timer.GetProgression());
             if(Engine::Mouse::GetInstance().IsClipped()) {
-                main_window->SetTitle("KazEngine [" + std::to_string(fps) + " FPS] (Appuyez sur ESC pour liberer la souris)");
+                main_window->SetTitle("KazEngine [" + Tools::to_string_with_precision(fps, 1) + " FPS] [" + std::to_string(guys.size()) + " Units] (Appuyez sur ESC pour liberer la souris)");
             }else{
-                main_window->SetTitle("KazEngine [" + std::to_string(fps) + " FPS] (Cliquez sur la fenetre pour capturer la souris)");
+                main_window->SetTitle("KazEngine [" + Tools::to_string_with_precision(fps, 1) + " FPS] [" + std::to_string(guys.size()) + " Units] (Cliquez sur la fenetre pour capturer la souris)");
             }
-        }else{
-            frame_count++;
+
+            refresh_timer.Start(std::chrono::milliseconds(50));
         }
+
+        if(framerate_timer.GetProgression() >= 1.0f) {
+            framerate_timer.Start(std::chrono::milliseconds(1000));
+            frame_count = 0;
+        }
+
+        //////////////
+        // ENTITIES //
+        //////////////
+
+        //if(dynamic_entity_add_start.GetProgression() >= 1.0f) {
+
+            auto new_entity = std::shared_ptr<Engine::Entity>(new Engine::Entity);
+            new_entity->AddMesh(simple_guy_mesh);
+
+            if(engine.GetEntityRender().AddEntity(*new_entity)) {
+                guys.resize(guys.size() + 1);
+                guys[guys.size()-1] = new_entity;
+
+                new_entity->PlayAnimation("Armature|Walk", 1.0f, true);
+
+                uint32_t count_z = static_cast<uint32_t>(std::sqrt(guys.size()));
+                uint32_t count_x = count_z;
+
+                uint32_t last = 0, rest = 0;
+                if(guys.size() > 2) {
+                    last = (count_z - 1) + (count_z - 1) * count_z;
+                    rest = static_cast<uint32_t>(guys.size() - last - 1);
+                }
+
+                for(uint32_t z=0; z<count_z; z++) {
+                    for(uint32_t x=0; x<count_x; x++) {
+                        guys[x + z * count_z]->properties.matrix = Maths::Matrix4x4::TranslationMatrix({x - count_x * 0.5f + 0.5f, 0.0f, -1.0f * z - 5.0f});
+                    }
+                }
+
+                for(uint32_t x=0; x<rest; x++) {
+                    guys[x + last + 1]->properties.matrix = Maths::Matrix4x4::TranslationMatrix({x - rest * 0.5f + 0.5f, 0.0f, -1.0f * count_z - 6.0f});
+                }
+            }
+
+            /*dynamic_entity_add_start.Start(std::chrono::milliseconds(100));
+        }*/
+
+        ///////////////
+        // MAIN LOOP //
+        ///////////////
 
         engine.Loop();
     }

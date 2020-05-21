@@ -145,8 +145,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Sources\Interaction\Interaction.cpp" />
-    <ClCompile Include="Sources\Interaction\Interaction.h" />
     <ClCompile Include="Sources\Camera\Camera.cpp" />
     <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
     <ClCompile Include="Sources\Core\Core.cpp" />

@@ -19,7 +19,8 @@ namespace Engine
             UserInterface(VkCommandPool command_pool);
             VkCommandBuffer BuildCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer);
             void Update(uint8_t frame_index);
-            inline void Refresh() { for(int i=0; i<this->need_update.size(); i++) this->need_update[i] = true; }
+            inline void Refresh() { for(int i=0; i<this->need_update.size(); i++) this->Refresh(i); }
+            void Refresh(uint8_t frame_index); // { this->need_update[frame_index] = true; }
 
             //////////////////////////////
             // IMouseListener interface //
@@ -45,7 +46,7 @@ namespace Engine
             DescriptorSet texture_descriptor;
             VkRenderPass render_pass;
             std::vector<bool> need_update;
-            Chunk ui_vbo_chunk;
+            std::shared_ptr<Chunk> ui_vbo_chunk;
             MOUSE_SELECTION_SQUARE selection_square;
             DescriptorSet selection_descriptor;
             std::vector<bool> update_selection_square;

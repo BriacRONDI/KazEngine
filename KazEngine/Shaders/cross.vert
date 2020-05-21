@@ -8,15 +8,16 @@ layout (set=0, binding=0) uniform Camera
 	mat4 view;
 } camera;
 
-layout (set=1, binding=0) uniform Entity
+layout (set=1, binding=0) buffer ID
 {
-	uint entity_id[100];
+	uint entity_id[];
 };
 
 struct Properties {
 	mat4 model;
 	uint animation_id;
 	uint frame_id;
+	// ivec2 padding;
 };
 
 layout (set=1, binding=1) buffer Entity

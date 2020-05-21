@@ -66,7 +66,7 @@ namespace Engine
         }
 
         // Allocate data buffers
-        DataBank::GetManagedBuffer().Allocate(SIZE_MEGABYTE(20), MULTI_USAGE_BUFFER_MASK, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        DataBank::GetManagedBuffer().Allocate(SIZE_MEGABYTE(100), MULTI_USAGE_BUFFER_MASK, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                      frame_count, true, {Vulkan::GetGraphicsQueue().index});
 
         // Initialize Camera
@@ -76,7 +76,8 @@ namespace Engine
         this->entity_render = new EntityRender(this->graphics_command_pool);
 
         // Create the map
-        this->map = new Map(this->graphics_command_pool, this->entity_render->GetEntityDataChunk());
+        this->map = new Map(this->graphics_command_pool, this->entity_render->GetEntityDescriptor());
+        this->entity_render->GetEntityDescriptor().Update();
 
         // Create the user interface
         this->user_interface = new UserInterface(this->graphics_command_pool);
@@ -150,22 +151,13 @@ namespace Engine
         VkCommandBuffer command_buffer = resources.comand_buffers[0];
         VkFramebuffer frame_buffer = resources.framebuffer;
 
-        VkResult result = vkWaitForFences(Vulkan::GetDevice(), 1, &resources.fence, VK_FALSE, 1000000000);
-        if(result != VK_SUCCESS) {
-            #if defined(DISPLAY_LOGS)
-            std::cout << "Core::BuildRenderPass => vkWaitForFences : Timeout" << std::endl;
-            #endif
-            return false;
-        }
-        vkResetFences(Vulkan::GetDevice(), 1, &resources.fence);
-
         VkCommandBufferBeginInfo command_buffer_begin_info;
         command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         command_buffer_begin_info.pNext = nullptr;
         command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         command_buffer_begin_info.pInheritanceInfo = nullptr;
 
-        result = vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
+        VkResult result = vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             std::cout << "BuildCommandBuffer[" << swap_chain_image_index << "] => vkBeginCommandBuffer : Failed" << std::endl;
@@ -235,18 +227,14 @@ namespace Engine
 
     void Core::SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end)
     {
-        std::vector<Entity*> entities = this->entity_render->SquareSelection(box_start, box_end);
-        std::vector<uint32_t> ids(entities.size() * 4);
-        for(uint32_t i=0; i<entities.size(); i++)
-            ids[i*4] = entities[i]->GetId();
-        this->map->UpdateSelection({static_cast<uint32_t>(entities.size()), ids});
+        this->map->UpdateSelection(this->entity_render->SquareSelection(box_start, box_end));
     }
 
     void Core::ToggleSelection(Point<uint32_t> mouse_position)
     {
         Entity* entity = this->entity_render->ToggleSelection(mouse_position);
-        if(entity == nullptr) this->map->UpdateSelection({0, {}});
-        else this->map->UpdateSelection({1, {entity->GetId()}});
+        if(entity == nullptr) this->map->UpdateSelection({});
+        else this->map->UpdateSelection({entity});
     }
 
     void Core::SizeChanged(Area<uint32_t> size)
@@ -284,6 +272,24 @@ namespace Engine
         this->entity_render->Update(swap_chain_image_index);
         this->user_interface->Update(swap_chain_image_index);
         DataBank::GetManagedBuffer().Flush(this->transfer_buffers[swap_chain_image_index], swap_chain_image_index);
+
+        VkResult result = vkWaitForFences(Vulkan::GetDevice(), 1, &this->resources[swap_chain_image_index].fence, VK_FALSE, 1000000000);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "Core::BuildRenderPass => vkWaitForFences : Timeout" << std::endl;
+            #endif
+            return;
+        }
+        vkResetFences(Vulkan::GetDevice(), 1, &this->resources[swap_chain_image_index].fence);
+
+        // Update descriptor sets
+        if(this->entity_render->GetEntityDescriptor().NeedUpdate(swap_chain_image_index)) {
+            this->map->Refresh(swap_chain_image_index);
+            this->entity_render->GetEntityDescriptor().Update(swap_chain_image_index);
+            /*#if defined(DISPLAY_LOGS)
+            std::cout << "EntityDescriptor : updated" << std::endl;
+            #endif*/
+        }
 
         // Build image
         this->BuildRenderPass(swap_chain_image_index);

@@ -1906,6 +1906,67 @@ namespace Engine
         else return nonCoherentAtomSize * (multiple + 1);
     }
 
+    bool Vulkan::MoveData(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, VkDeviceSize data_size, VkDeviceSize source_offset, VkDeviceSize destination_offset)
+    {
+        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
+        VkResult result = vkWaitForFences(this->device, 1, &command_buffer.fence, VK_FALSE, 1000000000);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "MoveData => vkWaitForFences : Timeout" << std::endl;
+            #endif
+            return 0;
+        }
+        vkResetFences(this->device, 1, &command_buffer.fence);
+
+        ///////////////////////////////////////////
+        //       Envoi des données vers          //
+        //   la mémoire de la carte graphique    //
+        ///////////////////////////////////////////
+
+        // Préparation de la copie de l'image depuis le staging buffer vers un vertex buffer
+        VkCommandBufferBeginInfo command_buffer_begin_info = {};
+        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        command_buffer_begin_info.pNext = nullptr; 
+        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        command_buffer_begin_info.pInheritanceInfo = nullptr;
+
+        vkBeginCommandBuffer(command_buffer.handle, &command_buffer_begin_info);
+
+        VkBufferCopy buffer_copy_info = {};
+        buffer_copy_info.srcOffset = source_offset;
+        buffer_copy_info.dstOffset = destination_offset;
+        buffer_copy_info.size = data_size;
+
+        vkCmdCopyBuffer(command_buffer.handle, buffer.handle, buffer.handle, 1, &buffer_copy_info);
+        vkEndCommandBuffer(command_buffer.handle);
+
+        // Exécution de la commande de copie
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.pNext = nullptr;
+        submit_info.waitSemaphoreCount = 0;
+        submit_info.pWaitSemaphores = nullptr;
+        submit_info.pWaitDstStageMask = nullptr;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffer.handle;
+        submit_info.signalSemaphoreCount = 0;
+        submit_info.pSignalSemaphores = nullptr;
+
+        result = vkQueueSubmit(this->transfer_queue.handle, 1, &submit_info, command_buffer.fence);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            switch(result) {
+                case VK_ERROR_OUT_OF_HOST_MEMORY : std::cout << "MoveData => vkQueueSubmit : VK_ERROR_OUT_OF_HOST_MEMORY" << std::endl;
+                case VK_ERROR_OUT_OF_DEVICE_MEMORY : std::cout << "MoveData => vkQueueSubmit : VK_ERROR_OUT_OF_DEVICE_MEMORY" << std::endl;
+                case VK_ERROR_DEVICE_LOST : std::cout << "MoveData => vkQueueSubmit : VK_ERROR_DEVICE_LOST" << std::endl;
+            }
+            #endif
+            return false;
+        }
+
+        return true;
+    }
+
     /**
      * Envoi de données vers un buffer de la carte graphique en passant par un staging buffer
      * Renvoie la taille du segment de données mis à jour,

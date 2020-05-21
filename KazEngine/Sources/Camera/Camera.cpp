@@ -51,7 +51,7 @@ namespace Engine
     void Camera::Update(uint8_t frame_index)
     {
         if(Mouse::GetInstance().IsClipped() && this->rts_mode && !this->frozen) this->RtsScroll();
-        DataBank::GetManagedBuffer().WriteData(&this->camera, sizeof(Camera::CAMERA_UBO), this->chunk.offset, frame_index);
+        DataBank::GetManagedBuffer().WriteData(&this->camera, sizeof(Camera::CAMERA_UBO), this->chunk->offset, frame_index);
     }
 
     void Camera::RtsScroll()

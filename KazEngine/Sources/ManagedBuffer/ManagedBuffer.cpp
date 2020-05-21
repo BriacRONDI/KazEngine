@@ -11,12 +11,11 @@ namespace Engine
             }
         }
 
-        // this->free_chunks.clear();
         this->staging_buffers.clear();
         this->buffers.clear();
         this->flush_chunks.clear();
 
-        this->instance_count        = 0;
+        this->instance_count = 0;
     }
 
     bool ManagedBuffer::Allocate(VkDeviceSize size, VkBufferUsageFlags usage, VkFlags requirement, uint8_t instance_count,
@@ -26,7 +25,6 @@ namespace Engine
 
         this->instance_count = instance_count;
         this->chunk = {0, size};
-        // this->free_chunks.push_back({0, size});
 
         this->staging_buffers.resize(instance_count);
         this->buffers.resize(instance_count);
@@ -73,28 +71,33 @@ namespace Engine
 
     inline void ManagedBuffer::UpdateFlushRange(size_t start_offset, size_t data_size, uint8_t instance_id)
     {
-        std::vector<Chunk>& chunks = this->flush_chunks[instance_id];
+        std::vector<Chunk>& flush = this->flush_chunks[instance_id];
+        size_t end_offset = start_offset + data_size;
+        
+        uint32_t overlap_start = 0;
+        uint32_t overlap_count = 0;
+        uint32_t insert_pos = 0;
+        for(uint32_t i=0; i<flush.size(); i++) {
+            
+            size_t flush_chunk_end = flush[i].offset + flush[i].range;
 
-        auto contiguous_before = chunks.end();
-        auto contiguous_after = chunks.end();
-
-        for(auto chunk_it = chunks.begin(); chunk_it != chunks.end(); chunk_it++) {
-
-            if(chunk_it->offset + chunk_it->range == start_offset) contiguous_before = chunk_it;
-            if(chunk_it->offset == start_offset + data_size) contiguous_after = chunk_it;
-            if(contiguous_before != chunks.end() && contiguous_after != chunks.end()) break;
+            if(end_offset < flush[i].offset) {
+                insert_pos = i;
+                break;
+            }else if(flush_chunk_end >= start_offset) {
+                if(!overlap_count) overlap_start = i;
+                overlap_count++;
+                if(flush[i].offset < start_offset) start_offset = flush[i].offset;
+                if(flush_chunk_end > end_offset) end_offset = flush_chunk_end;
+            }
         }
 
-        if(contiguous_before != chunks.end() && contiguous_after != chunks.end()) {
-            contiguous_before->range += data_size + contiguous_after->range;
-            chunks.erase(contiguous_after);
-        } else if(contiguous_before != chunks.end()) {
-            contiguous_before->range += data_size;
-        } else if(contiguous_after != chunks.end()) {
-            contiguous_after->range += data_size;
-            contiguous_after->offset -= data_size;
-        } else {
-            chunks.push_back({start_offset, data_size});
+        if(!overlap_count) flush.insert(flush.begin() + insert_pos, {start_offset, end_offset - start_offset});
+        else {
+            flush[overlap_start].offset = start_offset;
+            flush[overlap_start].range = end_offset - start_offset;
+            if(overlap_count == 2) flush.erase(flush.begin() + overlap_start + 1);
+            else if(overlap_count > 2) flush.erase(flush.begin() + overlap_start + 1, flush.begin() + overlap_start + overlap_count - 1);
         }
     }
 
@@ -124,90 +127,17 @@ namespace Engine
         return true;
     }
 
-    /*Vulkan::DATA_CHUNK ManagedBuffer::ReserveChunk(size_t size)
+    bool ManagedBuffer::ResizeChunk(std::shared_ptr<Chunk> chunk, size_t size, bool& relocated, VkDeviceSize alignment)
     {
-        if(!this->free_chunks.size()) return {};
+        size_t mem_offset = chunk->offset;
+        size_t mem_range = chunk->range;
+        bool resized = this->chunk.ResizeChild(chunk, size, relocated, alignment);
+        if(!resized) return false;
 
-        VkDeviceSize claimed_range = size;
-        // if(this->chunck_alignment > 0) claimed_range = static_cast<uint32_t>((size + this->chunck_alignment - 1) & ~(this->chunck_alignment - 1));
+        if(relocated)
+            for(uint8_t i=0; i<this->instance_count; i++)
+                this->WriteData(this->staging_buffers[i].pointer + mem_offset, mem_range, chunk->offset, i);
 
-        for(auto iter = this->free_chunks.begin(); iter != this->free_chunks.end(); iter++) {
-            Vulkan::DATA_CHUNK& chunk = *iter;
-            if(chunk.range > claimed_range) {
-                Vulkan::DATA_CHUNK result = {chunk.offset, size};
-                chunk.offset += static_cast<uint32_t>(claimed_range);
-                chunk.range -= claimed_range;
-                return result;
-            }else if(chunk.range == claimed_range) {
-                Vulkan::DATA_CHUNK result = {chunk.offset, size};
-                this->free_chunks.erase(iter);
-                return result;
-            }
-        }
-
-        return {};
-    }*/
-
-    /*Vulkan::DATA_CHUNK ManagedBuffer::ReserveChunk(size_t size, VkDeviceSize alignment)
-    {
-        if(!this->free_chunks.size()) return {};
-
-        VkDeviceSize claimed_range = (size + alignment - 1) & ~(alignment - 1);
-
-        for(auto iter = this->free_chunks.begin(); iter != this->free_chunks.end(); iter++) {
-            Vulkan::DATA_CHUNK& chunk = *iter;
-
-            VkDeviceSize aligned_offset = (chunk.offset + alignment - 1) & ~(alignment - 1);
-            if(aligned_offset == chunk.offset) {
-                if(chunk.range > claimed_range) {
-                    Vulkan::DATA_CHUNK result = {chunk.offset, size};
-                    chunk.offset += static_cast<uint32_t>(claimed_range);
-                    chunk.range -= claimed_range;
-                    return result;
-                }else if(chunk.range == claimed_range) {
-                    Vulkan::DATA_CHUNK result = {chunk.offset, size};
-                    this->free_chunks.erase(iter);
-                    return result;
-                }
-            }else{
-                VkDeviceSize new_range = aligned_offset - chunk.offset;
-                VkDeviceSize available_range = chunk.range - new_range;
-                if(available_range >= claimed_range) {
-                    
-                    Vulkan::DATA_CHUNK result = {aligned_offset, claimed_range};
-                    chunk.range = new_range;
-                    if(available_range != claimed_range) this->free_chunks.push_back({aligned_offset + claimed_range, available_range - claimed_range});
-                    return result;
-                }
-            }
-        }
-
-        return {};
-    }*/
-
-    /*void ManagedBuffer::FreeChunk(Vulkan::DATA_CHUNK freed)
-    {
-        if(!freed.range) return;
-        auto contiguous_before = this->free_chunks.end();
-        auto contiguous_after = this->free_chunks.end();
-
-        for(auto chunk_it = this->free_chunks.begin(); chunk_it != this->free_chunks.end(); chunk_it++) {
-
-            if(chunk_it->offset + chunk_it->range == freed.offset) contiguous_before = chunk_it;
-            if(chunk_it->offset == freed.offset + freed.range) contiguous_after = chunk_it;
-            if(contiguous_before != this->free_chunks.end() && contiguous_after != this->free_chunks.end()) break;
-        }
-
-        if(contiguous_before != this->free_chunks.end() && contiguous_after != this->free_chunks.end()) {
-            contiguous_before->range += freed.range + contiguous_after->range;
-            this->free_chunks.erase(contiguous_after);
-        } else if(contiguous_before != this->free_chunks.end()) {
-            contiguous_before->range += freed.range;
-        } else if(contiguous_after != this->free_chunks.end()) {
-            contiguous_after->range += freed.range;
-            contiguous_after->offset -= freed.range;
-        } else {
-            this->free_chunks.push_back(freed);
-        }
-    }*/
+        return true;
+    }
 }

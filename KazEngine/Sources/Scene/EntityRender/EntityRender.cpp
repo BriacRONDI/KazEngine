@@ -8,10 +8,6 @@ namespace Engine
 
             vkDeviceWaitIdle(Vulkan::GetDevice());
 
-            // Chunk
-            DataBank::GetManagedBuffer().FreeChunk(this->entity_ids_chunk);
-            DataBank::GetManagedBuffer().FreeChunk(this->entity_data_chunk);
-
             // Descriptor Sets
             this->entities_descriptor.Clear();
             this->texture_descriptor.Clear();
@@ -31,10 +27,6 @@ namespace Engine
         this->render_groups.clear();
         this->skeleton_descriptor.Clear();
         this->texture_descriptor.Clear();
-
-        this->entity_data_chunk                 = {};
-        this->entity_ids_chunk                  = {};
-        this->next_drawable_bind_dynamic_offset = 0;
     }
 
     EntityRender::EntityRender(VkCommandPool command_pool) : command_pool(command_pool)
@@ -65,28 +57,12 @@ namespace Engine
         // Entity //
         ////////////
 
-        this->entity_ids_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_KILOBYTE(5));
-        this->entity_data_chunk = DataBank::GetManagedBuffer().ReserveChunk(Entity::GetUboSize() * 100);
+        if(!this->entities_descriptor.Create({
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, SIZE_KILOBYTE(5)},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, Entity::GetUboSize() * 100}
+        }, instance_count)) return false;
 
-        // Not enough memory
-        if(!this->entity_ids_chunk.range || !this->entity_data_chunk.range) return false;
-
-        bindings = {
-            DescriptorSet::CreateSimpleBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT),
-            DescriptorSet::CreateSimpleBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
-        };
-
-        bool success = this->entities_descriptor.Prepare(bindings, instance_count);
-        if(!success) return false;
-
-        for(uint8_t i=0; i<instance_count; i++) {
-            uint32_t id = this->entities_descriptor.Allocate({
-                DataBank::GetManagedBuffer().GetBufferInfos(this->entity_ids_chunk, i),
-                DataBank::GetManagedBuffer().GetBufferInfos(this->entity_data_chunk, i)
-            });
-
-            if(id == UINT32_MAX) return false;
-        }
+        this->entity_data_chunk = this->entities_descriptor.ReserveRange(Entity::GetUboSize() * 100, Vulkan::SboAlignment(), ENTITY_DATA_BINDING);
 
         /////////////
         // Texture //
@@ -105,18 +81,17 @@ namespace Engine
             DescriptorSet::CreateSimpleBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
         };
 
-        success = this->skeleton_descriptor.Prepare(bindings, instance_count);
-        if(!success) return false;
+        if(!this->skeleton_descriptor.Prepare(bindings, instance_count)) return false;
 
         this->skeleton_bones_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_MEGABYTE(5));
         this->skeleton_offsets_ids_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_KILOBYTE(1));
         this->skeleton_offsets_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_MEGABYTE(1));
         this->skeleton_animations_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_KILOBYTE(1));
 
-        if(!this->skeleton_bones_chunk.range
-            || !this->skeleton_offsets_chunk.range
-            || !this->skeleton_offsets_ids_chunk.range
-            || !this->skeleton_animations_chunk.range)
+        if(this->skeleton_bones_chunk == nullptr
+            || this->skeleton_offsets_chunk == nullptr
+            || this->skeleton_offsets_ids_chunk == nullptr
+            || this->skeleton_animations_chunk == nullptr)
             return false;
 
         for(uint8_t i=0; i<instance_count; i++) {
@@ -184,7 +159,9 @@ namespace Engine
             Vulkan::GetInstance().LoadShaderModule("./Shaders/textured_model.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
         };
 
-        vertex_attribute_description = Vulkan::CreateVertexInputDescription({Vulkan::POSITION, Vulkan::UV, Vulkan::BONE_WEIGHTS, Vulkan::BONE_IDS}, vertex_binding_description);
+        vertex_attribute_description = Vulkan::CreateVertexInputDescription({
+            Vulkan::POSITION, Vulkan::UV, Vulkan::BONE_WEIGHTS, Vulkan::BONE_IDS
+        }, vertex_binding_description);
 
         auto skeleton_layout = this->skeleton_descriptor.GetLayout();
 
@@ -255,8 +232,8 @@ namespace Engine
         DataBank::GetSkeleton(name).BuildBoneOffsetsSBO(offsets_sbo, offsets_ids, this->skeletons[name].dynamic_offsets, sbo_alignment);
 
         // Write to GPU memory
-        DataBank::GetManagedBuffer().WriteData(offsets_sbo.data(), offsets_sbo.size(), this->skeleton_offsets_chunk.offset);
-        DataBank::GetManagedBuffer().WriteData(offsets_ids.data(), offsets_ids.size(), this->skeleton_offsets_ids_chunk.offset);
+        DataBank::GetManagedBuffer().WriteData(offsets_sbo.data(), offsets_sbo.size(), this->skeleton_offsets_chunk->offset);
+        DataBank::GetManagedBuffer().WriteData(offsets_ids.data(), offsets_ids.size(), this->skeleton_offsets_ids_chunk->offset);
 
         ////////////////////
         // Animations SBO //
@@ -278,13 +255,13 @@ namespace Engine
             DataBank::GetSkeleton(name).BuildAnimationSBO(skeleton_sbo, animations[i].name, baked_animation.frame_count, bone_count, 30);
             
             // Write the bone count before frame offsets
-            if(!i) DataBank::GetManagedBuffer().WriteData(&bone_count, sizeof(uint32_t), this->skeleton_animations_chunk.offset);
+            if(!i) DataBank::GetManagedBuffer().WriteData(&bone_count, sizeof(uint32_t), this->skeleton_animations_chunk->offset);
 
             // Write the frame offset
-            DataBank::GetManagedBuffer().WriteData(&frame_id, sizeof(uint32_t), this->skeleton_animations_chunk.offset + sizeof(uint32_t) * (i + 1));
+            DataBank::GetManagedBuffer().WriteData(&frame_id, sizeof(uint32_t), this->skeleton_animations_chunk->offset + sizeof(uint32_t) * (i + 1));
 
             // Write animation to GPU memory
-            DataBank::GetManagedBuffer().WriteData(skeleton_sbo.data(), skeleton_sbo.size(), this->skeleton_bones_chunk.offset + animation_offset);
+            DataBank::GetManagedBuffer().WriteData(skeleton_sbo.data(), skeleton_sbo.size(), this->skeleton_bones_chunk->offset + animation_offset);
 
             frame_id += static_cast<uint32_t>(skeleton_sbo.size() / sizeof(Maths::Matrix4x4));
             animation_offset += Vulkan::GetInstance().ComputeStorageBufferAlignment(static_cast<uint32_t>(skeleton_sbo.size()));
@@ -331,11 +308,46 @@ namespace Engine
                 for(auto& drawable_bind : this->render_groups[i].drawables) {
                     if(drawable_bind.mesh.IsSameMesh(mesh)) {
 
+                        // Check memory requirement for entity SBO
+                        auto entity_sbo_chunk = this->entity_data_chunk->ReserveRange(Entity::GetUboSize(), Vulkan::SboAlignment());
+                        if(entity_sbo_chunk == nullptr) {
+                            if(!this->entities_descriptor.ResizeChunk(this->entity_data_chunk, this->entity_data_chunk->range + Entity::GetUboSize() * 100,
+                                                                      ENTITY_DATA_BINDING, static_cast<uint32_t>(Vulkan::SboAlignment()))) {
+                                #if defined(DISPLAY_LOGS)
+                                std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                                #endif
+                                return false;
+                            }
+                            entity_sbo_chunk = this->entity_data_chunk->ReserveRange(Entity::GetUboSize(), Vulkan::SboAlignment());
+                        }
+
                         // Mesh is already loaded, add draw instance
-                        size_t id_offet = drawable_bind.entities.size() * sizeof(uint32_t) * 4;
-                        DataBank::GetManagedBuffer().WriteData(&entity.GetId(), sizeof(uint32_t),
-                                this->entity_ids_chunk.offset + drawable_bind.dynamic_offsets[0] + id_offet);
-                                // this->entity_ids_chunk.offset + drawable_bind.entity_ids_dynamic_offset + id_offet);
+                        auto chunk = drawable_bind.chunk->ReserveRange(sizeof(uint32_t));
+
+                        // Not engough memory
+                        if(chunk == nullptr) {
+                            
+                            // Extend the descriptor set binding chunk
+                            if(!this->entities_descriptor.ResizeChunk(drawable_bind.chunk, drawable_bind.chunk->range + SIZE_KILOBYTE(1),
+                                                                      ENTITY_ID_BINDING, Vulkan::SboAlignment())) {
+                                #if defined(DISPLAY_LOGS)
+                                std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                                #endif
+                                return false;
+                            }else{
+                                chunk = drawable_bind.chunk->ReserveRange(sizeof(uint32_t));
+                                if(chunk == nullptr) {
+                                    #if defined(DISPLAY_LOGS)
+                                    std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                                    #endif
+                                    return false;
+                                }
+                            }
+                        }
+
+                        this->entities_descriptor.WriteData(&entity.GetId(), sizeof(uint32_t), ENTITY_ID_BINDING,
+                                                            static_cast<uint32_t>(drawable_bind.chunk->offset + chunk->offset));
+
                         drawable_bind.entities.push_back(&entity);
                         
                         // Finish
@@ -404,14 +416,33 @@ namespace Engine
                 // Setup loaded mesh //
                 ///////////////////////
 
-                new_bind.entities.push_back(&entity);
-                new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.begin(), {this->next_drawable_bind_dynamic_offset});
-                DataBank::GetManagedBuffer().WriteData(&entity.GetId(), sizeof(uint32_t), this->entity_ids_chunk.offset + new_bind.dynamic_offsets[0]);
+                // Check memory requirement for entity SBO
+                auto entity_sbo_chunk = this->entity_data_chunk->ReserveRange(Entity::GetUboSize(), Vulkan::SboAlignment());
+                if(entity_sbo_chunk == nullptr) {
+                    if(!this->entities_descriptor.ResizeChunk(this->entity_data_chunk, this->entity_data_chunk->range + Entity::GetUboSize() * 100,
+                                                              ENTITY_DATA_BINDING, static_cast<uint32_t>(Vulkan::SboAlignment()))) {
+                        #if defined(DISPLAY_LOGS)
+                        std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                        #endif
+                        return false;
+                    }
+                    entity_sbo_chunk = this->entity_data_chunk->ReserveRange(Entity::GetUboSize(), Vulkan::SboAlignment());
+                }
 
-                this->next_drawable_bind_dynamic_offset += Vulkan::GetInstance().ComputeUniformBufferAlignment(static_cast<uint32_t>(10 * sizeof(uint32_t)));
+                new_bind.entities.push_back(&entity);
+                new_bind.chunk = this->entities_descriptor.ReserveRange(sizeof(uint32_t) * 10, Vulkan::SboAlignment(), ENTITY_ID_BINDING);
+                if(new_bind.chunk == nullptr) {
+                    #if defined(DISPLAY_LOGS)
+                    std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                    #endif
+                    return false;
+                }
+                new_bind.chunk->ReserveRange(sizeof(uint32_t));
+                this->entities_descriptor.WriteData(&entity.GetId(), sizeof(uint32_t), ENTITY_ID_BINDING, static_cast<uint32_t>(new_bind.chunk->offset));
+                new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.begin(), {static_cast<uint32_t>(new_bind.chunk->offset)});
 
                 // Add loaded mesh
-                this->render_groups[i].drawables.push_back(new_bind);
+                this->render_groups[i].drawables.push_back(std::move(new_bind));
 
                 // Finish
                 this->entities.push_back(&entity);
@@ -425,7 +456,7 @@ namespace Engine
     void EntityRender::Update(uint8_t frame_index)
     {
         for(auto entity : this->entities) {
-            entity->Update(this->entity_data_chunk.offset, frame_index);
+            entity->Update(this->entities_descriptor.GetChunk(ENTITY_DATA_BINDING)->offset, frame_index);
         }
     }
 
@@ -493,6 +524,7 @@ namespace Engine
             for(auto& bind : this->render_groups[i].drawables) {
             
                 std::vector<VkDescriptorSet> bind_descriptor_sets_2 = {this->entities_descriptor.Get(frame_index)};
+                bind.dynamic_offsets[0] = static_cast<uint32_t>(bind.chunk->offset);
 
                 if(bind.has_skeleton)
                     bind_descriptor_sets_2.push_back(this->skeleton_descriptor.Get(frame_index));

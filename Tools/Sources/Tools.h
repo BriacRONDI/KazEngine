@@ -1,6 +1,7 @@
 #pragma once
 
 #include <fstream>
+#include <sstream>
 #include <vector>
 
 #if defined _WIN32
@@ -35,16 +36,13 @@ namespace Tools
     };
 
     template <typename T>
-    struct Area {
-        T width;
-        T height;
-    };
-
-    template <typename T>
-    struct Point {
-        T x;
-        T y;
-    };
+    std::string to_string_with_precision(const T a_value, const int n = 6)
+    {
+        std::ostringstream out;
+        out.precision(n);
+        out << std::fixed << a_value;
+        return out.str();
+    }
 
     /**
      * Open and read a file

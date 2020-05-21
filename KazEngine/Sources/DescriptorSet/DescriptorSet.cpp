@@ -23,8 +23,12 @@ namespace Engine
             if(this->pool != nullptr) vkDestroyDescriptorPool(Vulkan::GetDevice(), this->pool, nullptr);
         }
 
+        for(auto& binding : this->bindings)
+            DataBank::GetInstance().GetManagedBuffer().FreeChunk(binding.chunk);
+
         this->sets.clear();
         this->image_buffers.clear();
+        this->bindings.clear();
 
         this->layout            = nullptr;
         this->pool              = nullptr;
@@ -411,7 +415,7 @@ namespace Engine
         return set_id;
     }
 
-    bool DescriptorSet::Create(std::vector<BINDING_INFOS> infos, uint32_t max_sets)
+    bool DescriptorSet::Create(std::vector<BINDING_INFOS> infos, uint32_t instance_count)
     {
         this->Clear();
         this->bindings.resize(infos.size());
@@ -429,24 +433,19 @@ namespace Engine
             switch(this->bindings[i].layout.descriptorType) {
                 case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER :
                 case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC :
-                    alignment = Vulkan::GetInstance().GetDeviceLimits().minUniformBufferOffsetAlignment;
+                    alignment = Vulkan::UboAlignment();
                     break;
 
                 case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
                 case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC :
-                    alignment = Vulkan::GetInstance().GetDeviceLimits().minStorageBufferOffsetAlignment;
+                    alignment = Vulkan::SboAlignment();
                     break;
             }
 
-            this->bindings[i].chunks.resize(max_sets);
-            for(uint32_t j=0; j<max_sets; j++) {
-                this->bindings[i].chunks[j] = DataBank::GetInstance().GetManagedBuffer().ReserveChunk(infos[i].size, alignment);
-                if(!this->bindings[i].chunks[j].range) {
-                    this->Clear();
-                    return false;
-                }
-            }
+            this->bindings[i].chunk = DataBank::GetManagedBuffer().ReserveChunk(infos[i].size, alignment);
             layout_bindings.push_back(this->bindings[i].layout);
+
+            this->bindings[i].awaiting_update.resize(instance_count, false);
         }
 
         ////////////////////////
@@ -475,14 +474,14 @@ namespace Engine
         std::vector<VkDescriptorPoolSize> pool_sizes(layout_bindings.size());
         for(uint8_t i=0; i<pool_sizes.size(); i++) {
             pool_sizes[i].type = layout_bindings[i].descriptorType;
-            pool_sizes[i].descriptorCount = layout_bindings[i].descriptorCount * max_sets;
+            pool_sizes[i].descriptorCount = layout_bindings[i].descriptorCount * instance_count;
         }
 
 		VkDescriptorPoolCreateInfo poolInfo = {};
 		poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 		poolInfo.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
 		poolInfo.pPoolSizes = pool_sizes.data();
-        poolInfo.maxSets = max_sets;
+        poolInfo.maxSets = instance_count;
 
 		result = vkCreateDescriptorPool(Vulkan::GetDevice(), &poolInfo, nullptr, &this->pool);
 		if(result != VK_SUCCESS) {
@@ -496,15 +495,15 @@ namespace Engine
         // Allocation du Descriptor Sets //
         ///////////////////////////////////
 
-        std::vector<VkDescriptorSetLayout> layouts(max_sets, this->layout);
+        std::vector<VkDescriptorSetLayout> layouts(instance_count, this->layout);
         VkDescriptorSetAllocateInfo alloc_info = {};
         alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         alloc_info.pNext = nullptr;
         alloc_info.descriptorPool = this->pool;
-        alloc_info.descriptorSetCount = max_sets;
+        alloc_info.descriptorSetCount = instance_count;
         alloc_info.pSetLayouts = layouts.data();
 
-        this->sets.resize(max_sets);
+        this->sets.resize(instance_count);
         result = vkAllocateDescriptorSets(Vulkan::GetDevice(), &alloc_info, this->sets.data());
         if(result != VK_SUCCESS) {
             this->Clear();
@@ -518,19 +517,26 @@ namespace Engine
         // Mise à jour du Descriptor Set //
         ///////////////////////////////////
 
-        std::vector<VkWriteDescriptorSet> writes(this->bindings.size() * max_sets);
+        std::vector<VkWriteDescriptorSet> writes(this->bindings.size() * instance_count);
+        std::vector<VkDescriptorBufferInfo> buffer_infos(this->bindings.size() * instance_count);
+
         for(uint8_t i=0; i<bindings.size(); i++) {
-            for(uint32_t j=0; j<max_sets; j++) {
-                writes[i * max_sets + j].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                writes[i * max_sets + j].pNext = nullptr;
-                writes[i * max_sets + j].dstBinding = this->bindings[i].layout.binding;
-                writes[i * max_sets + j].dstArrayElement = 0;
-                writes[i * max_sets + j].descriptorCount = this->bindings[i].layout.descriptorCount;
-                writes[i * max_sets + j].descriptorType = this->bindings[i].layout.descriptorType;
-                writes[i * max_sets + j].pTexelBufferView = nullptr;
-                writes[i * max_sets + j].pImageInfo = nullptr;
-                writes[i * max_sets + j].dstSet = this->sets[j];
-                writes[i * max_sets + j].pBufferInfo = &DataBank::GetInstance().GetManagedBuffer().GetBufferInfos(this->bindings[i].chunks[j], j);
+
+            VkWriteDescriptorSet write;
+            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            write.pNext = nullptr;
+            write.dstBinding = this->bindings[i].layout.binding;
+            write.dstArrayElement = 0;
+            write.descriptorCount = this->bindings[i].layout.descriptorCount;
+            write.descriptorType = this->bindings[i].layout.descriptorType;
+            write.pTexelBufferView = nullptr;
+            write.pImageInfo = nullptr;
+
+            for(uint32_t j=0; j<instance_count; j++) {
+                writes[i * instance_count + j] = write;
+                writes[i * instance_count + j].dstSet = this->sets[j];
+                buffer_infos[i * instance_count + j] = DataBank::GetInstance().GetManagedBuffer().GetBufferInfos(this->bindings[i].chunk, j);
+                writes[i * instance_count + j].pBufferInfo = &buffer_infos[i * instance_count + j];
             }
         }
 
@@ -665,5 +671,145 @@ namespace Engine
         this->image_buffers.push_back(image_buffer);
 
         return index;
+    }
+
+    /*std::vector<Chunk>::iterator const DescriptorSet::ReserveRange(size_t size, uint8_t binding)
+    {
+        Chunk chunk = this->bindings[binding].chunk->ReserveRange(size);
+        return chunk;
+    }*/
+
+    std::shared_ptr<Chunk> DescriptorSet::ReserveRange(size_t size, size_t alignment, uint8_t binding)
+    {
+        std::shared_ptr<Chunk> chunk = this->bindings[binding].chunk->ReserveRange(size, alignment);
+
+        if(chunk == nullptr) {
+
+            VkDeviceSize binding_alignment = 0;
+            switch(this->bindings[binding].layout.descriptorType) {
+                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER :
+                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC :
+                    binding_alignment = Vulkan::UboAlignment();
+                    break;
+
+                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
+                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC :
+                    binding_alignment = Vulkan::SboAlignment();
+                    break;
+            }
+
+            bool relocated;
+            if(DataBank::GetManagedBuffer().ResizeChunk(this->bindings[binding].chunk,
+                                                        this->bindings[binding].chunk->range + size,
+                                                        relocated, binding_alignment)) {
+
+                this->AwaitUpdate(binding);
+                return this->bindings[binding].chunk->ReserveRange(size, alignment);
+            }else{
+                return nullptr;
+            }
+        }
+
+        return chunk;
+    }
+
+    bool DescriptorSet::ResizeChunk(std::shared_ptr<Chunk> chunk, size_t size, uint8_t binding, VkDeviceSize alignment)
+    {
+        bool relocated;
+        if(!this->bindings[binding].chunk->ResizeChild(chunk, size, relocated, alignment)) {
+
+            VkDeviceSize binding_alignment = 0;
+            switch(this->bindings[binding].layout.descriptorType) {
+                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER :
+                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC :
+                    binding_alignment = Vulkan::UboAlignment();
+                    break;
+
+                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
+                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC :
+                    binding_alignment = Vulkan::SboAlignment();
+                    break;
+            }
+
+            size_t extension = size - chunk->range;
+            if(DataBank::GetManagedBuffer().ResizeChunk(this->bindings[binding].chunk,
+                                                        this->bindings[binding].chunk->range + extension,
+                                                        relocated, binding_alignment)) {
+                this->AwaitUpdate(binding);
+                if(!this->bindings[binding].chunk->ResizeChild(chunk, size, relocated, alignment)) {
+                    std::vector<Chunk::DEFRAG_CHUNK> defrag;
+                    if(this->bindings[binding].chunk->Defragment(alignment, defrag, chunk, extension)) {
+                        std::vector<std::vector<char>> resized_chunk_data(this->sets.size());
+                        for(auto& fragment : defrag) {
+                            if(fragment.chunk == chunk) {
+                                for(uint8_t i=0; i<resized_chunk_data.size(); i++) {
+                                    resized_chunk_data[i].resize(chunk->range - extension);
+                                    DataBank::GetManagedBuffer().ReadStagingBuffer(
+                                        resized_chunk_data[i], this->bindings[binding].chunk->offset + fragment.old_offset, i);
+                                }
+                            }else{
+                                DataBank::GetManagedBuffer().MoveData(this->bindings[binding].chunk->offset + fragment.old_offset,
+                                                                      this->bindings[binding].chunk->offset + fragment.chunk->offset,
+                                                                      fragment.chunk->range);
+                            }
+                        }
+
+                        for(uint8_t i=0; i<resized_chunk_data.size(); i++)
+                            this->WriteData(resized_chunk_data[i].data(), resized_chunk_data[i].size(), binding, static_cast<uint32_t>(chunk->offset));
+
+                        return true;
+                    }else{
+                        return false;
+                    }
+                }
+                return true;
+            }else{
+                return false;
+            }
+        }else{
+            this->AwaitUpdate(binding);
+            return true;
+        }
+    }
+
+    void DescriptorSet::UpdateDescriptorSet(uint8_t binding, uint8_t instance_id)
+    {
+        VkDescriptorBufferInfo buffer_infos = DataBank::GetInstance().GetManagedBuffer().GetBufferInfos(this->bindings[binding].chunk, instance_id);
+
+        VkWriteDescriptorSet write;
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.pNext = nullptr;
+        write.dstBinding = this->bindings[binding].layout.binding;
+        write.dstArrayElement = 0;
+        write.descriptorCount = this->bindings[binding].layout.descriptorCount;
+        write.descriptorType = this->bindings[binding].layout.descriptorType;
+        write.pTexelBufferView = nullptr;
+        write.pImageInfo = nullptr;
+        write.dstSet = this->sets[instance_id];
+        write.pBufferInfo = &buffer_infos;
+
+        vkUpdateDescriptorSets(Vulkan::GetDevice(), 1, &write, 0, nullptr);
+        this->bindings[binding].awaiting_update[instance_id] = false;
+    }
+
+    bool DescriptorSet::Update(uint8_t instance_id)
+    {
+        bool updated = false;
+        for(uint8_t i=0; i<this->bindings.size(); i++) {
+            if(this->bindings[i].awaiting_update[instance_id]) {
+                this->UpdateDescriptorSet(i, instance_id);
+                updated = true;
+            }
+        }
+
+        return updated;
+    }
+
+    bool DescriptorSet::NeedUpdate(uint8_t instance_id)
+    {
+        for(auto& binding : this->bindings)
+            if(binding.awaiting_update[instance_id])
+                return true;
+        return false;
     }
 }

@@ -8,7 +8,7 @@ namespace Engine
         this->mesh = mesh;
         std::unique_ptr<char> mesh_vbo = this->mesh->BuildVBO(vbo_size, this->index_buffer_offset);
         this->buffer_chunk = DataBank::GetManagedBuffer().ReserveChunk(vbo_size);
-        if(this->index_buffer_offset != UINT64_MAX) this->index_buffer_offset += this->buffer_chunk.offset;
+        if(this->index_buffer_offset != UINT64_MAX) this->index_buffer_offset += this->buffer_chunk->offset;
         this->vertex_count = static_cast<uint32_t>(mesh->index_buffer.size());
         if(!this->vertex_count) this->vertex_count = static_cast<uint32_t>(mesh->vertex_buffer.size());
 
@@ -43,14 +43,14 @@ namespace Engine
             this->materials.push_back(new_material);
         }
 
-        if(!this->buffer_chunk.range) {
+        if(this->buffer_chunk == nullptr) {
             #if defined(DISPLAY_LOGS)
             std::cout << "Drawable::Load->Model(" << this->mesh->name << ") => Failed" << std::endl;
             #endif
             return false;
         }
 
-        DataBank::GetManagedBuffer().WriteData(mesh_vbo.get(), vbo_size, this->buffer_chunk.offset);
+        DataBank::GetManagedBuffer().WriteData(mesh_vbo.get(), vbo_size, this->buffer_chunk->offset);
 
         return true;
     }
@@ -60,7 +60,7 @@ namespace Engine
         if(!this->materials.empty())
             vkCmdPushConstants(command_buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PUSH_CONSTANT_MATERIAL), &this->materials[0]);
 
-        vkCmdBindVertexBuffers(command_buffer, 0, 1, &buffer, &this->buffer_chunk.offset);
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, &buffer, &this->buffer_chunk->offset);
 
         if(this->index_buffer_offset != UINT64_MAX) {
             vkCmdBindIndexBuffer(command_buffer, buffer, this->index_buffer_offset, VK_INDEX_TYPE_UINT32);

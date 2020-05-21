@@ -39,13 +39,70 @@ namespace Engine
         this->properties.selected = 0;
         this->moving = false;
         this->base_move_speed = 5.0f / 1000.0f;
+        this->meshes = nullptr;
 
         Entity::next_id++;
     }
 
     Entity::~Entity()
     {
-        if(this->meshes != nullptr) delete this->meshes;
+        if(this->meshes != nullptr)
+            delete this->meshes;
+    }
+
+    Entity& Entity::operator=(Entity const& other)
+    {
+        if(&other != this) {
+            this->animation = other.animation;
+            this->animation_speed = other.animation_speed;
+            this->animation_timer = other.animation_timer;
+            this->base_move_speed = other.base_move_speed;
+            this->data_offset = other.data_offset;
+            this->id = other.id;
+            this->loop_animation = other.loop_animation;
+            this->move_destination = other.move_destination;
+            this->move_direction = other.move_direction;
+            this->move_length = other.move_length;
+            this->move_origin = other.move_origin;
+            this->move_speed = other.move_speed;
+            this->move_timer = other.move_timer;
+            this->moving = other.moving;
+            this->properties = other.properties;
+
+            if(other.meshes != nullptr) {
+                this->meshes = new std::vector<std::shared_ptr<Model::Mesh>>;
+                *this->meshes = *other.meshes;
+            }else{
+                this->meshes = nullptr;
+            }
+        }
+
+        return *this;
+    }
+
+    Entity& Entity::operator=(Entity&& other)
+    {
+        if(&other != this) {
+            this->animation = other.animation;
+            this->animation_speed = other.animation_speed;
+            this->animation_timer = other.animation_timer;
+            this->base_move_speed = other.base_move_speed;
+            this->data_offset = other.data_offset;
+            this->id = other.id;
+            this->loop_animation = other.loop_animation;
+            this->move_destination = other.move_destination;
+            this->move_direction = other.move_direction;
+            this->move_length = other.move_length;
+            this->move_origin = other.move_origin;
+            this->move_speed = other.move_speed;
+            this->move_timer = other.move_timer;
+            this->moving = other.moving;
+            this->properties = other.properties;
+            this->meshes = other.meshes;
+            other = {};
+        }
+
+        return *this;
     }
 
     void Entity::AddMesh(std::shared_ptr<Model::Mesh> mesh)

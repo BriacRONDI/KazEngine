@@ -82,7 +82,7 @@ namespace Engine
 
             Frustum frustum;                        // Frustum de la caméra
             std::vector<DescriptorSet> descriptor;
-            Chunk chunk;
+            std::shared_ptr<Chunk> chunk;
 
             Camera();
             virtual ~Camera();

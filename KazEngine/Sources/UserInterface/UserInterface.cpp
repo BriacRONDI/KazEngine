@@ -187,7 +187,7 @@ namespace Engine
         vertex_data[3].uv = { 1.0f, 1.0f };
 
         DataBank::GetManagedBuffer().WriteData(vertex_data.data(), static_cast<uint32_t>(vertex_data.size()) * sizeof(SHADER_INPUT),
-                                               this->ui_vbo_chunk.offset, frame_index);
+                                               this->ui_vbo_chunk->offset, frame_index);
 
         return true;
     }
@@ -198,6 +198,12 @@ namespace Engine
             this->selection_descriptor.WriteData(&this->selection_square, sizeof(MOUSE_SELECTION_SQUARE), 0, frame_index);
             this->update_selection_square[frame_index] = false;
         }
+    }
+
+    void UserInterface::Refresh(uint8_t frame_index)
+    {
+        this->need_update[frame_index] = true;
+        vkResetCommandBuffer(this->command_buffers[frame_index], VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
     }
 
     VkCommandBuffer UserInterface::BuildCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer)
@@ -262,7 +268,7 @@ namespace Engine
             VkDescriptorSet set = this->selection_descriptor.Get(frame_index);
             vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &set, 0, nullptr);
             vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline.handle);
-            vkCmdBindVertexBuffers(command_buffer, 0, 1, &DataBank::GetManagedBuffer().GetBuffer(frame_index).handle, &this->ui_vbo_chunk.offset);
+            vkCmdBindVertexBuffers(command_buffer, 0, 1, &DataBank::GetManagedBuffer().GetBuffer(frame_index).handle, &this->ui_vbo_chunk->offset);
             vkCmdDraw(command_buffer, 4, 1, 0, 0);
         }
 

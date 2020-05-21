@@ -7,6 +7,9 @@
 #include "../Entity/Entity.h"
 #include "../../Drawable/Drawable.h"
 
+#define ENTITY_ID_BINDING   0
+#define ENTITY_DATA_BINDING 1
+
 namespace Engine
 {
     class EntityRender
@@ -19,7 +22,7 @@ namespace Engine
             VkCommandBuffer GetCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer);
             std::vector<Entity*> SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
             Entity* ToggleSelection(Point<uint32_t> mouse_position);
-            inline Chunk GetEntityDataChunk() { return this->entity_data_chunk; }
+            inline DescriptorSet& GetEntityDescriptor() { return this->entities_descriptor; }
             
             bool AddEntity(Entity& entity);
             void Update(uint8_t frame_index);
@@ -35,6 +38,7 @@ namespace Engine
             struct DRAWABLE_BIND {
                 Drawable mesh;
                 uint32_t texture_id;
+                std::shared_ptr<Chunk> chunk;
                 std::vector<uint32_t> dynamic_offsets;
                 bool has_skeleton;
                 std::vector<Entity*> entities;
@@ -46,12 +50,11 @@ namespace Engine
                 std::vector<DRAWABLE_BIND> drawables;
             };
 
-            Chunk entity_ids_chunk;
-            Chunk entity_data_chunk;
-            Chunk skeleton_bones_chunk;
-            Chunk skeleton_offsets_chunk;
-            Chunk skeleton_offsets_ids_chunk;
-            Chunk skeleton_animations_chunk;
+            std::shared_ptr<Chunk> entity_data_chunk;
+            std::shared_ptr<Chunk> skeleton_bones_chunk;
+            std::shared_ptr<Chunk> skeleton_offsets_chunk;
+            std::shared_ptr<Chunk> skeleton_offsets_ids_chunk;
+            std::shared_ptr<Chunk> skeleton_animations_chunk;
 
             DescriptorSet texture_descriptor;
             DescriptorSet entities_descriptor;
@@ -63,7 +66,6 @@ namespace Engine
             std::vector<Entity*> entities;
             std::map<std::string, SKELETON_BUFFER_INFOS> skeletons;
             std::map<std::string, uint32_t> textures;
-            uint32_t next_drawable_bind_dynamic_offset;
 
             bool LoadTexture(std::string name);
             bool LoadSkeleton(std::string name);

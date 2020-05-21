@@ -1,31 +1,29 @@
 #version 450
-#extension GL_KHR_vulkan_glsl : enable
 
 layout (set=1, binding=0) uniform sampler2D inTexture;
 
-/*layout (set=2, binding=0) uniform MapProperties
+/*layout (set=2, binding=0) uniform Position
 {
-	vec3 selection_position;
-	uint display_selection;
-	vec3 destination_position;
-	uint display_destination;
-} map;*/
+	uint selection_count;
+	vec3 entity_positon[1024];
+};*/
 
 struct Properties {
 	mat4 model;
 	uint animation_id;
 	uint frame_id;
+	// ivec2 padding;
 };
 
-layout (set=2, binding=0) uniform Entity
+layout (set=2, binding=0) readonly buffer IDs
 {
 	uint selection_count;
-	uint entity_id[10];
+	uint entity_id[];
 };
 
 layout (set=2, binding=1) readonly buffer Entity
 {
-	Properties properties[];
+	Properties entity[];
 };
 
 layout (location = 0) in vec2 inUV;
@@ -45,13 +43,24 @@ void main()
 {
 	outColor = texture(inTexture, inUV);
 	
+	/*if(selection_count > 0) {
+		for(int i=0; i<selection_count; i++) {
+			float dist = distance(entity_positon[i], inPosition);
+			if(dist <= selection_radius + selection_border) {
+				float t = 1.0 + smoothstep(selection_radius, selection_radius + selection_border, dist) - smoothstep(selection_radius - selection_border, selection_radius, dist);
+				outColor = mix(selection_color, outColor, t);
+			}
+		}
+	}*/
+	
 	if(selection_count > 0) {
 		for(int i=0; i<selection_count; i++) {
-			Properties entity = properties[entity_id[i]];
-			vec3 entity_positon = vec3(entity.model[3][0], entity.model[3][1], entity.model[3][2]);
+			vec3 entity_positon = vec3(entity[entity_id[i]].model[3]);
 			float dist = distance(entity_positon, inPosition);
-			float t = 1.0 + smoothstep(selection_radius, selection_radius + selection_border, dist) - smoothstep(selection_radius - selection_border, selection_radius, dist);
-			outColor = mix(selection_color, outColor, t);
+			if(dist <= selection_radius + selection_border) {
+				float t = 1.0 + smoothstep(selection_radius, selection_radius + selection_border, dist) - smoothstep(selection_radius - selection_border, selection_radius, dist);
+				outColor = mix(selection_color, outColor, t);
+			}
 		}
 	}
 	
