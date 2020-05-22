@@ -182,7 +182,7 @@ namespace DataPackerGUI
         return true;
     }
 
-    void FileManager::OnContextMenu(std::string const& path, Tools::Point<uint32_t> const& position)
+    void FileManager::OnContextMenu(std::string const& path, Engine::Point<uint32_t> const& position)
     {
         // There's no context menu in white area
         if(path.empty()) return;
@@ -195,7 +195,7 @@ namespace DataPackerGUI
         else menu_id = IDR_TREE_CONTEXT_BINARY;
 
         // Compute context menu position
-        POINT pt = {static_cast<LONG>(position.x), static_cast<LONG>(position.y)};
+        POINT pt = {static_cast<LONG>(position.X), static_cast<LONG>(position.Y)};
         ClientToScreen(this->tree_view->GetHwnd(), &pt);
 
         // Load context menu

@@ -378,7 +378,7 @@ namespace DataPackerGUI
                             target->SelectItem(hit_test.hItem);
                         }
                         
-                        Tools::Point<uint32_t> position = {static_cast<uint32_t>(hit_test.pt.x), static_cast<uint32_t>(hit_test.pt.y)};
+                        Engine::Point<uint32_t> position = {static_cast<uint32_t>(hit_test.pt.x), static_cast<uint32_t>(hit_test.pt.y)};
                         for(auto& listener : target->Listeners) listener->OnContextMenu(path, position);
                     }
                     break;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../Tools/Sources/Tools.h"
+#include <Types.hpp>
 
 namespace DataPackerGUI
 {
@@ -14,7 +14,7 @@ namespace DataPackerGUI
              * @param path of target item
              * @param position Mouse cursor position
              */
-            virtual void OnContextMenu(std::string const& path, Tools::Point<uint32_t> const& position) = 0;
+            virtual void OnContextMenu(std::string const& path, Engine::Point<uint32_t> const& position) = 0;
 
             /**
              * A label has been edited

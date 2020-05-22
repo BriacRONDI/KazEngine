@@ -4,9 +4,10 @@
 #include <codecvt>
 #include <Windows.h>
 
+// #include <Tools.h>
+#include <Types.hpp>
 #include "../../Resources/resource.h"
 #include "../../DataPacker/Sources/DataPacker.h"
-#include "../../Tools/Sources/Tools.h"
 #include "../TreeView/TreeView.h"
 #include "../Import/Import.h"
 
@@ -81,7 +82,7 @@ namespace DataPackerGUI
             // ITreeViewListener //
             ///////////////////////
 
-            virtual void OnContextMenu(std::string const& path, Tools::Point<uint32_t> const& position);
+            virtual void OnContextMenu(std::string const& path, Engine::Point<uint32_t> const& position);
             virtual void OnLabelEdit(std::string const& path, std::string const& label);
             virtual void OnDropItem(std::string const& source_path, std::string const& dest_path);
             virtual void OnDropFiles(std::vector<std::wstring> const& files_path, std::string const& dest_path);
