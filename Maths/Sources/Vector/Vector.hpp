@@ -1,5 +1,6 @@
 #include <memory>
 #include <array>
+#include <cmath>
 
 #if !defined(DEGREES_TO_RADIANS)
 #define DEGREES_TO_RADIANS 0.01745329251994329576923690768489f
@@ -100,6 +101,9 @@ namespace Maths
 
             /// Equality operator
             inline bool operator==(VEC_TYPE const& other) const { return this->value == other.value; }
+
+            /// Inequality operator
+            inline bool operator!=(VEC_TYPE const& other) const { return this->value != other.value; }
 
             /// Base math operator
             /// @{

@@ -101,8 +101,9 @@ int main(int argc, char** argv)
     guy.AddMesh(simple_guy_mesh);
     engine.GetEntityRender().AddEntity(guy);
 
-    Engine::Camera::GetInstance().SetPosition({0.0f, 69.0f, -37.0f});
+    Engine::Camera::GetInstance().SetPosition({0.0f, 5.0f, -4.0f});
     Engine::Camera::GetInstance().Rotate({0.0f, Maths::F_PI_4, 0.0f});
+    Engine::Camera::GetInstance().SetRtsMode();
 
     Engine::Timer framerate_timer, refresh_timer;
     framerate_timer.Start(std::chrono::milliseconds(1000));
@@ -110,18 +111,9 @@ int main(int argc, char** argv)
     uint32_t frame_count = 0;
 
     uint32_t entity_count = 0;
-    Engine::Timer dynamic_entity_add_start;
-    dynamic_entity_add_start.Start(std::chrono::milliseconds(10));
+    // Engine::Timer dynamic_entity_add_start;
+    // dynamic_entity_add_start.Start(std::chrono::milliseconds(10));
     std::vector<std::shared_ptr<Engine::Entity>> guys;
-
-    for(int i=0; i<5000; i++) {
-        auto new_entity = std::shared_ptr<Engine::Entity>(new Engine::Entity);
-        guys.resize(guys.size() + 1);
-        guys[guys.size()-1] = new_entity;
-        new_entity->AddMesh(simple_guy_mesh);
-        engine.GetEntityRender().AddEntity(*new_entity);
-        new_entity->PlayAnimation("Armature|Walk", 1.0f, true);
-    }
 
     // Main loop
     while(Engine::Window::Loop())
@@ -150,7 +142,7 @@ int main(int argc, char** argv)
         // ENTITIES //
         //////////////
 
-        //if(dynamic_entity_add_start.GetProgression() >= 1.0f) {
+        if(/*dynamic_entity_add_start.GetProgression() >= 1.0f &&*/ Engine::Keyboard::GetInstance().IsPressed(VK_SPACE)) {
 
             auto new_entity = std::shared_ptr<Engine::Entity>(new Engine::Entity);
             new_entity->AddMesh(simple_guy_mesh);
@@ -181,8 +173,8 @@ int main(int argc, char** argv)
                 }
             }
 
-            /*dynamic_entity_add_start.Start(std::chrono::milliseconds(100));
-        }*/
+            // dynamic_entity_add_start.Start(std::chrono::milliseconds(10));
+        }
 
         ///////////////
         // MAIN LOOP //

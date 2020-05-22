@@ -7,6 +7,7 @@
 #include "../Vector/Vector.hpp"
 
 #include <array>
+#include <cmath>
 
 #define IDENTITY_MATRIX {1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1}
 #define ZERO_MATRIX {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
@@ -42,6 +43,9 @@ namespace Maths
 
             /// Equality operator
             inline bool operator==(Matrix4x4 const& other) const { return this->value == other.value; }
+
+            /// Inequality operator
+            inline bool operator!=(Matrix4x4 const& other) const { return this->value != other.value; }
 
             inline Matrix4x4(float const x1, float const y1, float const z1, float const w1,
                              float const x2, float const y2, float const z2, float const w2,

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 #include "../../Maths/Sources/Maths.h"
 
 namespace DataPacker

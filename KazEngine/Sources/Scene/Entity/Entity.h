@@ -16,6 +16,14 @@ namespace Engine
                 uint32_t animation_id;
                 uint32_t frame_id;
                 uint32_t selected;
+
+                inline bool operator !=(ENTITY_UBO other)
+                {
+                    return this->matrix != other.matrix
+                           || this->animation_id != other.animation_id
+                           || this->frame_id != other.frame_id
+                           || this->selected != other.selected;
+                }
             };
             
             ENTITY_UBO properties;
@@ -50,6 +58,7 @@ namespace Engine
             std::string animation;
             bool loop_animation;
             float animation_speed;
+            std::vector<ENTITY_UBO> last_ubo;
 
             bool moving;
             Maths::Vector3 move_origin;

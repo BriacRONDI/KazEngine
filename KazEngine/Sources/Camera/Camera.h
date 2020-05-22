@@ -23,6 +23,8 @@ namespace Engine
                 Maths::Matrix4x4 projection;
                 Maths::Matrix4x4 view;
                 Maths::Vector3 position;
+
+                bool operator!=(CAMERA_UBO other) { return this->projection != other.projection || this->view != other.view || this->position != other.position; }
             };
 
             // Singleton
@@ -44,6 +46,8 @@ namespace Engine
             inline void Freeze() { this->frozen = true; }
             inline void UnFreeze() { this->frozen = false; }
             inline bool IsRtsMode() { return this->rts_mode; }
+            inline void SetFpsMode() { this->rts_mode = false; }
+            inline void SetRtsMode() { this->rts_mode = true; }
 
             ///////////////////////////
             ///    IMouseListener    //
@@ -67,6 +71,7 @@ namespace Engine
             float rts_scroll_speed = 2.5f / 1000.0f;
             float rts_scroll_initial_position[2];
             std::chrono::system_clock::time_point scroll_start[2];
+            std::vector<CAMERA_UBO> last_ubo;
 
             CAMERA_UBO camera;                      // Uniform buffer de la caméra
             Point<uint32_t> mouse_origin;           // Position de la souris au moment du click

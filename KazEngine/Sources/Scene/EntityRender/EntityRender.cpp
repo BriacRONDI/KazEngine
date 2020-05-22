@@ -21,6 +21,7 @@ namespace Engine
                 if(command_buffer != nullptr) vkFreeCommandBuffers(Vulkan::GetDevice(), this->command_pool, 1, &command_buffer);
         }
 
+        this->need_update.clear();
         this->command_buffers.clear();
         this->entities.clear();
         this->entities_descriptor.Clear();
@@ -35,9 +36,10 @@ namespace Engine
 
         Entity::UpdateUboSize();
 
-        // Allocate draw command buffers
         uint32_t frame_count = Vulkan::GetConcurrentFrameCount();
         this->command_buffers.resize(frame_count);
+        this->need_update.resize(frame_count, true);
+
         if(!Vulkan::GetInstance().AllocateCommandBuffer(command_pool, this->command_buffers, VK_COMMAND_BUFFER_LEVEL_SECONDARY)) {
             #if defined(DISPLAY_LOGS)
             std::cout << "Dynamics::Dynamics() => AllocateCommandBuffer [draw] : Failed" << std::endl;
@@ -351,6 +353,7 @@ namespace Engine
                         drawable_bind.entities.push_back(&entity);
                         
                         // Finish
+                        for(uint8_t i=0; i<this->need_update.size(); i++) this->need_update[i] = true;
                         this->entities.push_back(&entity);
                         return true;
                     }
@@ -446,6 +449,7 @@ namespace Engine
 
                 // Finish
                 this->entities.push_back(&entity);
+                for(uint8_t i=0; i<this->need_update.size(); i++) this->need_update[i] = true;
                 return true;
             }
         }
@@ -460,10 +464,17 @@ namespace Engine
         }
     }
 
+    void EntityRender::Refresh(uint8_t frame_index)
+    {
+        this->need_update[frame_index] = true;
+        vkResetCommandBuffer(this->command_buffers[frame_index], VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+    }
+
     VkCommandBuffer EntityRender::GetCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer)
     {
         VkCommandBuffer command_buffer = this->command_buffers[frame_index];
-        // vkResetCommandPool(Vulkan::GetDevice(), this->command_pool, 0);
+        if(!this->need_update[frame_index]) return command_buffer;
+        this->need_update[frame_index] = false;
 
         VkCommandBufferInheritanceInfo inheritance_info = {};
         inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;

@@ -28,7 +28,10 @@ namespace Engine
             }
         }
 
-        DataBank::GetManagedBuffer().WriteData(&this->properties, Entity::ubo_size, offset + this->data_offset, frame_index);
+        if(this->last_ubo[frame_index] != this->properties) {
+            DataBank::GetManagedBuffer().WriteData(&this->properties, Entity::ubo_size, offset + this->data_offset, frame_index);
+            this->last_ubo[frame_index] = this->properties;
+        }
     }
 
     Entity::Entity()
@@ -40,6 +43,8 @@ namespace Engine
         this->moving = false;
         this->base_move_speed = 5.0f / 1000.0f;
         this->meshes = nullptr;
+        this->last_ubo.resize(Vulkan::GetConcurrentFrameCount());
+        for(auto& ubo : this->last_ubo) ubo.selected = true;
 
         Entity::next_id++;
     }

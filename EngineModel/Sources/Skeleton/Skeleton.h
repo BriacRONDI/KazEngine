@@ -3,6 +3,7 @@
 #include <chrono>
 #include <map>
 #include <vector>
+#include <string>
 #include "../../../Maths/Sources/Maths.h"
 
 namespace Model

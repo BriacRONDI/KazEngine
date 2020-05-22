@@ -252,6 +252,7 @@ namespace Engine
         // Force rebuild external command buffers
         this->map->Refresh();
         this->user_interface->Refresh();
+        this->entity_render->Refresh();
     }
 
     void Core::Loop()
@@ -285,10 +286,8 @@ namespace Engine
         // Update descriptor sets
         if(this->entity_render->GetEntityDescriptor().NeedUpdate(swap_chain_image_index)) {
             this->map->Refresh(swap_chain_image_index);
+            this->entity_render->Refresh(swap_chain_image_index);
             this->entity_render->GetEntityDescriptor().Update(swap_chain_image_index);
-            /*#if defined(DISPLAY_LOGS)
-            std::cout << "EntityDescriptor : updated" << std::endl;
-            #endif*/
         }
 
         // Build image
@@ -309,6 +308,7 @@ namespace Engine
             // Force rebuild command buffers
             this->map->Refresh();
             this->user_interface->Refresh();
+            this->entity_render->Refresh();
         }
     }
 }

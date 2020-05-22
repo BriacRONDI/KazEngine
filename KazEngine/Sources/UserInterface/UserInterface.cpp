@@ -213,7 +213,6 @@ namespace Engine
         if(!this->need_update[frame_index]) return command_buffer;
         this->UpdateVertexBuffer(frame_index);
         this->need_update[frame_index] = false;
-        // vkResetCommandPool(Vulkan::GetDevice(), this->command_pool, 0);
 
         VkCommandBufferBeginInfo command_buffer_begin_info = {};
         command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -308,7 +307,7 @@ namespace Engine
     void UserInterface::MouseButtonUp(MOUSE_BUTTON button)
     {
         if(button == MOUSE_BUTTON::MOUSE_BUTTON_LEFT) {
-            if(this->selection_square.display > 0) {
+            if(this->selection_square.display > 0 && Camera::GetInstance().IsRtsMode()) {
                 this->selection_square.display = 0;
                 this->update_selection_square = {true, true, true};
                 this->need_update = {true, true, true};

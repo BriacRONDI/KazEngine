@@ -37,6 +37,8 @@ namespace Engine
         for(uint8_t i=0; i<DataBank::GetManagedBuffer().GetInstanceCount(); i++) this->descriptor[i].Create({binding}, {DataBank::GetManagedBuffer().GetBufferInfos(this->chunk, i)});
 
         this->frustum.Setup(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
+        this->last_ubo.resize(Vulkan::GetConcurrentFrameCount());
+
         Mouse::GetInstance().AddListener(this);
     }
 
@@ -51,7 +53,11 @@ namespace Engine
     void Camera::Update(uint8_t frame_index)
     {
         if(Mouse::GetInstance().IsClipped() && this->rts_mode && !this->frozen) this->RtsScroll();
-        DataBank::GetManagedBuffer().WriteData(&this->camera, sizeof(Camera::CAMERA_UBO), this->chunk->offset, frame_index);
+
+        if(this->camera != this->last_ubo[frame_index]) {
+            DataBank::GetManagedBuffer().WriteData(&this->camera, sizeof(Camera::CAMERA_UBO), this->chunk->offset, frame_index);
+            this->last_ubo[frame_index] = this->camera;
+        }
     }
 
     void Camera::RtsScroll()

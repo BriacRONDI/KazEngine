@@ -187,9 +187,7 @@ namespace Engine
     {
         VkCommandBuffer command_buffer = this->command_buffers[frame_index];
         if(!this->need_update[frame_index]) return command_buffer;
-
         this->need_update[frame_index] = false;
-        // vkResetCommandPool(Vulkan::GetDevice(), this->command_pool, 0);
 
         VkCommandBufferInheritanceInfo inheritance_info = {};
         inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;

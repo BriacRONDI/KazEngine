@@ -2,6 +2,7 @@
 
 #include <map>
 #include <vector>
+#include <string>
 #include <Maths.h>
 #include "../Deformer/Deformer.h"
 

@@ -23,6 +23,8 @@ namespace Engine
             std::vector<Entity*> SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
             Entity* ToggleSelection(Point<uint32_t> mouse_position);
             inline DescriptorSet& GetEntityDescriptor() { return this->entities_descriptor; }
+            inline void Refresh() { for(int i=0; i<this->need_update.size(); i++) this->Refresh(i); }
+            void Refresh(uint8_t frame_index);
             
             bool AddEntity(Entity& entity);
             void Update(uint8_t frame_index);
@@ -60,6 +62,7 @@ namespace Engine
             DescriptorSet entities_descriptor;
             DescriptorSet skeleton_descriptor;
 
+            std::vector<bool> need_update;
             VkCommandPool command_pool;
             std::vector<VkCommandBuffer> command_buffers;
             std::vector<RENDER_GOURP> render_groups;
