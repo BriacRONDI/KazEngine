@@ -4,9 +4,15 @@ ModelConverter/x64/
 ModelConverter/.vs/
 KazEngine/x64/
 .vs/
+.tlog/
 *.exe
 *.dll
 *.log
 *.spv
+*.obj
+*.idb
+*.pdb
+*.tlog
+*.lastbuildstate
 !zlib.dll
 !zlibd.dll
