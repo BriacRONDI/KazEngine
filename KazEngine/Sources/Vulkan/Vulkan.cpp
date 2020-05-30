@@ -2425,58 +2425,74 @@ namespace Engine
     }
 
     std::vector<VkVertexInputAttributeDescription> Vulkan::CreateVertexInputDescription(
-                std::vector<VERTEX_BINDING_ATTRIBUTE> attributes,
-                VkVertexInputBindingDescription &description,
-                uint32_t binding)
+                std::vector<std::vector<VERTEX_BINDING_ATTRIBUTE>> attributes,
+                std::vector<VkVertexInputBindingDescription>& descriptions)
     {
         std::vector<VkVertexInputAttributeDescription> output;
-        output.reserve(attributes.size());
         uint32_t location = 0;
-        uint32_t offset = 0;
+        descriptions.clear();
 
-        for(auto type : attributes) {
+        for(int32_t i=0; i<attributes.size(); i++) {
 
-            VkVertexInputAttributeDescription attribute;
-            attribute.offset = offset;
-            attribute.location = location;
-            attribute.binding = binding;
-            location++;
+            uint32_t offset = 0;
+            for(auto type : attributes[i]) {
 
-            switch(type) {
+                VkVertexInputAttributeDescription attribute;
+                attribute.offset = offset;
+                attribute.location = location;
+                attribute.binding = i;
+                location++;
 
-                case VERTEX_BINDING_ATTRIBUTE::POSITION :
-                case VERTEX_BINDING_ATTRIBUTE::NORMAL :
-                case VERTEX_BINDING_ATTRIBUTE::COLOR :
-                    attribute.format = VK_FORMAT_R32G32B32_SFLOAT;
-                    offset += sizeof(Maths::Vector3);
-                    break;
+                switch(type) {
 
-                case VERTEX_BINDING_ATTRIBUTE::POSITION_2D :
-                case VERTEX_BINDING_ATTRIBUTE::UV :
-                    attribute.format = VK_FORMAT_R32G32_SFLOAT;
-                    offset += sizeof(Maths::Vector2);
-                    break;
+                    case VERTEX_BINDING_ATTRIBUTE::POSITION :
+                    case VERTEX_BINDING_ATTRIBUTE::NORMAL :
+                    case VERTEX_BINDING_ATTRIBUTE::COLOR :
+                        attribute.format = VK_FORMAT_R32G32B32_SFLOAT;
+                        offset += sizeof(Maths::Vector3);
+                        break;
 
-                case VERTEX_BINDING_ATTRIBUTE::BONE_WEIGHTS :
-                    attribute.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-                    offset += sizeof(Maths::Vector4);
-                    break;
+                    case VERTEX_BINDING_ATTRIBUTE::POSITION_2D :
+                    case VERTEX_BINDING_ATTRIBUTE::UV :
+                        attribute.format = VK_FORMAT_R32G32_SFLOAT;
+                        offset += sizeof(Maths::Vector2);
+                        break;
 
-                case VERTEX_BINDING_ATTRIBUTE::BONE_IDS :
-                    attribute.format = VK_FORMAT_R32G32B32A32_SINT;
-                    offset += sizeof(int) * 4;
-                    break;
+                    case VERTEX_BINDING_ATTRIBUTE::BONE_WEIGHTS :
+                        attribute.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                        offset += sizeof(Maths::Vector4);
+                        break;
 
-                default :
-                    attribute.format = VK_FORMAT_UNDEFINED;
+                    case VERTEX_BINDING_ATTRIBUTE::BONE_IDS :
+                        attribute.format = VK_FORMAT_R32G32B32A32_SINT;
+                        offset += sizeof(int) * 4;
+                        break;
+
+                    case VERTEX_BINDING_ATTRIBUTE::MATRIX :
+                        attribute.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                        offset += sizeof(Maths::Matrix4x4);
+                        location += 3;
+                        break;
+
+                    case VERTEX_BINDING_ATTRIBUTE::UINT_ID :
+                        attribute.format = VK_FORMAT_R32_UINT;
+                        offset += sizeof(uint32_t);
+                        break;
+
+                    default :
+                        attribute.format = VK_FORMAT_UNDEFINED;
+                }
+
+                output.push_back(attribute);
             }
 
-            output.push_back(attribute);
+            VkVertexInputBindingDescription description;
+            description.binding = i;
+            description.stride = offset;
+            if(i == 0) description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+            else description.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+            descriptions.push_back(description);
         }
-
-        description.binding = binding;
-        description.stride = offset;
-        description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
         return output;
     }
@@ -2487,7 +2503,7 @@ namespace Engine
     bool Vulkan::CreatePipeline(bool dynamic_viewport,
                                 std::vector<VkDescriptorSetLayout> const& descriptor_set_layouts,
                                 std::vector<VkPipelineShaderStageCreateInfo> const& shader_stages,
-                                VkVertexInputBindingDescription const& vertex_binding_description,
+                                std::vector<VkVertexInputBindingDescription> const& vertex_binding_description,
                                 std::vector<VkVertexInputAttributeDescription> const& vertex_attribute_descriptions,
                                 std::vector<VkPushConstantRange> const& push_constant_rages,
                                 PIPELINE& pipeline,
@@ -2554,8 +2570,8 @@ namespace Engine
         vertex_input_state.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
         vertex_input_state.pNext = nullptr;
         vertex_input_state.flags = 0;
-        vertex_input_state.vertexBindingDescriptionCount = 1;
-        vertex_input_state.pVertexBindingDescriptions = &vertex_binding_description;
+        vertex_input_state.vertexBindingDescriptionCount = static_cast<uint32_t>(vertex_binding_description.size());
+        vertex_input_state.pVertexBindingDescriptions = vertex_binding_description.data();
         vertex_input_state.vertexAttributeDescriptionCount = static_cast<uint32_t>(vertex_attribute_descriptions.size());
         vertex_input_state.pVertexAttributeDescriptions = vertex_attribute_descriptions.data();
 

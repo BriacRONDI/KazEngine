@@ -19,6 +19,7 @@
     <ClCompile Include="Sources\Platform\Common\Timer\Timer.cpp" />
     <ClCompile Include="Sources\UserInterface\UserInterface.cpp" />
     <ClCompile Include="Sources\ManagedBuffer\Chunk\Chunk.cpp" />
+    <ClCompile Include="Sources\Scene\Entity\SkeletonEntity.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Sources\Vulkan\ListOfFunctions.inl" />
@@ -50,5 +51,6 @@
     <ClInclude Include="Sources\UserInterface\UserInterface.h" />
     <ClInclude Include="Sources\UserInterface\IUserInteraction.h" />
     <ClInclude Include="Sources\ManagedBuffer\Chunk\Chunk.h" />
+    <ClInclude Include="Sources\Scene\Entity\SkeletonEntity.h" />
   </ItemGroup>
 </Project>

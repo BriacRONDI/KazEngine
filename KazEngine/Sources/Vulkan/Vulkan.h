@@ -148,7 +148,9 @@ namespace Engine
                 NORMAL          = 3,
                 BONE_WEIGHTS    = 4,
                 BONE_IDS        = 5,
-                POSITION_2D     = 6
+                POSITION_2D     = 6,
+                MATRIX          = 7,
+                UINT_ID         = 8
             };
 
             /*struct DATA_CHUNK {
@@ -167,7 +169,10 @@ namespace Engine
             // FONCTIONS PRINCIPALES //
             ///////////////////////////
 
-            static std::vector<VkVertexInputAttributeDescription> CreateVertexInputDescription(std::vector<VERTEX_BINDING_ATTRIBUTE> attributes, VkVertexInputBindingDescription &description, uint32_t binding = 0);
+            static std::vector<VkVertexInputAttributeDescription> CreateVertexInputDescription(
+                std::vector<std::vector<VERTEX_BINDING_ATTRIBUTE>> attributes,
+                std::vector<VkVertexInputBindingDescription> &descriptions);
+
             static inline Vulkan& CreateInstance() { if(Vulkan::vulkan == nullptr) Vulkan::vulkan = new Vulkan; return *Vulkan::vulkan; }
             static inline bool HasInstance() { return Vulkan::vulkan != nullptr; }                                          // Indique si l'instance vulkan existe
             static inline Vulkan& GetInstance() { return *Vulkan::vulkan; }                                                 // Récupération de l'instance du singleton
@@ -250,7 +255,7 @@ namespace Engine
             bool CreatePipeline(bool dynamic_viewport,
                                 std::vector<VkDescriptorSetLayout> const& descriptor_set_layouts,
                                 std::vector<VkPipelineShaderStageCreateInfo> const& shader_stages,
-                                VkVertexInputBindingDescription const& vertex_binding_description,
+                                std::vector<VkVertexInputBindingDescription> const& vertex_binding_description,
                                 std::vector<VkVertexInputAttributeDescription> const& vertex_attribute_descriptions,
                                 std::vector<VkPushConstantRange> const& push_constant_rages,
                                 PIPELINE& pipeline,

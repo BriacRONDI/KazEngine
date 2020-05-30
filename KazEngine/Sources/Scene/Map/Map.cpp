@@ -106,8 +106,8 @@ namespace Engine
         shader_stages[0] = Vulkan::GetInstance().LoadShaderModule("./Shaders/map.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
         shader_stages[1] = Vulkan::GetInstance().LoadShaderModule("./Shaders/map.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
-        VkVertexInputBindingDescription vertex_binding_description;
-        auto vertex_attribute_description = Vulkan::CreateVertexInputDescription({Vulkan::POSITION, Vulkan::UV}, vertex_binding_description);
+        std::vector<VkVertexInputBindingDescription> vertex_binding_description;
+        auto vertex_attribute_description = Vulkan::CreateVertexInputDescription({{Vulkan::POSITION, Vulkan::UV}}, vertex_binding_description);
 
         bool success = Vulkan::GetInstance().CreatePipeline(
             true, {Camera::GetInstance().GetDescriptorSet(0).GetLayout(), this->texture_descriptor.GetLayout(), this->entities_descriptor.GetLayout()},

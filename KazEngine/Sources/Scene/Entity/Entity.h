@@ -11,64 +11,39 @@ namespace Engine
     {
         public :
 
-            struct ENTITY_UBO {
+            struct ENTITY_DATA {
                 Maths::Matrix4x4 matrix;
-                uint32_t animation_id;
-                uint32_t frame_id;
                 uint32_t selected;
 
-                inline bool operator !=(ENTITY_UBO other)
-                {
-                    return this->matrix != other.matrix
-                           || this->animation_id != other.animation_id
-                           || this->frame_id != other.frame_id
-                           || this->selected != other.selected;
-                }
+                virtual inline bool operator !=(ENTITY_DATA other) { return this->matrix != other.matrix; }
+                virtual inline uint32_t Size() { return sizeof(Maths::Matrix4x4) + sizeof(uint32_t); }
+                virtual inline void Write(size_t offset, uint8_t instance_id) { DataBank::GetManagedBuffer().WriteData(&this->matrix, this->Size(), offset, instance_id); }
             };
             
-            ENTITY_UBO properties;
-            uint32_t data_offset;
+            ENTITY_DATA properties;
+            std::shared_ptr<Chunk> chunk;
+            static std::shared_ptr<Chunk> static_instance_chunk;
             
             Entity();
-            ~Entity();
+            virtual ~Entity();
             inline Entity(Entity const& other) { *this = other; }
             inline Entity(Entity&& other) { *this = std::move(other); }
-            Entity& operator=(Entity const& other);
-            Entity& operator=(Entity&& other);
-
+            virtual Entity& operator=(Entity const& other);
+            virtual Entity& operator=(Entity&& other);
             void AddMesh(std::shared_ptr<Model::Mesh> mesh);
             inline std::vector<std::shared_ptr<Model::Mesh>> const* GetMeshes() { return this->meshes; }
             inline uint32_t const& GetId() { return this->id; }
-            void Update(VkDeviceSize offset, uint32_t frame_index);
-            void PlayAnimation(std::string animation, float speed = 1.0f, bool loop = false);
-            inline void StopAnimation() { this->animation.clear(); }
-            void MoveTo(Maths::Vector3 destination, float speed = 1.0f);
+            virtual void Update(uint32_t frame_index);
             bool InSelectBox(Maths::Plane left_plane, Maths::Plane right_plane, Maths::Plane top_plane, Maths::Plane bottom_plane);
             bool IntersectRay(Maths::Vector3 const& ray_origin, Maths::Vector3 const& ray_direction);
+            virtual bool AddToScene();
 
-            static inline void UpdateUboSize() { Entity::ubo_size = Vulkan::GetInstance().ComputeStorageBufferAlignment(sizeof(ENTITY_UBO)); }
-            static inline uint32_t GetUboSize() { return Entity::ubo_size; }
-
-        private :
+        protected :
 
             uint32_t id;
             std::vector<std::shared_ptr<Model::Mesh>>* meshes;
-            Timer animation_timer;
-            Timer move_timer;
-            std::string animation;
-            bool loop_animation;
-            float animation_speed;
-            std::vector<ENTITY_UBO> last_ubo;
-
-            bool moving;
-            Maths::Vector3 move_origin;
-            Maths::Vector3 move_destination;
-            Maths::Vector3 move_direction;
-            float base_move_speed;
-            float move_speed;
-            float move_length;
+            std::vector<ENTITY_DATA> last_state;
 
             static uint32_t next_id;
-            static uint32_t ubo_size;
     };
 }
