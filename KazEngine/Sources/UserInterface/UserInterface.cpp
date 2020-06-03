@@ -68,8 +68,8 @@ namespace Engine
         size_t chunk_size = Vulkan::GetInstance().ComputeUniformBufferAlignment(SIZE_KILOBYTE(5));
         this->ui_vbo_chunk = DataBank::GetManagedBuffer().ReserveChunk(chunk_size);
 
-        VkVertexInputBindingDescription vertex_binding_description;
-        auto vertex_attribute_description = Vulkan::CreateVertexInputDescription({Vulkan::POSITION_2D, Vulkan::UV}, vertex_binding_description);
+        std::vector<VkVertexInputBindingDescription> vertex_binding_description;
+        auto vertex_attribute_description = Vulkan::CreateVertexInputDescription({{Vulkan::POSITION_2D, Vulkan::UV}}, vertex_binding_description);
 
         bool success = Vulkan::GetInstance().CreatePipeline(
             true, {this->selection_descriptor.GetLayout()},

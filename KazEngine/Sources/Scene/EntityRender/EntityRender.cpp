@@ -112,7 +112,7 @@ namespace Engine
 
     bool EntityRender::SetupPipelines()
     {
-        VkVertexInputBindingDescription vertex_binding_description;
+        std::vector<VkVertexInputBindingDescription> vertex_binding_description;
         std::vector<VkVertexInputAttributeDescription> vertex_attribute_description;
         std::vector<VkPipelineShaderStageCreateInfo> shader_stages;
         Vulkan::PIPELINE pipeline;
@@ -126,7 +126,7 @@ namespace Engine
             Vulkan::GetInstance().LoadShaderModule("./Shaders/textured_model.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
         };
 
-        vertex_attribute_description = Vulkan::CreateVertexInputDescription({Vulkan::POSITION, Vulkan::UV}, vertex_binding_description);
+        vertex_attribute_description = Vulkan::CreateVertexInputDescription({{Vulkan::POSITION, Vulkan::UV}}, vertex_binding_description);
 
         VkPushConstantRange push_constant;
         push_constant.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -162,7 +162,7 @@ namespace Engine
         };
 
         vertex_attribute_description = Vulkan::CreateVertexInputDescription({
-            Vulkan::POSITION, Vulkan::UV, Vulkan::BONE_WEIGHTS, Vulkan::BONE_IDS
+            {Vulkan::POSITION, Vulkan::UV, Vulkan::BONE_WEIGHTS, Vulkan::BONE_IDS}
         }, vertex_binding_description);
 
         auto skeleton_layout = this->skeleton_descriptor.GetLayout();
@@ -191,7 +191,7 @@ namespace Engine
             Vulkan::GetInstance().LoadShaderModule("./Shaders/cross.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
         };
 
-        vertex_attribute_description = Vulkan::CreateVertexInputDescription({Vulkan::POSITION}, vertex_binding_description);
+        vertex_attribute_description = Vulkan::CreateVertexInputDescription({{Vulkan::POSITION}}, vertex_binding_description);
 
         success = Vulkan::GetInstance().CreatePipeline(
             true, {camera_layout, entities_layout}, shader_stages,
