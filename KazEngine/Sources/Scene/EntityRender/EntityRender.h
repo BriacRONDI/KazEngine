@@ -37,22 +37,31 @@ namespace Engine
                 std::map<std::string, std::pair<uint32_t, uint32_t>> dynamic_offsets; // Key = mesh name, Values = [first] : bone offsets, [second] : offsets ids
             };
 
+            struct ENTITY_MESH_CHUNK {
+                Entity* entity;
+                std::shared_ptr<Chunk> chunk;
+                uint32_t instance_id;
+            };
+
             struct DRAWABLE_BIND {
                 Drawable mesh;
                 uint32_t texture_id;
                 std::shared_ptr<Chunk> chunk;
                 std::vector<uint32_t> dynamic_offsets;
                 bool has_skeleton;
-                std::vector<Entity*> entities;
+                std::vector<ENTITY_MESH_CHUNK> entities;
             };
 
             struct RENDER_GOURP {
                 Vulkan::PIPELINE pipeline;
                 uint16_t mask;
+                std::shared_ptr<Chunk> indirect_commands_chunk;
+                uint32_t next_instance_id;
                 std::vector<DRAWABLE_BIND> drawables;
             };
 
             std::shared_ptr<Chunk> entity_data_chunk;
+            std::shared_ptr<Chunk> indirect_commands_chunk;
             std::shared_ptr<Chunk> skeleton_bones_chunk;
             std::shared_ptr<Chunk> skeleton_offsets_chunk;
             std::shared_ptr<Chunk> skeleton_offsets_ids_chunk;

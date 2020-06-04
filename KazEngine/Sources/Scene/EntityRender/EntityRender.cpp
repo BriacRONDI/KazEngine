@@ -126,7 +126,10 @@ namespace Engine
             Vulkan::GetInstance().LoadShaderModule("./Shaders/textured_model.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
         };
 
-        vertex_attribute_description = Vulkan::CreateVertexInputDescription({{Vulkan::POSITION, Vulkan::UV}}, vertex_binding_description);
+        vertex_attribute_description = Vulkan::CreateVertexInputDescription({
+            {Vulkan::POSITION, Vulkan::UV},
+            {Vulkan::MATRIX, Vulkan::BONE_WEIGHTS}
+        }, vertex_binding_description);
 
         VkPushConstantRange push_constant;
         push_constant.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -138,7 +141,7 @@ namespace Engine
         auto entities_layout = this->entities_descriptor.GetLayout();
         
         bool success = Vulkan::GetInstance().CreatePipeline(
-            true, {texture_layout, camera_layout, entities_layout},
+            true, {texture_layout, camera_layout},
             shader_stages, vertex_binding_description, vertex_attribute_description, {push_constant}, pipeline
         );
 
@@ -146,10 +149,11 @@ namespace Engine
         shader_stages.clear();
         
         if(!success) return false;
-        
+
         this->render_groups.push_back({
             pipeline,
-            Model::Mesh::RENDER_POSITION | Model::Mesh::RENDER_UV | Model::Mesh::RENDER_TEXTURE
+            Model::Mesh::RENDER_POSITION | Model::Mesh::RENDER_UV | Model::Mesh::RENDER_TEXTURE,
+            nullptr, 0
         });
 
         ///////////////////
@@ -162,13 +166,14 @@ namespace Engine
         };
 
         vertex_attribute_description = Vulkan::CreateVertexInputDescription({
-            {Vulkan::POSITION, Vulkan::UV, Vulkan::BONE_WEIGHTS, Vulkan::BONE_IDS}
+            {Vulkan::POSITION, Vulkan::UV, Vulkan::BONE_WEIGHTS, Vulkan::BONE_IDS},
+            {Vulkan::MATRIX, Vulkan::UINT_ID, Vulkan::UINT_ID, Vulkan::UV}
         }, vertex_binding_description);
 
         auto skeleton_layout = this->skeleton_descriptor.GetLayout();
 
         success = Vulkan::GetInstance().CreatePipeline(
-            true, {texture_layout, camera_layout, entities_layout, skeleton_layout},
+            true, {texture_layout, camera_layout, skeleton_layout},
             shader_stages, vertex_binding_description, vertex_attribute_description, {push_constant}, pipeline
         );
 
@@ -310,7 +315,7 @@ namespace Engine
                 for(auto& drawable_bind : this->render_groups[i].drawables) {
                     if(drawable_bind.mesh.IsSameMesh(mesh)) {
 
-                        // Check memory requirement for entity SBO
+                        // Get memory for entity SBO
                         auto entity_sbo_chunk = this->entity_data_chunk->ReserveRange(Entity::GetUboSize(), Vulkan::SboAlignment());
                         if(entity_sbo_chunk == nullptr) {
                             if(!this->entities_descriptor.ResizeChunk(this->entity_data_chunk, this->entity_data_chunk->range + Entity::GetUboSize() * 100,
@@ -350,9 +355,47 @@ namespace Engine
                         this->entities_descriptor.WriteData(&entity.GetId(), sizeof(uint32_t), ENTITY_ID_BINDING,
                                                             static_cast<uint32_t>(drawable_bind.chunk->offset + chunk->offset));
 
-                        drawable_bind.entities.push_back(&entity);
                         
-                        // Finish
+                        
+                        if(this->render_groups[i].indirect_commands_chunk == nullptr)
+                            this->render_groups[i].indirect_commands_chunk = DataBank::GetManagedBuffer().ReserveChunk(sizeof(VkDrawIndirectCommand));
+
+                        if(this->render_groups[i].indirect_commands_chunk == nullptr) {
+                            #if defined(DISPLAY_LOGS)
+                            std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                            #endif
+                            return false;
+                        }
+
+                        ENTITY_MESH_CHUNK emc;
+                        emc.chunk = this->render_groups[i].indirect_commands_chunk->ReserveRange(sizeof(VkDrawIndirectCommand));
+
+                        if(emc.chunk == nullptr) {
+                            bool relocated;
+                            if(!DataBank::GetManagedBuffer().ResizeChunk(this->render_groups[i].indirect_commands_chunk,
+                                                this->render_groups[i].indirect_commands_chunk->range + sizeof(VkDrawIndirectCommand) * 10, relocated)) {
+                                #if defined(DISPLAY_LOGS)
+                                std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                                #endif
+                                return false;
+                            }else{
+                                emc.chunk = this->render_groups[i].indirect_commands_chunk->ReserveRange(sizeof(VkDrawIndirectCommand));
+                                if(emc.chunk == nullptr) {
+                                    #if defined(DISPLAY_LOGS)
+                                    std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                                    #endif
+                                    return false;
+                                }
+                            }
+                        }
+
+                        emc.entity = &entity;
+                        emc.instance_id = static_cast<uint32_t>(entity_sbo_chunk->offset / entity_sbo_chunk->range);
+                        VkDrawIndirectCommand indirect = drawable_bind.mesh.GetIndirectCommand(emc.instance_id);
+                        DataBank::GetManagedBuffer().WriteData(&indirect, sizeof(VkDrawIndirectCommand),
+                                                               this->render_groups[i].indirect_commands_chunk->offset + emc.chunk->offset);
+                        drawable_bind.entities.push_back(emc);
+
                         for(uint8_t i=0; i<this->need_update.size(); i++) this->need_update[i] = true;
                         this->entities.push_back(&entity);
                         return true;
@@ -432,7 +475,45 @@ namespace Engine
                     entity_sbo_chunk = this->entity_data_chunk->ReserveRange(Entity::GetUboSize(), Vulkan::SboAlignment());
                 }
 
-                new_bind.entities.push_back(&entity);
+                if(this->render_groups[i].indirect_commands_chunk == nullptr)
+                    this->render_groups[i].indirect_commands_chunk = DataBank::GetManagedBuffer().ReserveChunk(sizeof(VkDrawIndirectCommand));
+
+                if(this->render_groups[i].indirect_commands_chunk == nullptr) {
+                    #if defined(DISPLAY_LOGS)
+                    std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                    #endif
+                    return false;
+                }
+
+                ENTITY_MESH_CHUNK emc;
+                emc.chunk = this->render_groups[i].indirect_commands_chunk->ReserveRange(sizeof(VkDrawIndirectCommand));
+
+                if(emc.chunk == nullptr) {
+                    bool relocated;
+                    if(!DataBank::GetManagedBuffer().ResizeChunk(this->render_groups[i].indirect_commands_chunk,
+                                    this->render_groups[i].indirect_commands_chunk->range + sizeof(VkDrawIndirectCommand) * 10, relocated)) {
+                        #if defined(DISPLAY_LOGS)
+                        std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                        #endif
+                        return false;
+                    }else{
+                        emc.chunk = this->render_groups[i].indirect_commands_chunk->ReserveRange(sizeof(VkDrawIndirectCommand));
+                        if(emc.chunk == nullptr) {
+                            #if defined(DISPLAY_LOGS)
+                            std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                            #endif
+                            return false;
+                        }
+                    }
+                }
+
+                emc.entity = &entity;
+                emc.instance_id = static_cast<uint32_t>(entity_sbo_chunk->offset / entity_sbo_chunk->range);
+                VkDrawIndirectCommand indirect = new_bind.mesh.GetIndirectCommand(emc.instance_id);
+                DataBank::GetManagedBuffer().WriteData(&indirect, sizeof(VkDrawIndirectCommand),
+                                                        this->render_groups[i].indirect_commands_chunk->offset + emc.chunk->offset);
+                new_bind.entities.push_back(emc);
+
                 new_bind.chunk = this->entities_descriptor.ReserveRange(sizeof(uint32_t) * 10, Vulkan::SboAlignment(), ENTITY_ID_BINDING);
                 if(new_bind.chunk == nullptr) {
                     #if defined(DISPLAY_LOGS)
@@ -442,7 +523,7 @@ namespace Engine
                 }
                 new_bind.chunk->ReserveRange(sizeof(uint32_t));
                 this->entities_descriptor.WriteData(&entity.GetId(), sizeof(uint32_t), ENTITY_ID_BINDING, static_cast<uint32_t>(new_bind.chunk->offset));
-                new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.begin(), {static_cast<uint32_t>(new_bind.chunk->offset)});
+                // new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.begin(), {static_cast<uint32_t>(new_bind.chunk->offset)});
 
                 // Add loaded mesh
                 this->render_groups[i].drawables.push_back(std::move(new_bind));
@@ -533,20 +614,20 @@ namespace Engine
                                     static_cast<uint32_t>(bind_descriptor_sets_1.size()), bind_descriptor_sets_1.data(), 0, nullptr);
 
             for(auto& bind : this->render_groups[i].drawables) {
-            
-                std::vector<VkDescriptorSet> bind_descriptor_sets_2 = {this->entities_descriptor.Get(frame_index)};
-                bind.dynamic_offsets[0] = static_cast<uint32_t>(bind.chunk->offset);
 
-                if(bind.has_skeleton)
-                    bind_descriptor_sets_2.push_back(this->skeleton_descriptor.Get(frame_index));
+                if(bind.has_skeleton) {
+                    std::vector<VkDescriptorSet> bind_descriptor_sets_2 = {this->skeleton_descriptor.Get(frame_index)};
 
-                vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->render_groups[i].pipeline.layout,
-                                static_cast<uint32_t>(bind_descriptor_sets_1.size()),
-                                static_cast<uint32_t>(bind_descriptor_sets_2.size()), bind_descriptor_sets_2.data(),
-                                static_cast<uint32_t>(bind.dynamic_offsets.size()), bind.dynamic_offsets.data());
+                    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->render_groups[i].pipeline.layout,
+                                    static_cast<uint32_t>(bind_descriptor_sets_1.size()),
+                                    static_cast<uint32_t>(bind_descriptor_sets_2.size()), bind_descriptor_sets_2.data(),
+                                    static_cast<uint32_t>(bind.dynamic_offsets.size()), bind.dynamic_offsets.data());
+                }
 
                 bind.mesh.Render(command_buffer, DataBank::GetManagedBuffer().GetBuffer(frame_index).handle,
-                                 pipeline.layout, static_cast<uint32_t>(bind.entities.size()));
+                                    pipeline.layout, static_cast<uint32_t>(bind.entities.size()),
+                                    this->entities_descriptor.GetChunk(ENTITY_DATA_BINDING)->offset,
+                                    this->render_groups[i].indirect_commands_chunk->offset);
             }
         }
 

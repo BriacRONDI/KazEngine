@@ -666,6 +666,7 @@ namespace Engine
         VkPhysicalDeviceFeatures features = {};
         features.vertexPipelineStoresAndAtomics = VK_TRUE;
         features.fillModeNonSolid = VK_TRUE;
+        features.multiDrawIndirect = VK_TRUE;
         #if defined(DISPLAY_LOGS)
         features.geometryShader = VK_TRUE;
         features.wideLines = VK_TRUE;
@@ -2470,6 +2471,11 @@ namespace Engine
 
                     case VERTEX_BINDING_ATTRIBUTE::MATRIX :
                         attribute.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                        for(uint8_t i=0; i<3; i++) {
+                            output.push_back(attribute);
+                            attribute.offset += sizeof(Maths::Vector4);
+                            attribute.location = location + i;
+                        }
                         offset += sizeof(Maths::Matrix4x4);
                         location += 3;
                         break;

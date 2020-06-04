@@ -18,8 +18,9 @@ namespace Engine
             };
             
             bool Load(std::shared_ptr<Model::Mesh> mesh, std::map<std::string, uint32_t>& textures);
-            void Render(VkCommandBuffer command_buffer, VkBuffer buffer, VkPipelineLayout layout, uint32_t instance_count);
+            void Render(VkCommandBuffer command_buffer, VkBuffer buffer, VkPipelineLayout layout, uint32_t instance_count, size_t instance_offset, size_t indirect_offset);
             inline bool IsSameMesh(std::shared_ptr<Model::Mesh> mesh) { return this->mesh == mesh; }
+            VkDrawIndirectCommand GetIndirectCommand(uint32_t instance_id);
 
         private :
 
@@ -29,5 +30,6 @@ namespace Engine
             uint32_t vertex_count               = 0;
             size_t index_buffer_offset          = 0;
             std::shared_ptr<Chunk> buffer_chunk;
+            uint32_t indirect_count;
     };
 }

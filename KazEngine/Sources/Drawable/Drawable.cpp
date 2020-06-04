@@ -55,9 +55,26 @@ namespace Engine
         return true;
     }
 
-    void Drawable::Render(VkCommandBuffer command_buffer, VkBuffer buffer, VkPipelineLayout layout, uint32_t instance_count)
+    VkDrawIndirectCommand Drawable::GetIndirectCommand(uint32_t instance_id)
     {
-        if(!this->materials.empty())
+        VkDrawIndirectCommand indirect;
+        indirect.firstInstance = instance_id;
+        indirect.firstVertex = 0;
+        indirect.instanceCount = 1;
+        indirect.vertexCount = this->vertex_count;
+        return indirect;
+    }
+
+    void Drawable::Render(VkCommandBuffer command_buffer, VkBuffer buffer, VkPipelineLayout layout, uint32_t instance_count, size_t instance_offset, size_t indirect_offset)
+    {
+        vkCmdPushConstants(command_buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PUSH_CONSTANT_MATERIAL), &this->materials[0]);
+
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, &buffer, &this->buffer_chunk->offset);
+        vkCmdBindVertexBuffers(command_buffer, 1, 1, &buffer, &instance_offset);
+
+        vkCmdDrawIndirect(command_buffer, buffer, indirect_offset, instance_count, sizeof(VkDrawIndirectCommand));
+        
+        /*if(!this->materials.empty())
             vkCmdPushConstants(command_buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PUSH_CONSTANT_MATERIAL), &this->materials[0]);
 
         vkCmdBindVertexBuffers(command_buffer, 0, 1, &buffer, &this->buffer_chunk->offset);
@@ -67,6 +84,6 @@ namespace Engine
             vkCmdDrawIndexed(command_buffer, this->vertex_count, instance_count, 0, 0, 0);
         }else{
             vkCmdDraw(command_buffer, this->vertex_count, instance_count, 0, 0);
-        }
+        }*/
     }
 }
