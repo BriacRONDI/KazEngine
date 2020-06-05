@@ -97,7 +97,7 @@ int main(int argc, char** argv)
     auto simple_guy_material = Engine::DataBank::GetMaterialFromPackage(data_buffer, "/SimpleGuy/AO");
     Engine::DataBank::AddMaterial(simple_guy_material, "AO");
 
-    Engine::Entity guy;
+    Engine::SkeletonEntity guy;
     guy.AddMesh(simple_guy_mesh);
     engine.GetEntityRender().AddEntity(guy);
 
@@ -144,14 +144,14 @@ int main(int argc, char** argv)
 
         if(/*dynamic_entity_add_start.GetProgression() >= 1.0f &&*/ Engine::Keyboard::GetInstance().IsPressed(VK_SPACE)) {
 
-            auto new_entity = std::shared_ptr<Engine::Entity>(new Engine::Entity);
+            auto new_entity = std::shared_ptr<Engine::SkeletonEntity>(new Engine::SkeletonEntity);
             new_entity->AddMesh(simple_guy_mesh);
 
             if(engine.GetEntityRender().AddEntity(*new_entity)) {
                 guys.resize(guys.size() + 1);
                 guys[guys.size()-1] = new_entity;
 
-                new_entity->PlayAnimation("Armature|Walk", 1.0f, true);
+                // new_entity->PlayAnimation("Armature|Walk", 1.0f, true);
 
                 uint32_t count_z = static_cast<uint32_t>(std::sqrt(guys.size()));
                 uint32_t count_x = count_z;

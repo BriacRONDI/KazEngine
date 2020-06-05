@@ -71,6 +71,7 @@ namespace Engine
 
     inline void ManagedBuffer::UpdateFlushRange(size_t start_offset, size_t data_size, uint8_t instance_id)
     {
+        if(!data_size) return;
         std::vector<Chunk>& flush = this->flush_chunks[instance_id];
         size_t end_offset = start_offset + data_size;
         

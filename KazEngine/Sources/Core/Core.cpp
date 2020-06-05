@@ -76,8 +76,8 @@ namespace Engine
         this->entity_render = new EntityRender(this->graphics_command_pool);
 
         // Create the map
-        this->map = new Map(this->graphics_command_pool, this->entity_render->GetEntityDescriptor());
-        this->entity_render->GetEntityDescriptor().Update();
+        // this->map = new Map(this->graphics_command_pool, this->entity_render->GetEntityDescriptor());
+        // this->entity_render->GetEntityDescriptor().Update();
 
         // Create the user interface
         this->user_interface = new UserInterface(this->graphics_command_pool);
@@ -185,11 +185,16 @@ namespace Engine
         vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
         // Exécution des render passes secondaires
-        VkCommandBuffer command_buffers[2] = {
+        /*VkCommandBuffer command_buffers[2] = {
             this->entity_render->GetCommandBuffer(swap_chain_image_index, frame_buffer),
             this->map->GetCommandBuffer(swap_chain_image_index, frame_buffer)
         };
-        vkCmdExecuteCommands(command_buffer, 2, command_buffers);
+        vkCmdExecuteCommands(command_buffer, 2, command_buffers);*/
+
+        VkCommandBuffer command_buffers[2] = {
+            this->entity_render->GetCommandBuffer(swap_chain_image_index, frame_buffer)
+        };
+        vkCmdExecuteCommands(command_buffer, 1, command_buffers);
 
         // Fin de la render pass primaire
         vkCmdEndRenderPass(command_buffer);
@@ -269,7 +274,7 @@ namespace Engine
 
         // Update uniform buffer
         Camera::GetInstance().Update(swap_chain_image_index);
-        this->map->Update(swap_chain_image_index);
+        // this->map->Update(swap_chain_image_index);
         this->entity_render->Update(swap_chain_image_index);
         this->user_interface->Update(swap_chain_image_index);
         DataBank::GetManagedBuffer().Flush(this->transfer_buffers[swap_chain_image_index], swap_chain_image_index);
@@ -284,11 +289,11 @@ namespace Engine
         vkResetFences(Vulkan::GetDevice(), 1, &this->resources[swap_chain_image_index].fence);
 
         // Update descriptor sets
-        if(this->entity_render->GetEntityDescriptor().NeedUpdate(swap_chain_image_index)) {
+        /*if(this->entity_render->GetEntityDescriptor().NeedUpdate(swap_chain_image_index)) {
             this->map->Refresh(swap_chain_image_index);
             this->entity_render->Refresh(swap_chain_image_index);
             this->entity_render->GetEntityDescriptor().Update(swap_chain_image_index);
-        }
+        }*/
 
         // Build image
         this->BuildRenderPass(swap_chain_image_index);

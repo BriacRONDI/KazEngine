@@ -152,13 +152,14 @@
     <ClCompile Include="Sources\Main.cpp" />
     <ClCompile Include="Sources\ManagedBuffer\Chunk\Chunk.cpp" />
     <ClCompile Include="Sources\ManagedBuffer\ManagedBuffer.cpp" />
-    <ClCompile Include="Sources\Drawable\Drawable.cpp" />
+    <ClCompile Include="Sources\LoadedMesh\LoadedMesh.cpp" />
     <ClCompile Include="Sources\DataBank\DataBank.cpp" />
     <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp" />
     <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp" />
     <ClCompile Include="Sources\Platform\Win32\Window\Window.cpp" />
     <ClCompile Include="Sources\Scene\EntityRender\EntityRender.cpp" />
     <ClCompile Include="Sources\Scene\Entity\Entity.cpp" />
+    <ClCompile Include="Sources\Scene\Entity\SkeletonEntity.cpp" />
     <ClCompile Include="Sources\Scene\Map\Map.cpp" />
     <ClCompile Include="Sources\Platform\Common\Timer\Timer.cpp" />
     <ClCompile Include="Sources\UserInterface\UserInterface.cpp" />
@@ -177,7 +178,7 @@
     <ClInclude Include="Sources\Engine.h" />
     <ClInclude Include="Sources\ManagedBuffer\Chunk\Chunk.h" />
     <ClInclude Include="Sources\ManagedBuffer\ManagedBuffer.h" />
-    <ClInclude Include="Sources\Drawable\Drawable.h" />
+    <ClInclude Include="Sources\LoadedMesh\LoadedMesh.h" />
     <ClInclude Include="Sources\DataBank\DataBank.h" />
     <ClInclude Include="Sources\Platform\Common\Timer\ITimerListener.h" />
     <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h" />
@@ -189,6 +190,7 @@
     <ClInclude Include="Sources\Platform\Common\Mouse\Mouse.h" />
     <ClInclude Include="Sources\Scene\EntityRender\EntityRender.h" />
     <ClInclude Include="Sources\Scene\Entity\Entity.h" />
+    <ClInclude Include="Sources\Scene\Entity\SkeletonEntity.h" />
     <ClInclude Include="Sources\Scene\Map\Map.h" />
     <ClInclude Include="Sources\Platform\Common\Timer\Timer.h" />
     <ClInclude Include="Sources\UserInterface\IUserInteraction.h" />

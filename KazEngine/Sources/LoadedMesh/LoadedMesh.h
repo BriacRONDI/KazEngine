@@ -5,7 +5,7 @@
 
 namespace Engine
 {
-    class Drawable
+    class LoadedMesh
     {
         public :
 
@@ -18,18 +18,18 @@ namespace Engine
             };
             
             bool Load(std::shared_ptr<Model::Mesh> mesh, std::map<std::string, uint32_t>& textures);
-            void Render(VkCommandBuffer command_buffer, VkBuffer buffer, VkPipelineLayout layout, uint32_t instance_count, size_t instance_offset, size_t indirect_offset);
+            void Render(VkCommandBuffer command_buffer, VkBuffer buffer, VkPipelineLayout layout, uint32_t instance_count,
+                        std::vector<std::shared_ptr<Chunk>> instance_buffer_chunks, size_t indirect_offset);
             inline bool IsSameMesh(std::shared_ptr<Model::Mesh> mesh) { return this->mesh == mesh; }
             VkDrawIndirectCommand GetIndirectCommand(uint32_t instance_id);
 
         private :
 
-            // std::map<std::string, PUSH_CONSTANT_MATERIAL> materials;
             std::vector<PUSH_CONSTANT_MATERIAL> materials;
             std::shared_ptr<Model::Mesh> mesh;
             uint32_t vertex_count               = 0;
             size_t index_buffer_offset          = 0;
-            std::shared_ptr<Chunk> buffer_chunk;
+            std::shared_ptr<Chunk> vertex_buffer_chunk;
             uint32_t indirect_count;
     };
 }

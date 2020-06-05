@@ -4,8 +4,8 @@
 #include "../../ManagedBuffer/ManagedBuffer.h"
 #include "../../DataBank/DataBank.h"
 #include "../../Camera/Camera.h"
-#include "../Entity/Entity.h"
-#include "../../Drawable/Drawable.h"
+#include "../Entity/SkeletonEntity.h"
+#include "../../LoadedMesh/LoadedMesh.h"
 
 #define ENTITY_ID_BINDING   0
 #define ENTITY_DATA_BINDING 1
@@ -22,7 +22,7 @@ namespace Engine
             VkCommandBuffer GetCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer);
             std::vector<Entity*> SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
             Entity* ToggleSelection(Point<uint32_t> mouse_position);
-            inline DescriptorSet& GetEntityDescriptor() { return this->entities_descriptor; }
+            // inline DescriptorSet& GetEntityDescriptor() { return this->entities_descriptor; }
             inline void Refresh() { for(int i=0; i<this->need_update.size(); i++) this->Refresh(i); }
             void Refresh(uint8_t frame_index);
             
@@ -44,7 +44,7 @@ namespace Engine
             };
 
             struct DRAWABLE_BIND {
-                Drawable mesh;
+                LoadedMesh mesh;
                 uint32_t texture_id;
                 std::shared_ptr<Chunk> chunk;
                 std::vector<uint32_t> dynamic_offsets;
@@ -55,20 +55,21 @@ namespace Engine
             struct RENDER_GOURP {
                 Vulkan::PIPELINE pipeline;
                 uint16_t mask;
+                std::vector<std::shared_ptr<Chunk>> instance_buffer_chunks;
                 std::shared_ptr<Chunk> indirect_commands_chunk;
-                uint32_t next_instance_id;
+                // uint32_t next_instance_id;
                 std::vector<DRAWABLE_BIND> drawables;
             };
 
-            std::shared_ptr<Chunk> entity_data_chunk;
-            std::shared_ptr<Chunk> indirect_commands_chunk;
+            // std::shared_ptr<Chunk> entity_data_chunk;
+            // std::shared_ptr<Chunk> indirect_commands_chunk;
             std::shared_ptr<Chunk> skeleton_bones_chunk;
             std::shared_ptr<Chunk> skeleton_offsets_chunk;
             std::shared_ptr<Chunk> skeleton_offsets_ids_chunk;
             std::shared_ptr<Chunk> skeleton_animations_chunk;
 
             DescriptorSet texture_descriptor;
-            DescriptorSet entities_descriptor;
+            // DescriptorSet entities_descriptor;
             DescriptorSet skeleton_descriptor;
 
             std::vector<bool> need_update;
