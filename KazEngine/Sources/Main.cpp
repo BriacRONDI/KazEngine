@@ -100,6 +100,7 @@ int main(int argc, char** argv)
     Engine::SkeletonEntity guy;
     guy.AddMesh(simple_guy_mesh);
     engine.GetEntityRender().AddEntity(guy);
+    guy.PlayAnimation("Armature|Walk", 1.0f, true);
 
     Engine::Camera::GetInstance().SetPosition({0.0f, 5.0f, -4.0f});
     Engine::Camera::GetInstance().Rotate({0.0f, Maths::F_PI_4, 0.0f});
@@ -151,7 +152,7 @@ int main(int argc, char** argv)
                 guys.resize(guys.size() + 1);
                 guys[guys.size()-1] = new_entity;
 
-                // new_entity->PlayAnimation("Armature|Walk", 1.0f, true);
+                new_entity->PlayAnimation("Armature|Walk", 1.0f, true);
 
                 uint32_t count_z = static_cast<uint32_t>(std::sqrt(guys.size()));
                 uint32_t count_x = count_z;

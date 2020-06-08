@@ -15,7 +15,7 @@ namespace Engine
                 Maths::Matrix4x4 matrix;
                 uint32_t selected;
 
-                virtual inline bool operator !=(ENTITY_DATA other) { return this->matrix != other.matrix; }
+                inline bool operator !=(ENTITY_DATA other) { return this->matrix != other.matrix || this->selected != other.selected; }
                 // static inline uint32_t Size() { return sizeof(Maths::Matrix4x4) + sizeof(uint32_t); }
                 // virtual inline void Write(size_t offset, uint8_t instance_id) { DataBank::GetManagedBuffer().WriteData(&this->matrix, this->Size(), offset, instance_id); }
             };
@@ -23,7 +23,7 @@ namespace Engine
             ENTITY_DATA properties;
             static std::shared_ptr<Chunk> static_data_chunk;
             
-            Entity();
+            Entity(bool pick_chunk = true);
             virtual ~Entity();
             inline Entity(Entity const& other) { *this = other; }
             inline Entity(Entity&& other) { *this = std::move(other); }

@@ -1,18 +1,19 @@
 #include "Entity.h"
+#include "SkeletonEntity.h"
 
 namespace Engine
 {
     uint32_t Entity::next_id = 0;
     std::shared_ptr<Chunk> Entity::static_data_chunk;
 
-    Entity::Entity()
+    Entity::Entity(bool pick_chunk)
     {
         this->id = Entity::next_id;
         this->properties.selected = 0;
         this->meshes = nullptr;
         this->last_static_state.resize(Vulkan::GetConcurrentFrameCount());
         for(auto& state : this->last_static_state) state.selected = true;
-        this->PickChunk();
+        if(pick_chunk) this->PickChunk();
         Entity::next_id++;
     }
 
@@ -37,6 +38,11 @@ namespace Engine
                 #endif
                 return false;
             }
+
+            if(relocated) {
+                SkeletonEntity::absolute_skeleton_data_chunk->offset = Entity::static_data_chunk->offset + SkeletonEntity::skeleton_data_chunk->offset;
+            }
+
             this->static_instance_chunk = Entity::static_data_chunk->ReserveRange(sizeof(ENTITY_DATA));
         }
 
@@ -52,7 +58,6 @@ namespace Engine
     void Entity::Update(uint32_t frame_index)
     {
         if(this->last_static_state[frame_index] != this->properties) {
-            // this->properties.Write(Entity::static_instance_chunk->offset + this->instance_chunk->offset, frame_index);
             DataBank::GetManagedBuffer().WriteData(&this->properties, sizeof(ENTITY_DATA),
                                                    Entity::static_data_chunk->offset + this->static_instance_chunk->offset,
                                                    frame_index);

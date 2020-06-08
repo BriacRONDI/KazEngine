@@ -63,6 +63,9 @@ namespace Engine
 
             // std::shared_ptr<Chunk> entity_data_chunk;
             // std::shared_ptr<Chunk> indirect_commands_chunk;
+
+            std::shared_ptr<Chunk> instance_buffer_chunk;
+
             std::shared_ptr<Chunk> skeleton_bones_chunk;
             std::shared_ptr<Chunk> skeleton_offsets_chunk;
             std::shared_ptr<Chunk> skeleton_offsets_ids_chunk;

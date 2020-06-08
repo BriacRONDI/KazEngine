@@ -65,6 +65,7 @@ namespace Engine
         }, instance_count)) return false;
 
         this->entity_data_chunk = this->entities_descriptor.ReserveRange(Entity::GetUboSize() * 100, Vulkan::SboAlignment(), ENTITY_DATA_BINDING);*/
+        this->instance_buffer_chunk = DataBank::GetManagedBuffer().ReserveChunk(sizeof(Entity::ENTITY_DATA) * 100);
 
         /////////////
         // Texture //
@@ -150,7 +151,7 @@ namespace Engine
         
         if(!success) return false;
 
-        Entity::InitilizeInstanceChunk();
+        SkeletonEntity::InitilizeInstanceChunk();
 
         this->render_groups.push_back({
             pipeline,
@@ -184,14 +185,11 @@ namespace Engine
         shader_stages.clear();
         
         if(!success) return false;
-        
-        SkeletonEntity::InitilizeInstanceChunk();
 
         this->render_groups.push_back({
             pipeline,
             Model::Mesh::RENDER_POSITION | Model::Mesh::RENDER_UV | Model::Mesh::RENDER_TEXTURE | Model::Mesh::RENDER_SKELETON,
-            {Entity::static_data_chunk, SkeletonEntity::skeleton_data_chunk}
-            // SkeletonEntity::skeleton_instance_chunk
+            {SkeletonEntity::absolute_skeleton_data_chunk, SkeletonEntity::animation_data_chunk}
         });
 
         /////////////////

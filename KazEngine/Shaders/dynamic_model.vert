@@ -12,7 +12,6 @@ layout (location = 8)  in uint selected;
 
 layout (location = 9)  in uint animation_id;
 layout (location = 10)  in uint frame_id;
-// layout (location = 11) in vec2 padding;
 
 
 layout (set=1, binding=0) uniform Camera
@@ -87,8 +86,8 @@ void main()
 		
 		// uint frame_id = animations.first_frame_id[entity_props.animation_id];
 		// boneTransform += skeleton.bones[animations.bone_count * entity_props.frame_id + inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
-		// boneTransform += skeleton.bones[animations.bone_count * frame_id + inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
-		boneTransform += skeleton.bones[0] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
+		boneTransform += skeleton.bones[animations.bone_count * frame_id + inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
+		// boneTransform += skeleton.bones[0] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
 		total_weight += inBoneWeights[i];
 		has_bone = true;
 	}

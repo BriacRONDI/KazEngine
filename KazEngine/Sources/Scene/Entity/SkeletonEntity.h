@@ -22,8 +22,10 @@ namespace Engine
             
             };
             
-            SKELETON_DATA skeleton_properties;
+            SKELETON_DATA animation_properties;
             static std::shared_ptr<Chunk> skeleton_data_chunk;
+            static std::shared_ptr<Chunk> absolute_skeleton_data_chunk;
+            static std::shared_ptr<Chunk> animation_data_chunk;
             
             SkeletonEntity();
             virtual Entity& operator=(Entity const& other);
@@ -33,12 +35,14 @@ namespace Engine
             void PlayAnimation(std::string animation, float speed = 1.0f, bool loop = false);
             inline void StopAnimation() { this->animation.clear(); }
             void MoveTo(Maths::Vector3 destination, float speed = 1.0f);
-            inline uint32_t GetSkeletonInstanceId() { return static_cast<uint32_t>(this->skeleton_instance_chunk->offset / sizeof(SKELETON_DATA)); }
+            // inline uint32_t GetSkeletonInstanceId() { return static_cast<uint32_t>(this->skeleton_instance_chunk->offset / sizeof(SKELETON_DATA)); }
+            // virtual inline uint32_t GetInstanceId() { return static_cast<uint32_t>(this->static_instance_chunk->offset / sizeof(ENTITY_DATA)); }
             static bool InitilizeInstanceChunk();
 
         private :
 
-            std::shared_ptr<Chunk> skeleton_instance_chunk;
+            // std::shared_ptr<Chunk> skeleton_instance_chunk;
+            std::shared_ptr<Chunk> animation_instance_chunk;
             Timer animation_timer;
             Timer move_timer;
             std::string animation;
@@ -51,8 +55,8 @@ namespace Engine
             float base_move_speed;
             float move_speed;
             float move_length;
-            std::vector<SKELETON_DATA> last_skeleton_state;
+            std::vector<SKELETON_DATA> last_animation_state;
 
-            virtual bool PickChunk() override;
+            virtual bool PickChunk();
     };
 }

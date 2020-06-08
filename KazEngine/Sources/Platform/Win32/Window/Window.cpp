@@ -1,5 +1,4 @@
 #include "../../Common/Window/Window.h"
-#include <strsafe.h>
 
 namespace Engine
 {
