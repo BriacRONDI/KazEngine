@@ -29,7 +29,7 @@ namespace Engine
     {
         Entity::InitilizeInstanceChunk();
         if(SkeletonEntity::skeleton_data_chunk == nullptr) {
-            SkeletonEntity::skeleton_data_chunk = Entity::static_data_chunk->ReserveRange(0);
+            SkeletonEntity::skeleton_data_chunk = Entity::static_data_chunk->ReserveRange(0, Vulkan::SboAlignment());
             if(SkeletonEntity::skeleton_data_chunk == nullptr) return false;
         }
 
@@ -48,15 +48,15 @@ namespace Engine
     bool SkeletonEntity::PickChunk()
     {
         if(this->static_instance_chunk == nullptr) {
-            this->static_instance_chunk = SkeletonEntity::skeleton_data_chunk->ReserveRange(sizeof(ENTITY_DATA));
+            this->static_instance_chunk = SkeletonEntity::skeleton_data_chunk->ReserveRange(sizeof(ENTITY_DATA), Vulkan::SboAlignment());
             if(this->static_instance_chunk == nullptr) {
                 bool relocated;
                 if(!Entity::static_data_chunk->ResizeChild(SkeletonEntity::skeleton_data_chunk,
-                                                            SkeletonEntity::skeleton_data_chunk->range + sizeof(ENTITY_DATA),
-                                                            relocated)) {
+                                                           SkeletonEntity::skeleton_data_chunk->range + sizeof(ENTITY_DATA),
+                                                           relocated, Vulkan::SboAlignment())) {
                     if(!DataBank::GetManagedBuffer().ResizeChunk(Entity::static_data_chunk,
-                                                                    Entity::static_data_chunk->range + sizeof(ENTITY_DATA),
-                                                                    relocated)) {
+                                                                 Entity::static_data_chunk->range + sizeof(ENTITY_DATA),
+                                                                 relocated, Vulkan::SboAlignment())) {
                         #if defined(DISPLAY_LOGS)
                         std::cout << "SkeletonEntity::PickChunk() => Not enough memory" << std::endl;
                         return false;
@@ -64,13 +64,16 @@ namespace Engine
                     }else{
                         Entity::static_data_chunk->ResizeChild(SkeletonEntity::skeleton_data_chunk,
                                                                 SkeletonEntity::skeleton_data_chunk->range + sizeof(ENTITY_DATA),
-                                                                relocated);
+                                                                relocated, Vulkan::SboAlignment());
                     }
                 }
-                this->static_instance_chunk = SkeletonEntity::skeleton_data_chunk->ReserveRange(sizeof(ENTITY_DATA));
+                this->static_instance_chunk = SkeletonEntity::skeleton_data_chunk->ReserveRange(sizeof(ENTITY_DATA), Vulkan::SboAlignment());
             }
             SkeletonEntity::absolute_skeleton_data_chunk->offset = Entity::static_data_chunk->offset + SkeletonEntity::skeleton_data_chunk->offset;
             SkeletonEntity::absolute_skeleton_data_chunk->range = SkeletonEntity::skeleton_data_chunk->range;
+
+            for(auto& listener : this->Listeners)
+                listener->StaticBufferUpdated();
         }
 
         if(this->animation_instance_chunk == nullptr) {

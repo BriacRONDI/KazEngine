@@ -2,17 +2,9 @@
 
 layout (set=1, binding=0) uniform sampler2D inTexture;
 
-/*layout (set=2, binding=0) uniform Position
-{
-	uint selection_count;
-	vec3 entity_positon[1024];
-};*/
-
 struct Properties {
 	mat4 model;
-	uint animation_id;
-	uint frame_id;
-	// ivec2 padding;
+	uint selected;
 };
 
 layout (set=2, binding=0) readonly buffer IDs

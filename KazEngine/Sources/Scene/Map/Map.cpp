@@ -29,9 +29,11 @@ namespace Engine
         this->index_buffer_offet = 0;
     }
 
-    Map::Map(VkCommandPool command_pool, DescriptorSet& entities_descriptor) : command_pool(command_pool), entities_descriptor(entities_descriptor)
+    Map::Map(VkCommandPool command_pool) : command_pool(command_pool)
     {
         this->Clear();
+
+        Entity::AddListener(this);
 
         uint32_t frame_count = Vulkan::GetConcurrentFrameCount();
         this->need_update.resize(frame_count, true);
@@ -67,12 +69,14 @@ namespace Engine
         // Entity //
         ////////////
 
-        this->selection_chunk = this->entities_descriptor.ReserveRange(sizeof(uint32_t) * 1000, Vulkan::SboAlignment(), 0);
+        // this->selection_chunk = this->entities_descriptor.ReserveRange(sizeof(uint32_t) * 1000, Vulkan::SboAlignment(), 0);
 
-        /*if(!this->entities_descriptor.Create({
-            // {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, SIZE_KILOBYTE(5)},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(Maths::Vector4) * 1025}
-        }, instance_count)) return false;*/
+        if(!this->entities_descriptor.Create({
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(uint32_t) * 101},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(Entity::ENTITY_DATA) * 100}
+        }, instance_count, {nullptr, Entity::static_data_chunk})) return false;
+
+        this->selection_chunk = this->entities_descriptor.ReserveRange(sizeof(uint32_t) * 101);
 
         /*VkDeviceSize alignment = Vulkan::GetInstance().GetDeviceLimits().minUniformBufferOffsetAlignment;
         this->entity_ids_chunk = DataBank::GetManagedBuffer().ReserveChunk(sizeof(uint32_t) * 50 * 4, alignment);
@@ -151,7 +155,7 @@ namespace Engine
     void Map::UpdateSelection(std::vector<Entity*> entities)
     {
         uint32_t count = static_cast<uint32_t>(entities.size());
-
+        
         if(this->selection_chunk->range < (count + 1) * sizeof(uint32_t)) {
             if(!this->entities_descriptor.ResizeChunk(this->selection_chunk, (count + 1) * sizeof(uint32_t), 0, Vulkan::SboAlignment())) {
                 count = static_cast<uint32_t>(this->selection_chunk->range / sizeof(uint32_t)) - 1;
@@ -174,6 +178,14 @@ namespace Engine
     {
         if(!this->need_update[frame_index]) return;
         this->UpdateVertexBuffer(frame_index);
+    }
+
+    void Map::UpdateDescriptorSets(uint8_t frame_index)
+    {
+        if(this->entities_descriptor.NeedUpdate(frame_index)) {
+            this->Refresh(frame_index);
+            this->entities_descriptor.Update(frame_index);
+        }
     }
 
     void Map::Refresh(uint8_t frame_index)
@@ -232,10 +244,10 @@ namespace Engine
 
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline.handle);
 
-        uint32_t dynamic_offset = static_cast<uint32_t>(this->selection_chunk->offset);
+        // uint32_t dynamic_offset = static_cast<uint32_t>(this->selection_chunk->offset);
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline.layout, 0,
                                 static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(),
-                                1, &dynamic_offset);
+                                0, nullptr);
 
         vkCmdBindVertexBuffers(command_buffer, 0, 1, &DataBank::GetManagedBuffer().GetBuffer(frame_index).handle, &this->map_vbo_chunk->offset);
         vkCmdBindIndexBuffer(command_buffer, DataBank::GetManagedBuffer().GetBuffer(frame_index).handle,

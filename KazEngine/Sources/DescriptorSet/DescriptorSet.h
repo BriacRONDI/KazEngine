@@ -22,7 +22,7 @@ namespace Engine
             bool Create(std::vector<VkDescriptorSetLayoutBinding> const& layout_bindings, std::vector<VkDescriptorBufferInfo> const& buffers_infos);
             bool Create(Tools::IMAGE_MAP const& image);
             bool Prepare(std::vector<VkDescriptorSetLayoutBinding> const& layout_bindings, uint32_t instance_count = 1);
-            bool Create(std::vector<BINDING_INFOS> infos, uint32_t instance_count = 1);
+            bool Create(std::vector<BINDING_INFOS> infos, uint32_t instance_count = 1, std::vector<std::shared_ptr<Chunk>> external_chunk = {});
             uint32_t Allocate(std::vector<VkDescriptorBufferInfo> const& buffers_infos);
             bool PrepareBindlessTexture(uint32_t texture_count = 32);
             int32_t AllocateTexture(Tools::IMAGE_MAP const& image);
@@ -42,6 +42,7 @@ namespace Engine
             bool Update(uint8_t instance_id);
             bool NeedUpdate(uint8_t instance_id);
             inline void FreeChunk(std::shared_ptr<Chunk> chunk, uint8_t binding) { this->bindings[binding].chunk->FreeChild(chunk); }
+            inline void AwaitUpdate(uint8_t binding) { for(uint8_t i=0; i<this->bindings[binding].awaiting_update.size(); i++) this->bindings[binding].awaiting_update[i] = true; }
 
         private :
 
@@ -60,8 +61,6 @@ namespace Engine
             std::vector<DESCRIPTOR_SET_BINDING> bindings;
 
             bool CreateSampler();
-            inline void AwaitUpdate(uint8_t binding) { for(uint8_t i=0; i<this->bindings[binding].awaiting_update.size(); i++) 
-                this->bindings[binding].awaiting_update[i] = true; }
             void UpdateDescriptorSet(uint8_t binding, uint8_t instance_id = 0);
     };
 }

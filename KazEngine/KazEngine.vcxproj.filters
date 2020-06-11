@@ -52,5 +52,6 @@
     <ClInclude Include="Sources\LoadedMesh\LoadedMesh.h" />
     <ClInclude Include="Sources\Scene\Entity\SkeletonEntity.h" />
     <ClInclude Include="Sources\Scene\Entity\Entity.h" />
+    <ClInclude Include="Sources\Scene\Entity\IEntityListener.h" />
   </ItemGroup>
 </Project>

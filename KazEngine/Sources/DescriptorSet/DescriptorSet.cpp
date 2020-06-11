@@ -415,7 +415,7 @@ namespace Engine
         return set_id;
     }
 
-    bool DescriptorSet::Create(std::vector<BINDING_INFOS> infos, uint32_t instance_count)
+    bool DescriptorSet::Create(std::vector<BINDING_INFOS> infos, uint32_t instance_count, std::vector<std::shared_ptr<Chunk>> external_chunk)
     {
         this->Clear();
         this->bindings.resize(infos.size());
@@ -442,7 +442,9 @@ namespace Engine
                     break;
             }
 
-            this->bindings[i].chunk = DataBank::GetManagedBuffer().ReserveChunk(infos[i].size, alignment);
+            if(external_chunk.size() == infos.size() && external_chunk[i] != nullptr) this->bindings[i].chunk = external_chunk[i];
+            else this->bindings[i].chunk = DataBank::GetManagedBuffer().ReserveChunk(infos[i].size, alignment);
+
             layout_bindings.push_back(this->bindings[i].layout);
 
             this->bindings[i].awaiting_update.resize(instance_count, false);
@@ -517,8 +519,8 @@ namespace Engine
         // Mise à jour du Descriptor Set //
         ///////////////////////////////////
 
-        std::vector<VkWriteDescriptorSet> writes(this->bindings.size() * instance_count);
-        std::vector<VkDescriptorBufferInfo> buffer_infos(this->bindings.size() * instance_count);
+        std::vector<VkWriteDescriptorSet> writes;
+        std::vector<VkDescriptorBufferInfo> buffer_infos(bindings.size() * instance_count);
 
         for(uint8_t i=0; i<bindings.size(); i++) {
 
@@ -533,13 +535,15 @@ namespace Engine
             write.pImageInfo = nullptr;
 
             for(uint32_t j=0; j<instance_count; j++) {
-                writes[i * instance_count + j] = write;
-                writes[i * instance_count + j].dstSet = this->sets[j];
                 buffer_infos[i * instance_count + j] = DataBank::GetInstance().GetManagedBuffer().GetBufferInfos(this->bindings[i].chunk, j);
-                writes[i * instance_count + j].pBufferInfo = &buffer_infos[i * instance_count + j];
+                if(buffer_infos[i * bindings.size() + j].range > 0) {
+                    write.dstSet = this->sets[j];
+                    write.pBufferInfo = &buffer_infos[i * bindings.size() + j];
+                    writes.push_back(write);
+                }
             }
         }
-
+        
         // Mise à jour
         vkUpdateDescriptorSets(Vulkan::GetDevice(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 

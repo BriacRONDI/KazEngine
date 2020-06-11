@@ -2,12 +2,14 @@
 
 #include <Maths.h>
 #include <Model.h>
+#include <EventEmitter.hpp>
 #include "../../DataBank/DataBank.h"
 #include "../../Platform/Common/Timer/Timer.h"
+#include "IEntityListener.h"
 
 namespace Engine
 {
-    class Entity
+    class Entity : public Tools::StaticEventEmitter<IEntityListener>
     {
         public :
 

@@ -20,7 +20,7 @@ namespace Engine
     bool Entity::InitilizeInstanceChunk()
     {
         if(Entity::static_data_chunk == nullptr) {
-            Entity::static_data_chunk = DataBank::GetManagedBuffer().ReserveChunk(0);
+            Entity::static_data_chunk = DataBank::GetManagedBuffer().ReserveChunk(0, Vulkan::SboAlignment());
             if(Entity::static_data_chunk == nullptr) return false;
         }
         return true;
@@ -29,10 +29,12 @@ namespace Engine
     bool Entity::PickChunk()
     {
         if(this->static_instance_chunk != nullptr) return true;
-        this->static_instance_chunk = Entity::static_data_chunk->ReserveRange(sizeof(ENTITY_DATA));
+        this->static_instance_chunk = Entity::static_data_chunk->ReserveRange(sizeof(ENTITY_DATA), Vulkan::SboAlignment());
         if(this->static_instance_chunk == nullptr) {
             bool relocated;
-            if(!DataBank::GetManagedBuffer().ResizeChunk(Entity::static_data_chunk, Entity::static_data_chunk->range + sizeof(ENTITY_DATA), relocated)) {
+            if(!DataBank::GetManagedBuffer().ResizeChunk(Entity::static_data_chunk,
+                                                         Entity::static_data_chunk->range + sizeof(ENTITY_DATA),
+                                                        relocated, Vulkan::SboAlignment())) {
                 #if defined(DISPLAY_LOGS)
                 std::cout << "Entity::SetupChunk : Not enough memory" << std::endl;
                 #endif
@@ -40,10 +42,14 @@ namespace Engine
             }
 
             if(relocated) {
-                SkeletonEntity::absolute_skeleton_data_chunk->offset = Entity::static_data_chunk->offset + SkeletonEntity::skeleton_data_chunk->offset;
+                SkeletonEntity::absolute_skeleton_data_chunk->offset = Entity::static_data_chunk->offset
+                                                                     + SkeletonEntity::skeleton_data_chunk->offset;
             }
 
-            this->static_instance_chunk = Entity::static_data_chunk->ReserveRange(sizeof(ENTITY_DATA));
+            this->static_instance_chunk = Entity::static_data_chunk->ReserveRange(sizeof(ENTITY_DATA), Vulkan::SboAlignment());
+
+            for(auto& listener : this->Listeners)
+                listener->StaticBufferUpdated();
         }
 
         return this->static_instance_chunk != nullptr;
