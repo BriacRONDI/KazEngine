@@ -2502,6 +2502,40 @@ namespace Engine
 
         return output;
     }
+
+    bool Vulkan::CreateComputePipeline(VkPipelineShaderStageCreateInfo stage,
+                                       std::vector<VkDescriptorSetLayout> const& descriptor_set_layouts,
+                                       std::vector<VkPushConstantRange> const& push_constant_ranges,
+                                       PIPELINE& pipeline)
+    {
+        VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo = {};
+        pPipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pPipelineLayoutCreateInfo.pNext = nullptr;
+        pPipelineLayoutCreateInfo.pushConstantRangeCount = static_cast<uint32_t>(push_constant_ranges.size());
+        pPipelineLayoutCreateInfo.pPushConstantRanges = push_constant_ranges.data();
+        pPipelineLayoutCreateInfo.setLayoutCount = static_cast<uint32_t>(descriptor_set_layouts.size());
+        pPipelineLayoutCreateInfo.pSetLayouts = descriptor_set_layouts.data();
+
+        VkResult result = vkCreatePipelineLayout(this->device, &pPipelineLayoutCreateInfo, nullptr, &pipeline.layout);
+
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "CreatePipeline => vkCreatePipelineLayout : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        VkComputePipelineCreateInfo pipeline_create_infos;
+        pipeline_create_infos.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        pipeline_create_infos.pNext = nullptr;
+        pipeline_create_infos.layout = pipeline.layout;
+        pipeline_create_infos.flags = 0;
+        pipeline_create_infos.basePipelineHandle = nullptr;
+        pipeline_create_infos.basePipelineIndex = 0;
+        pipeline_create_infos.stage = stage;
+
+        result = vkCreateComputePipelines(this->device, nullptr, 1, &pipeline_create_infos, nullptr, &pipeline.handle);
+    }
    
 
     /**
@@ -2512,7 +2546,7 @@ namespace Engine
                                 std::vector<VkPipelineShaderStageCreateInfo> const& shader_stages,
                                 std::vector<VkVertexInputBindingDescription> const& vertex_binding_description,
                                 std::vector<VkVertexInputAttributeDescription> const& vertex_attribute_descriptions,
-                                std::vector<VkPushConstantRange> const& push_constant_rages,
+                                std::vector<VkPushConstantRange> const& push_constant_ranges,
                                 PIPELINE& pipeline,
                                 VkPolygonMode polygon_mode,
                                 VkPrimitiveTopology topology,
@@ -2521,8 +2555,8 @@ namespace Engine
         VkPipelineLayoutCreateInfo pPipelineLayoutCreateInfo = {};
         pPipelineLayoutCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pPipelineLayoutCreateInfo.pNext = nullptr;
-        pPipelineLayoutCreateInfo.pushConstantRangeCount = static_cast<uint32_t>(push_constant_rages.size());
-        pPipelineLayoutCreateInfo.pPushConstantRanges = push_constant_rages.data();
+        pPipelineLayoutCreateInfo.pushConstantRangeCount = static_cast<uint32_t>(push_constant_ranges.size());
+        pPipelineLayoutCreateInfo.pPushConstantRanges = push_constant_ranges.data();
         pPipelineLayoutCreateInfo.setLayoutCount = static_cast<uint32_t>(descriptor_set_layouts.size());
         pPipelineLayoutCreateInfo.pSetLayouts = descriptor_set_layouts.data();
 

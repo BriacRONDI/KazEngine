@@ -13,16 +13,17 @@ namespace Engine
     {
         public :
 
-            struct ENTITY_DATA {
+            /*struct ENTITY_DATA {
                 Maths::Matrix4x4 matrix;
                 uint32_t selected;
 
                 inline bool operator !=(ENTITY_DATA other) { return this->matrix != other.matrix || this->selected != other.selected; }
                 // static inline uint32_t Size() { return sizeof(Maths::Matrix4x4) + sizeof(uint32_t); }
                 // virtual inline void Write(size_t offset, uint8_t instance_id) { DataBank::GetManagedBuffer().WriteData(&this->matrix, this->Size(), offset, instance_id); }
-            };
+            };*/
             
-            ENTITY_DATA properties;
+            Maths::Matrix4x4 matrix;
+            bool selected;
             static std::shared_ptr<Chunk> static_data_chunk;
             
             Entity(bool pick_chunk = true);
@@ -37,14 +38,13 @@ namespace Engine
             virtual void Update(uint32_t frame_index);
             bool InSelectBox(Maths::Plane left_plane, Maths::Plane right_plane, Maths::Plane top_plane, Maths::Plane bottom_plane);
             bool IntersectRay(Maths::Vector3 const& ray_origin, Maths::Vector3 const& ray_direction);
-            virtual inline uint32_t GetInstanceId() { return static_cast<uint32_t>(this->static_instance_chunk->offset / sizeof(ENTITY_DATA)); }
+            virtual inline uint32_t GetInstanceId() { return static_cast<uint32_t>(this->static_instance_chunk->offset / sizeof(Maths::Matrix4x4)); }
             static bool InitilizeInstanceChunk();
 
         protected :
 
             uint32_t id;
             std::vector<std::shared_ptr<Model::Mesh>>* meshes;
-            std::vector<ENTITY_DATA> last_static_state;
             std::shared_ptr<Chunk> static_instance_chunk;
 
             static uint32_t next_id;

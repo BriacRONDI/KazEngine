@@ -257,7 +257,10 @@ namespace Engine
                 relocated = false;
                 return true;
             }else{
+                size_t mem_offset = child->offset;
+                size_t mem_range = child->range;
                 if(this->ReserveRange(size, alignment, child) == nullptr) return false;
+                this->FreeRange(mem_offset, mem_range);
                 relocated = true;
                 return true;
             }

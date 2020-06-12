@@ -2,11 +2,6 @@
 
 layout (set=1, binding=0) uniform sampler2D inTexture;
 
-struct Properties {
-	mat4 model;
-	uint selected;
-};
-
 layout (set=2, binding=0) readonly buffer IDs
 {
 	uint selection_count;
@@ -15,7 +10,7 @@ layout (set=2, binding=0) readonly buffer IDs
 
 layout (set=2, binding=1) readonly buffer Entity
 {
-	Properties entity[];
+	mat4 model[];
 };
 
 layout (location = 0) in vec2 inUV;
@@ -47,7 +42,8 @@ void main()
 	
 	if(selection_count > 0) {
 		for(int i=0; i<selection_count; i++) {
-			vec3 entity_positon = vec3(entity[entity_id[i]].model[3]);
+			// vec3 entity_positon = vec3(entity[entity_id[i]].model[3]);
+			vec3 entity_positon = vec3(model[entity_id[i]][3]);
 			float dist = distance(entity_positon, inPosition);
 			if(dist <= selection_radius + selection_border) {
 				float t = 1.0 + smoothstep(selection_radius, selection_radius + selection_border, dist) - smoothstep(selection_radius - selection_border, selection_radius, dist);

@@ -73,7 +73,7 @@ namespace Engine
 
         if(!this->entities_descriptor.Create({
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(uint32_t) * 101},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(Entity::ENTITY_DATA) * 100}
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(Maths::Matrix4x4) * 100}
         }, instance_count, {nullptr, Entity::static_data_chunk})) return false;
 
         this->selection_chunk = this->entities_descriptor.ReserveRange(sizeof(uint32_t) * 101);

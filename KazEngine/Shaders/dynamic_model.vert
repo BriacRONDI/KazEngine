@@ -8,11 +8,11 @@ layout (location = 2)  in vec4  inBoneWeights;
 layout (location = 3)  in ivec4 inBoneIDs;
 
 layout (location = 4)  in mat4 model;
-layout (location = 8)  in uint selected;
+// layout (location = 8)  in uint selected;
 // layout (location = 9)  in uint padding;
 
-layout (location = 10)  in uint animation_id;
-layout (location = 11)  in uint frame_id;
+layout (location = 8)  in uint animation_id;
+layout (location = 9)  in uint frame_id;
 
 
 layout (set=1, binding=0) uniform Camera

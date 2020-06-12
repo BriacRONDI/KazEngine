@@ -4,7 +4,7 @@ layout (location = 0) in vec3 inPos;
 layout (location = 1) in vec2 inUV;
 
 layout (location = 2) in mat4 model;
-layout (location = 6)  in uint selected;
+// layout (location = 6)  in uint selected;
 // layout (location = 7)  in uint padding;
 
 layout (set=1, binding=0) uniform Camera

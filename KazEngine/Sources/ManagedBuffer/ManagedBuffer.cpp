@@ -90,6 +90,8 @@ namespace Engine
                 overlap_count++;
                 if(flush[i].offset < start_offset) start_offset = flush[i].offset;
                 if(flush_chunk_end > end_offset) end_offset = flush_chunk_end;
+            }else{
+                insert_pos++;
             }
         }
 

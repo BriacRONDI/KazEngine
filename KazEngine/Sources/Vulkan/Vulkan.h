@@ -257,11 +257,16 @@ namespace Engine
                                 std::vector<VkPipelineShaderStageCreateInfo> const& shader_stages,
                                 std::vector<VkVertexInputBindingDescription> const& vertex_binding_description,
                                 std::vector<VkVertexInputAttributeDescription> const& vertex_attribute_descriptions,
-                                std::vector<VkPushConstantRange> const& push_constant_rages,
+                                std::vector<VkPushConstantRange> const& push_constant_ranges,
                                 PIPELINE& pipeline,
                                 VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL,
                                 VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
                                 bool blend_state = false);
+
+            bool CreateComputePipeline(VkPipelineShaderStageCreateInfo stage,
+                                       std::vector<VkDescriptorSetLayout> const& descriptor_set_layouts,
+                                       std::vector<VkPushConstantRange> const& push_constant_ranges,
+                                       PIPELINE& pipeline);
 
             inline Window* GetDrawWindow() { return this->draw_window; }
 

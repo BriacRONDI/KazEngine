@@ -8,13 +8,6 @@ namespace Engine
 
     SkeletonEntity::SkeletonEntity() : Entity(false)
     {
-        this->id = Entity::next_id;
-        this->properties.selected = 0;
-        this->meshes = nullptr;
-        this->last_static_state.resize(Vulkan::GetConcurrentFrameCount());
-        for(auto& state : this->last_static_state) state.selected = true;
-        Entity::next_id++;
-
         this->animation_properties.frame_id = 0;
         this->animation_properties.animation_id = 0;
         this->moving = false;
@@ -48,14 +41,14 @@ namespace Engine
     bool SkeletonEntity::PickChunk()
     {
         if(this->static_instance_chunk == nullptr) {
-            this->static_instance_chunk = SkeletonEntity::skeleton_data_chunk->ReserveRange(sizeof(ENTITY_DATA), Vulkan::SboAlignment());
+            this->static_instance_chunk = SkeletonEntity::skeleton_data_chunk->ReserveRange(sizeof(Maths::Matrix4x4), Vulkan::SboAlignment());
             if(this->static_instance_chunk == nullptr) {
                 bool relocated;
                 if(!Entity::static_data_chunk->ResizeChild(SkeletonEntity::skeleton_data_chunk,
-                                                           SkeletonEntity::skeleton_data_chunk->range + sizeof(ENTITY_DATA),
+                                                           SkeletonEntity::skeleton_data_chunk->range + sizeof(Maths::Matrix4x4),
                                                            relocated, Vulkan::SboAlignment())) {
                     if(!DataBank::GetManagedBuffer().ResizeChunk(Entity::static_data_chunk,
-                                                                 Entity::static_data_chunk->range + sizeof(ENTITY_DATA),
+                                                                 Entity::static_data_chunk->range + sizeof(Maths::Matrix4x4),
                                                                  relocated, Vulkan::SboAlignment())) {
                         #if defined(DISPLAY_LOGS)
                         std::cout << "SkeletonEntity::PickChunk() => Not enough memory" << std::endl;
@@ -63,11 +56,11 @@ namespace Engine
                         #endif
                     }else{
                         Entity::static_data_chunk->ResizeChild(SkeletonEntity::skeleton_data_chunk,
-                                                                SkeletonEntity::skeleton_data_chunk->range + sizeof(ENTITY_DATA),
+                                                                SkeletonEntity::skeleton_data_chunk->range + sizeof(Maths::Matrix4x4),
                                                                 relocated, Vulkan::SboAlignment());
                     }
                 }
-                this->static_instance_chunk = SkeletonEntity::skeleton_data_chunk->ReserveRange(sizeof(ENTITY_DATA), Vulkan::SboAlignment());
+                this->static_instance_chunk = SkeletonEntity::skeleton_data_chunk->ReserveRange(sizeof(Maths::Matrix4x4), Vulkan::SboAlignment());
             }
             SkeletonEntity::absolute_skeleton_data_chunk->offset = Entity::static_data_chunk->offset + SkeletonEntity::skeleton_data_chunk->offset;
             SkeletonEntity::absolute_skeleton_data_chunk->range = SkeletonEntity::skeleton_data_chunk->range;
@@ -113,19 +106,16 @@ namespace Engine
             Maths::Vector3 new_position = this->move_origin + this->move_direction * this->move_speed * static_cast<float>(this->move_timer.GetDuration().count());
             if((new_position - this->move_origin).Length() >= this->move_length) {
                 this->moving = false;
-                this->properties.matrix.SetTranslation(this->move_destination);
+                this->matrix.SetTranslation(this->move_destination);
             }else{
-                this->properties.matrix.SetTranslation(new_position);
+                this->matrix.SetTranslation(new_position);
             }
         }
 
-        if(this->last_static_state[frame_index] != this->properties) {
-            DataBank::GetManagedBuffer().WriteData(&this->properties, sizeof(ENTITY_DATA),
-                                                   SkeletonEntity::absolute_skeleton_data_chunk->offset
-                                                        + this->static_instance_chunk->offset,
-                                                   frame_index);
-            this->last_static_state[frame_index] = this->properties;
-        }
+        DataBank::GetManagedBuffer().WriteData(&this->matrix, sizeof(Maths::Matrix4x4),
+                                                SkeletonEntity::absolute_skeleton_data_chunk->offset
+                                                    + this->static_instance_chunk->offset,
+                                                frame_index);
 
         if(this->last_animation_state[frame_index] != this->animation_properties) {
             DataBank::GetManagedBuffer().WriteData(&this->animation_properties, sizeof(SKELETON_DATA),
@@ -212,7 +202,7 @@ namespace Engine
 
     void SkeletonEntity::MoveTo(Maths::Vector3 destination, float speed)
     {
-        this->move_origin = this->properties.matrix.GetTranslation();
+        this->move_origin = this->matrix.GetTranslation();
         this->move_destination = destination;
         this->move_direction = this->move_destination - this->move_origin;
         this->move_length = this->move_direction.Length();
