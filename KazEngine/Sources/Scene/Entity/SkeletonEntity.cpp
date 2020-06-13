@@ -20,9 +20,9 @@ namespace Engine
 
     bool SkeletonEntity::InitilizeInstanceChunk()
     {
-        Entity::InitilizeInstanceChunk();
+        //Entity::InitilizeInstanceChunk();
         if(SkeletonEntity::skeleton_data_chunk == nullptr) {
-            SkeletonEntity::skeleton_data_chunk = Entity::static_data_chunk->ReserveRange(0, Vulkan::SboAlignment());
+            SkeletonEntity::skeleton_data_chunk = Entity::descriptor->ReserveRange(0, Vulkan::SboAlignment());
             if(SkeletonEntity::skeleton_data_chunk == nullptr) return false;
         }
 
@@ -43,11 +43,14 @@ namespace Engine
         if(this->static_instance_chunk == nullptr) {
             this->static_instance_chunk = SkeletonEntity::skeleton_data_chunk->ReserveRange(sizeof(Maths::Matrix4x4), Vulkan::SboAlignment());
             if(this->static_instance_chunk == nullptr) {
-                bool relocated;
-                if(!Entity::static_data_chunk->ResizeChild(SkeletonEntity::skeleton_data_chunk,
-                                                           SkeletonEntity::skeleton_data_chunk->range + sizeof(Maths::Matrix4x4),
-                                                           relocated, Vulkan::SboAlignment())) {
-                    if(!DataBank::GetManagedBuffer().ResizeChunk(Entity::static_data_chunk,
+                if(!Entity::descriptor->ResizeChunk(SkeletonEntity::skeleton_data_chunk,
+                                                    SkeletonEntity::skeleton_data_chunk->range + sizeof(Maths::Matrix4x4),
+                                                    0, Vulkan::SboAlignment())) {
+                    #if defined(DISPLAY_LOGS)
+                    std::cout << "SkeletonEntity::PickChunk() => Not enough memory" << std::endl;
+                    return false;
+                    #endif
+                    /*if(!DataBank::GetManagedBuffer().ResizeChunk(Entity::static_data_chunk,
                                                                  Entity::static_data_chunk->range + sizeof(Maths::Matrix4x4),
                                                                  relocated, Vulkan::SboAlignment())) {
                         #if defined(DISPLAY_LOGS)
@@ -58,15 +61,15 @@ namespace Engine
                         Entity::static_data_chunk->ResizeChild(SkeletonEntity::skeleton_data_chunk,
                                                                 SkeletonEntity::skeleton_data_chunk->range + sizeof(Maths::Matrix4x4),
                                                                 relocated, Vulkan::SboAlignment());
-                    }
+                    }*/
                 }
                 this->static_instance_chunk = SkeletonEntity::skeleton_data_chunk->ReserveRange(sizeof(Maths::Matrix4x4), Vulkan::SboAlignment());
             }
-            SkeletonEntity::absolute_skeleton_data_chunk->offset = Entity::static_data_chunk->offset + SkeletonEntity::skeleton_data_chunk->offset;
+            SkeletonEntity::absolute_skeleton_data_chunk->offset = Entity::descriptor->GetChunk()->offset + SkeletonEntity::skeleton_data_chunk->offset;
             SkeletonEntity::absolute_skeleton_data_chunk->range = SkeletonEntity::skeleton_data_chunk->range;
 
-            for(auto& listener : this->Listeners)
-                listener->StaticBufferUpdated();
+            /*for(auto& listener : this->Listeners)
+                listener->StaticBufferUpdated();*/
         }
 
         if(this->animation_instance_chunk == nullptr) {
@@ -112,10 +115,13 @@ namespace Engine
             }
         }
 
-        DataBank::GetManagedBuffer().WriteData(&this->matrix, sizeof(Maths::Matrix4x4),
+        /*DataBank::GetManagedBuffer().WriteData(&this->matrix, sizeof(Maths::Matrix4x4),
                                                 SkeletonEntity::absolute_skeleton_data_chunk->offset
                                                     + this->static_instance_chunk->offset,
-                                                frame_index);
+                                                frame_index);*/
+
+        Entity::descriptor->WriteData(&this->matrix, sizeof(Maths::Matrix4x4), 0, frame_index,
+            static_cast<uint32_t>(SkeletonEntity::skeleton_data_chunk->offset + this->static_instance_chunk->offset));
 
         if(this->last_animation_state[frame_index] != this->animation_properties) {
             DataBank::GetManagedBuffer().WriteData(&this->animation_properties, sizeof(SKELETON_DATA),

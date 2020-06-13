@@ -9,11 +9,14 @@ namespace Engine
             vkDeviceWaitIdle(Vulkan::GetDevice());
 
             // Descriptor Sets
-            // this->entities_descriptor.Clear();
             this->texture_descriptor.Clear();
 
             // Pipelines
-            for(auto& render_group : this->render_groups) render_group.pipeline.Clear();
+            for(auto& render_group : this->render_groups) {
+                render_group.graphics_pipeline.Clear();
+                render_group.indirect_descriptor.Clear();
+                render_group.compute_pipeline.Clear();
+            }
             this->render_groups.clear();
 
             // Secondary graphics command buffers
@@ -24,7 +27,6 @@ namespace Engine
         this->need_update.clear();
         this->command_buffers.clear();
         this->entities.clear();
-        // this->entities_descriptor.Clear();
         this->render_groups.clear();
         this->skeleton_descriptor.Clear();
         this->texture_descriptor.Clear();
@@ -33,8 +35,6 @@ namespace Engine
     EntityRender::EntityRender(VkCommandPool command_pool) : command_pool(command_pool)
     {
         this->Clear();
-
-        // Entity::UpdateUboSize();
 
         uint32_t frame_count = Vulkan::GetConcurrentFrameCount();
         this->command_buffers.resize(frame_count);
@@ -54,18 +54,6 @@ namespace Engine
     {
         std::vector<VkDescriptorSetLayoutBinding> bindings;
         uint8_t instance_count = DataBank::GetManagedBuffer().GetInstanceCount();
-
-        ////////////
-        // Entity //
-        ////////////
-
-        /*if(!this->entities_descriptor.Create({
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, SIZE_KILOBYTE(5)},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, Entity::GetUboSize() * 100}
-        }, instance_count)) return false;
-
-        this->entity_data_chunk = this->entities_descriptor.ReserveRange(Entity::GetUboSize() * 100, Vulkan::SboAlignment(), ENTITY_DATA_BINDING);*/
-        this->instance_buffer_chunk = DataBank::GetManagedBuffer().ReserveChunk(sizeof(Maths::Matrix4x4) * 100);
 
         /////////////
         // Texture //
@@ -116,7 +104,10 @@ namespace Engine
         std::vector<VkVertexInputBindingDescription> vertex_binding_description;
         std::vector<VkVertexInputAttributeDescription> vertex_attribute_description;
         std::vector<VkPipelineShaderStageCreateInfo> shader_stages;
-        Vulkan::PIPELINE pipeline;
+        Vulkan::PIPELINE graphics_pipeline;
+        Vulkan::PIPELINE compute_pipeline;
+        DescriptorSet indirect_descriptor;
+        uint8_t instance_count = DataBank::GetManagedBuffer().GetInstanceCount();
 
         ///////////////////
         // Textured Mesh //
@@ -137,13 +128,12 @@ namespace Engine
         push_constant.offset = 0;
         push_constant.size = sizeof(LoadedMesh::PUSH_CONSTANT_MATERIAL);
 
-        auto texture_layout = this->texture_descriptor.GetLayout();
         auto camera_layout = Camera::GetInstance().GetDescriptorSet(0).GetLayout();
-        // auto entities_layout = this->entities_descriptor.GetLayout();
+        auto texture_layout = this->texture_descriptor.GetLayout();
         
         bool success = Vulkan::GetInstance().CreatePipeline(
             true, {texture_layout, camera_layout},
-            shader_stages, vertex_binding_description, vertex_attribute_description, {push_constant}, pipeline
+            shader_stages, vertex_binding_description, vertex_attribute_description, {push_constant}, graphics_pipeline
         );
 
         for(auto& stage : shader_stages) vkDestroyShaderModule(Vulkan::GetDevice(), stage.module, nullptr);
@@ -151,13 +141,32 @@ namespace Engine
         
         if(!success) return false;
 
+        if(!indirect_descriptor.Create({
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(VkDrawIndirectCommand)}
+        }, instance_count)) return false;
+
+        auto indirect_layout = indirect_descriptor.GetLayout();
+        auto entity_layout = Entity::GetDescriptor().GetLayout();
+
+        VkPipelineShaderStageCreateInfo compute_shader_stage = Vulkan::GetInstance().LoadShaderModule("./Shaders/cull_lod.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+        success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout}, {}, compute_pipeline);
+        
+        if(!success) {
+            indirect_descriptor.Clear();
+            vkDestroyShaderModule(Vulkan::GetDevice(), compute_shader_stage.module, nullptr);
+            return false;
+        }
+
         SkeletonEntity::InitilizeInstanceChunk();
 
         this->render_groups.push_back({
-            pipeline,
+            graphics_pipeline, compute_pipeline,
             Model::Mesh::RENDER_POSITION | Model::Mesh::RENDER_UV | Model::Mesh::RENDER_TEXTURE,
-            {Entity::static_data_chunk}
+            {Entity::GetDescriptor().GetChunk()},
+            std::move(indirect_descriptor)
         });
+
+        indirect_descriptor.Clear();
 
         ///////////////////
         // Animated Mesh //
@@ -178,7 +187,7 @@ namespace Engine
 
         success = Vulkan::GetInstance().CreatePipeline(
             true, {texture_layout, camera_layout, skeleton_layout},
-            shader_stages, vertex_binding_description, vertex_attribute_description, {push_constant}, pipeline
+            shader_stages, vertex_binding_description, vertex_attribute_description, {push_constant}, graphics_pipeline
         );
 
         for(auto& stage : shader_stages) vkDestroyShaderModule(Vulkan::GetDevice(), stage.module, nullptr);
@@ -186,38 +195,28 @@ namespace Engine
         
         if(!success) return false;
 
+        if(!indirect_descriptor.Create({
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(VkDrawIndirectCommand)}
+        }, instance_count)) return false;
+
+        indirect_layout = indirect_descriptor.GetLayout();
+
+        success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout}, {}, compute_pipeline);
+        vkDestroyShaderModule(Vulkan::GetDevice(), compute_shader_stage.module, nullptr);
+        
+        if(!success) {
+            indirect_descriptor.Clear();
+            return false;
+        }
+
         this->render_groups.push_back({
-            pipeline,
+            graphics_pipeline, compute_pipeline,
             Model::Mesh::RENDER_POSITION | Model::Mesh::RENDER_UV | Model::Mesh::RENDER_TEXTURE | Model::Mesh::RENDER_SKELETON,
-            {SkeletonEntity::absolute_skeleton_data_chunk, SkeletonEntity::animation_data_chunk}
+            {SkeletonEntity::absolute_skeleton_data_chunk, SkeletonEntity::animation_data_chunk},
+            std::move(indirect_descriptor)
         });
 
-        /////////////////
-        // Debug Cross //
-        /////////////////
-
-        /*shader_stages = {
-            Vulkan::GetInstance().LoadShaderModule("./Shaders/cross.vert.spv", VK_SHADER_STAGE_VERTEX_BIT),
-            Vulkan::GetInstance().LoadShaderModule("./Shaders/cross.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT)
-        };
-
-        vertex_attribute_description = Vulkan::CreateVertexInputDescription({{Vulkan::POSITION}}, vertex_binding_description);
-
-        success = Vulkan::GetInstance().CreatePipeline(
-            true, {camera_layout, entities_layout}, shader_stages,
-            vertex_binding_description, vertex_attribute_description, {}, pipeline,
-            VK_POLYGON_MODE_LINE, VK_PRIMITIVE_TOPOLOGY_LINE_LIST
-        );
-
-        for(auto& stage : shader_stages) vkDestroyShaderModule(Vulkan::GetDevice(), stage.module, nullptr);
-        shader_stages.clear();
-        
-        if(!success) return false;
-        
-        this->render_groups.push_back({
-            pipeline,
-            Model::Mesh::RENDER_POSITION
-        });*/
+        indirect_descriptor.Clear();
 
         return true;
     }
@@ -319,30 +318,19 @@ namespace Engine
 
                 for(auto& drawable_bind : this->render_groups[i].drawables) {
                     if(drawable_bind.mesh.IsSameMesh(mesh)) {
-                        
-                        if(this->render_groups[i].indirect_commands_chunk == nullptr)
-                            this->render_groups[i].indirect_commands_chunk = DataBank::GetManagedBuffer().ReserveChunk(sizeof(VkDrawIndirectCommand));
-
-                        if(this->render_groups[i].indirect_commands_chunk == nullptr) {
-                            #if defined(DISPLAY_LOGS)
-                            std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
-                            #endif
-                            return false;
-                        }
 
                         ENTITY_MESH_CHUNK emc;
-                        emc.chunk = this->render_groups[i].indirect_commands_chunk->ReserveRange(sizeof(VkDrawIndirectCommand));
+                        emc.chunk = this->render_groups[i].indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
 
                         if(emc.chunk == nullptr) {
-                            bool relocated;
-                            if(!DataBank::GetManagedBuffer().ResizeChunk(this->render_groups[i].indirect_commands_chunk,
-                                                this->render_groups[i].indirect_commands_chunk->range + sizeof(VkDrawIndirectCommand) * 10, relocated)) {
+                            if(!this->render_groups[i].indirect_descriptor.ResizeChunk(this->render_groups[i].indirect_descriptor.GetChunk()->range
+                                                                                     + sizeof(VkDrawIndirectCommand) * 10)) {
                                 #if defined(DISPLAY_LOGS)
                                 std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
                                 #endif
                                 return false;
                             }else{
-                                emc.chunk = this->render_groups[i].indirect_commands_chunk->ReserveRange(sizeof(VkDrawIndirectCommand));
+                                emc.chunk = this->render_groups[i].indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
                                 if(emc.chunk == nullptr) {
                                     #if defined(DISPLAY_LOGS)
                                     std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
@@ -355,8 +343,7 @@ namespace Engine
                         emc.entity = &entity;
                         emc.instance_id = entity.GetInstanceId();
                         VkDrawIndirectCommand indirect = drawable_bind.mesh.GetIndirectCommand(emc.instance_id);
-                        DataBank::GetManagedBuffer().WriteData(&indirect, sizeof(VkDrawIndirectCommand),
-                                                               this->render_groups[i].indirect_commands_chunk->offset + emc.chunk->offset);
+                        this->render_groups[i].indirect_descriptor.WriteData(&indirect, sizeof(VkDrawIndirectCommand), 0, static_cast<uint32_t>(emc.chunk->offset));
                         drawable_bind.entities.push_back(emc);
 
                         for(uint8_t i=0; i<this->need_update.size(); i++) this->need_update[i] = true;
@@ -425,29 +412,18 @@ namespace Engine
                 // Setup loaded mesh //
                 ///////////////////////
 
-                if(this->render_groups[i].indirect_commands_chunk == nullptr)
-                    this->render_groups[i].indirect_commands_chunk = DataBank::GetManagedBuffer().ReserveChunk(sizeof(VkDrawIndirectCommand));
-
-                if(this->render_groups[i].indirect_commands_chunk == nullptr) {
-                    #if defined(DISPLAY_LOGS)
-                    std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
-                    #endif
-                    return false;
-                }
-
                 ENTITY_MESH_CHUNK emc;
-                emc.chunk = this->render_groups[i].indirect_commands_chunk->ReserveRange(sizeof(VkDrawIndirectCommand));
+                emc.chunk = this->render_groups[i].indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
 
                 if(emc.chunk == nullptr) {
-                    bool relocated;
-                    if(!DataBank::GetManagedBuffer().ResizeChunk(this->render_groups[i].indirect_commands_chunk,
-                                    this->render_groups[i].indirect_commands_chunk->range + sizeof(VkDrawIndirectCommand) * 10, relocated)) {
+                    if(!this->render_groups[i].indirect_descriptor.ResizeChunk(this->render_groups[i].indirect_descriptor.GetChunk()->range
+                                                                             + sizeof(VkDrawIndirectCommand) * 10)) {
                         #if defined(DISPLAY_LOGS)
                         std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
                         #endif
                         return false;
                     }else{
-                        emc.chunk = this->render_groups[i].indirect_commands_chunk->ReserveRange(sizeof(VkDrawIndirectCommand));
+                        emc.chunk = this->render_groups[i].indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
                         if(emc.chunk == nullptr) {
                             #if defined(DISPLAY_LOGS)
                             std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
@@ -460,8 +436,7 @@ namespace Engine
                 emc.entity = &entity;
                 emc.instance_id = entity.GetInstanceId();
                 VkDrawIndirectCommand indirect = new_bind.mesh.GetIndirectCommand(emc.instance_id);
-                DataBank::GetManagedBuffer().WriteData(&indirect, sizeof(VkDrawIndirectCommand),
-                                                        this->render_groups[i].indirect_commands_chunk->offset + emc.chunk->offset);
+                this->render_groups[i].indirect_descriptor.WriteData(&indirect, sizeof(VkDrawIndirectCommand), 0, static_cast<uint32_t>(emc.chunk->offset));
                 new_bind.entities.push_back(emc);
 
                 // Add loaded mesh
@@ -537,7 +512,7 @@ namespace Engine
 
             if(!this->render_groups[i].drawables.size()) continue;
 
-            auto pipeline = this->render_groups[i].pipeline;
+            auto pipeline = this->render_groups[i].graphics_pipeline;
             vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
 
             std::vector<VkDescriptorSet> bind_descriptor_sets_1 = {
@@ -557,7 +532,7 @@ namespace Engine
                 if(bind.has_skeleton) {
                     std::vector<VkDescriptorSet> bind_descriptor_sets_2 = {this->skeleton_descriptor.Get(frame_index)};
 
-                    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->render_groups[i].pipeline.layout,
+                    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->render_groups[i].graphics_pipeline.layout,
                                     static_cast<uint32_t>(bind_descriptor_sets_1.size()),
                                     static_cast<uint32_t>(bind_descriptor_sets_2.size()), bind_descriptor_sets_2.data(),
                                     static_cast<uint32_t>(bind.dynamic_offsets.size()), bind.dynamic_offsets.data());
@@ -566,7 +541,7 @@ namespace Engine
                 bind.mesh.Render(command_buffer, DataBank::GetManagedBuffer().GetBuffer(frame_index).handle,
                                     pipeline.layout, static_cast<uint32_t>(bind.entities.size()),
                                     this->render_groups[i].instance_buffer_chunks,
-                                    this->render_groups[i].indirect_commands_chunk->offset);
+                                    this->render_groups[i].indirect_descriptor.GetChunk()->offset);
             }
         }
 

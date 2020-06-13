@@ -9,7 +9,7 @@
 
 namespace Engine
 {
-    class Map : public IEntityListener
+    class Map // : public IEntityListener
     {
         public :
 
@@ -21,13 +21,13 @@ namespace Engine
             inline void Refresh() { for(int i=0; i<this->need_update.size(); i++) this->Refresh(i); }
             void Refresh(uint8_t frame_index);
             void UpdateSelection(std::vector<Entity*> entities);
-            void UpdateDescriptorSets(uint8_t frame_index);
+            void UpdateDescriptorSet(uint8_t frame_index);
             
             /////////////////////
             // IEntityListener //
             /////////////////////
 
-            inline virtual void StaticBufferUpdated() { this->entities_descriptor.AwaitUpdate(1); }
+            // inline virtual void StaticBufferUpdated() { this->entities_descriptor.AwaitUpdate(1); }
 
         private :
 
@@ -39,7 +39,7 @@ namespace Engine
             VkCommandPool command_pool;
             std::vector<VkCommandBuffer> command_buffers;
             DescriptorSet texture_descriptor;
-            DescriptorSet entities_descriptor;
+            DescriptorSet selection_descriptor;
             Vulkan::PIPELINE pipeline;
 
             bool UpdateVertexBuffer(uint8_t frame_index);

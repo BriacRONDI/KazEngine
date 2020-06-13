@@ -2535,8 +2535,15 @@ namespace Engine
         pipeline_create_infos.stage = stage;
 
         result = vkCreateComputePipelines(this->device, nullptr, 1, &pipeline_create_infos, nullptr, &pipeline.handle);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "CreateComputePipeline => vkCreateComputePipelines : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        return true;
     }
-   
 
     /**
      * Création d'une pipeline

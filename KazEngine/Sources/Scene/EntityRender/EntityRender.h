@@ -52,18 +52,14 @@ namespace Engine
             };
 
             struct RENDER_GOURP {
-                Vulkan::PIPELINE pipeline;
+                Vulkan::PIPELINE graphics_pipeline;
+                Vulkan::PIPELINE compute_pipeline;
                 uint16_t mask;
                 std::vector<std::shared_ptr<Chunk>> instance_buffer_chunks;
-                std::shared_ptr<Chunk> indirect_commands_chunk;
-                // uint32_t next_instance_id;
+                // std::shared_ptr<Chunk> indirect_commands_chunk;
+                DescriptorSet indirect_descriptor;
                 std::vector<DRAWABLE_BIND> drawables;
             };
-
-            // std::shared_ptr<Chunk> entity_data_chunk;
-            // std::shared_ptr<Chunk> indirect_commands_chunk;
-
-            std::shared_ptr<Chunk> instance_buffer_chunk;
 
             std::shared_ptr<Chunk> skeleton_bones_chunk;
             std::shared_ptr<Chunk> skeleton_offsets_chunk;
@@ -71,7 +67,6 @@ namespace Engine
             std::shared_ptr<Chunk> skeleton_animations_chunk;
 
             DescriptorSet texture_descriptor;
-            // DescriptorSet entities_descriptor;
             DescriptorSet skeleton_descriptor;
 
             std::vector<bool> need_update;
@@ -86,5 +81,6 @@ namespace Engine
             bool LoadSkeleton(std::string name);
             bool SetupDescriptorSets();
             bool SetupPipelines();
+            // bool SetupComputePipeline();
     };
 }

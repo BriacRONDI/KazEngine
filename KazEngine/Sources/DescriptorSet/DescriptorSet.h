@@ -16,6 +16,8 @@ namespace Engine
             };
             
             DescriptorSet();
+            inline DescriptorSet(DescriptorSet&& other) { *this = std::move(other); }
+            DescriptorSet& operator=(DescriptorSet&& other);
             inline ~DescriptorSet() { this->Clear(); }
             void Clear();
             static VkDescriptorSetLayoutBinding CreateSimpleBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage_flags);
@@ -33,11 +35,13 @@ namespace Engine
             inline void WriteData(const void* data, VkDeviceSize data_size, uint8_t binding, uint8_t instance_id, uint32_t relative_offset = 0)
             { DataBank::GetManagedBuffer().WriteData(data, data_size, this->bindings[binding].chunk->offset + relative_offset, instance_id); }
 
-            inline void WriteData(const void* data, VkDeviceSize data_size, uint8_t binding, uint32_t relative_offset = 0) { for(uint8_t i=0; i<this->sets.size(); i++) { this->WriteData(data, data_size, binding, i, relative_offset); } }
+            inline void WriteData(const void* data, VkDeviceSize data_size, uint8_t binding, uint32_t relative_offset = 0)
+            { for(uint8_t i=0; i<this->sets.size(); i++) { this->WriteData(data, data_size, binding, i, relative_offset); } }
 
             inline std::shared_ptr<Chunk> ReserveRange(size_t size, uint8_t binding = 0) { return this->bindings[binding].chunk->ReserveRange(size); }
             std::shared_ptr<Chunk> ReserveRange(size_t size, size_t alignment, uint8_t binding = 0);
             bool ResizeChunk(std::shared_ptr<Chunk> chunk, size_t size, uint8_t binding = 0, VkDeviceSize alignment = 0);
+            bool ResizeChunk(size_t size, uint8_t binding = 0, VkDeviceSize alignment = 0);
             inline void Update() { for(uint8_t i=0; i<this->sets.size(); i++) this->Update(i); }
             bool Update(uint8_t instance_id);
             bool NeedUpdate(uint8_t instance_id);

@@ -4,7 +4,32 @@ namespace Engine
 {
     DescriptorSet::DescriptorSet()
     {
-        this->sampler = nullptr;
+        this->sets.clear();
+        this->image_buffers.clear();
+        this->bindings.clear();
+
+        this->layout            = nullptr;
+        this->pool              = nullptr;
+        this->sampler           = nullptr;
+    }
+
+    DescriptorSet& DescriptorSet::operator=(DescriptorSet&& other)
+    {
+        if(&other != this) {
+            this->pool = other.pool;
+            this->layout = other.layout;
+            this->sets = std::move(other.sets);
+            this->sampler = other.sampler;
+            this->image_buffers = std::move(other.image_buffers);
+            this->layout_bindings = std::move(other.layout_bindings);
+            this->bindings = std::move(other.bindings);
+
+            other.pool = nullptr;
+            other.layout = nullptr;
+            other.sampler = nullptr;
+        }
+
+        return *this;
     }
 
     void DescriptorSet::Clear()
@@ -715,6 +740,30 @@ namespace Engine
         }
 
         return chunk;
+    }
+
+    bool DescriptorSet::ResizeChunk(size_t size, uint8_t binding, VkDeviceSize alignment)
+    {
+        VkDeviceSize binding_alignment = 0;
+        switch(this->bindings[binding].layout.descriptorType) {
+            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER :
+            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC :
+                binding_alignment = Vulkan::UboAlignment();
+                break;
+
+            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
+            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC :
+                binding_alignment = Vulkan::SboAlignment();
+                break;
+        }
+
+        bool relocated;
+        if(DataBank::GetManagedBuffer().ResizeChunk(this->bindings[binding].chunk, size, relocated, binding_alignment)) {
+            this->AwaitUpdate(binding);
+            return true;
+        }else{
+            return false;
+        }
     }
 
     bool DescriptorSet::ResizeChunk(std::shared_ptr<Chunk> chunk, size_t size, uint8_t binding, VkDeviceSize alignment)

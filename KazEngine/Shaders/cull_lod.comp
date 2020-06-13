@@ -1,0 +1,31 @@
+#version 450
+
+layout (set=0, binding=0) uniform Camera
+{
+	mat4 projection;
+	mat4 view;
+} camera;
+
+layout (set=1, binding=0) readonly buffer Entity
+{
+	mat4 model[];
+};
+
+struct INDIRECT_COMMAND 
+{
+	uint indexCount;
+	uint instanceCount;
+	uint firstVertex;
+	uint firstInstance;
+};
+
+layout (set=2, binding=0) writeonly buffer IndirectDraws
+{
+	INDIRECT_COMMAND indirect_draws[ ];
+};
+
+void main()
+{
+	uint idx = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x;
+	indirect_draws[idx].instanceCount = 0;
+}

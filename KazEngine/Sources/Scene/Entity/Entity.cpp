@@ -4,7 +4,8 @@
 namespace Engine
 {
     uint32_t Entity::next_id = 0;
-    std::shared_ptr<Chunk> Entity::static_data_chunk;
+    DescriptorSet* Entity::descriptor = nullptr;
+    // std::shared_ptr<Chunk> Entity::static_data_chunk;
 
     Entity::Entity(bool pick_chunk)
     {
@@ -15,18 +16,46 @@ namespace Engine
         Entity::next_id++;
     }
 
-    bool Entity::InitilizeInstanceChunk()
+    void Entity::Clear()
+    {
+        if(Entity::descriptor != nullptr) {
+            delete Entity::descriptor;
+            Entity::descriptor = nullptr;
+        }
+
+        Entity::next_id = 0;
+    }
+
+    bool Entity::Initialize()
+    {
+        if(Entity::descriptor == nullptr) {
+            Entity::descriptor = new DescriptorSet;
+            if(!Entity::descriptor->Create({
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(Maths::Matrix4x4) * 100}
+            }, DataBank::GetManagedBuffer().GetInstanceCount())) {
+                #if defined(DISPLAY_LOGS)
+                std::cout << "Entity::Initialize() : Not enough memory" << std::endl;
+                #endif
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /*bool Entity::InitilizeInstanceChunk(DescriptorSet* descriptor)
     {
         if(Entity::static_data_chunk == nullptr) {
             Entity::static_data_chunk = DataBank::GetManagedBuffer().ReserveChunk(0, Vulkan::SboAlignment());
             if(Entity::static_data_chunk == nullptr) return false;
         }
+
         return true;
-    }
+    }*/
 
     bool Entity::PickChunk()
     {
-        if(this->static_instance_chunk != nullptr) return true;
+        /*if(this->static_instance_chunk != nullptr) return true;
         this->static_instance_chunk = Entity::static_data_chunk->ReserveRange(sizeof(Maths::Matrix4x4), Vulkan::SboAlignment());
         if(this->static_instance_chunk == nullptr) {
             bool relocated;
@@ -48,6 +77,30 @@ namespace Engine
 
             for(auto& listener : this->Listeners)
                 listener->StaticBufferUpdated();
+        }*/
+
+        if(this->static_instance_chunk != nullptr) return true;
+        this->static_instance_chunk = Entity::descriptor->ReserveRange(sizeof(Maths::Matrix4x4), Vulkan::SboAlignment());
+        if(this->static_instance_chunk == nullptr) {
+            if(!Entity::descriptor->ResizeChunk(this->static_instance_chunk,
+                                                this->static_instance_chunk->range + sizeof(Maths::Matrix4x4),
+                                                0, Vulkan::SboAlignment())) {
+            /*if(!DataBank::GetManagedBuffer().ResizeChunk(Entity::static_data_chunk,
+                                                         Entity::static_data_chunk->range + sizeof(Maths::Matrix4x4),
+                                                         relocated, Vulkan::SboAlignment())) {*/
+                #if defined(DISPLAY_LOGS)
+                std::cout << "Entity::SetupChunk : Not enough memory" << std::endl;
+                #endif
+                return false;
+            }
+
+            SkeletonEntity::absolute_skeleton_data_chunk->offset = Entity::descriptor->GetChunk()->offset
+                                                                 + SkeletonEntity::skeleton_data_chunk->offset;
+
+            this->static_instance_chunk = Entity::descriptor->ReserveRange(sizeof(Maths::Matrix4x4), Vulkan::SboAlignment());
+
+            /*for(auto& listener : this->Listeners)
+                listener->StaticBufferUpdated();*/
         }
 
         return this->static_instance_chunk != nullptr;
@@ -61,9 +114,10 @@ namespace Engine
 
     void Entity::Update(uint32_t frame_index)
     {
-        DataBank::GetManagedBuffer().WriteData(&this->matrix, sizeof(Maths::Matrix4x4),
-                                               Entity::static_data_chunk->offset + this->static_instance_chunk->offset,
-                                               frame_index);
+        Entity::descriptor->WriteData(&this->matrix, sizeof(Maths::Matrix4x4), 0, frame_index, static_cast<uint32_t>(this->static_instance_chunk->offset));
+        /*DataBank::GetManagedBuffer().WriteData(&this->matrix, sizeof(Maths::Matrix4x4),
+                                               Entity::descriptor->GetChunk()->offset + this->static_instance_chunk->offset,
+                                               frame_index);*/
     }
 
     Entity& Entity::operator=(Entity const& other)

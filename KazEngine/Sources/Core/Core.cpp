@@ -4,6 +4,9 @@ namespace Engine
 {
     void Core::Clear()
     {
+        // Entity
+        Entity::Clear();
+
         // User Interface
         if(this->user_interface != nullptr) {
             this->user_interface->RemoveListener(this);
@@ -68,6 +71,9 @@ namespace Engine
         // Allocate data buffers
         DataBank::GetManagedBuffer().Allocate(SIZE_MEGABYTE(100), MULTI_USAGE_BUFFER_MASK, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                      frame_count, true, {Vulkan::GetGraphicsQueue().index});
+
+        // Initialize Entity
+        Entity::Initialize();
 
         // Initialize Camera
         Camera::CreateInstance();
@@ -288,7 +294,14 @@ namespace Engine
         }
         vkResetFences(Vulkan::GetDevice(), 1, &this->resources[swap_chain_image_index].fence);
 
-        this->map->UpdateDescriptorSets(swap_chain_image_index);
+        // this->map->UpdateDescriptorSets(swap_chain_image_index);
+        if(Entity::GetDescriptor().NeedUpdate(swap_chain_image_index)) {
+            this->map->Refresh(swap_chain_image_index);
+            this->entity_render->Refresh(swap_chain_image_index);
+            Entity::GetDescriptor().Update(swap_chain_image_index);
+        }
+
+        this->map->UpdateDescriptorSet(swap_chain_image_index);
 
         // Build image
         this->BuildRenderPass(swap_chain_image_index);

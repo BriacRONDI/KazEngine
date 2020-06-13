@@ -8,7 +8,7 @@ layout (set=2, binding=0) readonly buffer IDs
 	uint entity_id[];
 };
 
-layout (set=2, binding=1) readonly buffer Entity
+layout (set=3, binding=0) readonly buffer Entity
 {
 	mat4 model[];
 };

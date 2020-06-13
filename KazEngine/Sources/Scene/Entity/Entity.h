@@ -5,6 +5,7 @@
 #include <EventEmitter.hpp>
 #include "../../DataBank/DataBank.h"
 #include "../../Platform/Common/Timer/Timer.h"
+#include "../../DescriptorSet/DescriptorSet.h"
 #include "IEntityListener.h"
 
 namespace Engine
@@ -12,19 +13,11 @@ namespace Engine
     class Entity : public Tools::StaticEventEmitter<IEntityListener>
     {
         public :
-
-            /*struct ENTITY_DATA {
-                Maths::Matrix4x4 matrix;
-                uint32_t selected;
-
-                inline bool operator !=(ENTITY_DATA other) { return this->matrix != other.matrix || this->selected != other.selected; }
-                // static inline uint32_t Size() { return sizeof(Maths::Matrix4x4) + sizeof(uint32_t); }
-                // virtual inline void Write(size_t offset, uint8_t instance_id) { DataBank::GetManagedBuffer().WriteData(&this->matrix, this->Size(), offset, instance_id); }
-            };*/
             
             Maths::Matrix4x4 matrix;
             bool selected;
-            static std::shared_ptr<Chunk> static_data_chunk;
+            // static std::shared_ptr<Chunk> static_data_chunk;
+            
             
             Entity(bool pick_chunk = true);
             virtual ~Entity();
@@ -39,7 +32,10 @@ namespace Engine
             bool InSelectBox(Maths::Plane left_plane, Maths::Plane right_plane, Maths::Plane top_plane, Maths::Plane bottom_plane);
             bool IntersectRay(Maths::Vector3 const& ray_origin, Maths::Vector3 const& ray_direction);
             virtual inline uint32_t GetInstanceId() { return static_cast<uint32_t>(this->static_instance_chunk->offset / sizeof(Maths::Matrix4x4)); }
-            static bool InitilizeInstanceChunk();
+            // static bool InitilizeInstanceChunk(DescriptorSet* descriptor);
+            static bool Initialize();
+            static inline DescriptorSet& GetDescriptor() { return *Entity::descriptor; }
+            static void Clear();
 
         protected :
 
@@ -48,6 +44,7 @@ namespace Engine
             std::shared_ptr<Chunk> static_instance_chunk;
 
             static uint32_t next_id;
+            static DescriptorSet* descriptor;
 
             virtual bool PickChunk();
     };
