@@ -130,6 +130,7 @@ namespace Maths
             #elif VECTOR_N == 4
             inline VEC_TYPE operator*(VEC_TYPE const& other) const { return { this->x * other.x, this->y * other.y, this->z * other.z, this->w * other.w }; }
             inline VEC_TYPE operator*(float const scalar) const { return { this->x * scalar, this->y * scalar, this->z * scalar, this->w * scalar }; }
+            inline VEC_TYPE& operator/=(float const scalar) { this->x /= scalar; this->y /= scalar; this->z /= scalar; this->w /= scalar; return *this; }
             inline VEC_TYPE operator/(float const scalar) const { return { this->x / scalar, this->y / scalar, this->z / scalar, this->w / scalar }; }
             inline VEC_TYPE operator+(VEC_TYPE const& other) const { return { this->x + other.x, this->y + other.y, this->z + other.z, this->w + other.w }; }
             inline VEC_TYPE operator-(VEC_TYPE const& other) const { return { this->x - other.x, this->y - other.y, this->z - other.z, this->w + other.w }; }

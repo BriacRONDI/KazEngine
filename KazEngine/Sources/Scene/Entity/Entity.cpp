@@ -115,9 +115,6 @@ namespace Engine
     void Entity::Update(uint32_t frame_index)
     {
         Entity::descriptor->WriteData(&this->matrix, sizeof(Maths::Matrix4x4), 0, frame_index, static_cast<uint32_t>(this->static_instance_chunk->offset));
-        /*DataBank::GetManagedBuffer().WriteData(&this->matrix, sizeof(Maths::Matrix4x4),
-                                               Entity::descriptor->GetChunk()->offset + this->static_instance_chunk->offset,
-                                               frame_index);*/
     }
 
     Entity& Entity::operator=(Entity const& other)

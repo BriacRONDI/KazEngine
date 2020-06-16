@@ -9,7 +9,10 @@
 #define ENGINE_VERSION VK_MAKE_VERSION(0, 0, 1)
 #define ENGINE_NAME "KazEngine"
 
-// #define STAGING_BUFFER_SIZE  1024 * 1024 * 5   // 5 Mo
+#define SIZE_KILOBYTE(kb) 1024 * kb
+#define SIZE_MEGABYTE(mb) 1024 * SIZE_KILOBYTE(mb)
+#define TRANSFER_BUFFER_SIZE  SIZE_MEGABYTE(5)
+#define SECONDS_TO_NANO(s) 1000 * 1000 * 1000 * s
 
 #if defined(DISPLAY_LOGS)
 #include <iostream>
@@ -186,12 +189,13 @@ namespace Engine
             static inline DEVICE_QUEUE& GetGraphicsQueue() { return Vulkan::vulkan->graphics_queue; }                       // Récupère la graphics queue
             static inline DEVICE_QUEUE& GetPresentQueue() { return Vulkan::vulkan->present_queue; }                         // Récupère la present queue
             static inline DEVICE_QUEUE& GetTransferQueue() { return Vulkan::vulkan->transfer_queue; }                       // Récupère la transfer queue
+            static inline DEVICE_QUEUE& GetComputeQueue() { return Vulkan::vulkan->compute_queue; }                         // Récupère la compute queue
             static inline VkFormat GetDepthFormat() { return Vulkan::vulkan->depth_format; }
             uint32_t ComputeUniformBufferAlignment(uint32_t buffer_size);                                                   // Calcule l'alignement correspondant à un Uniform Buffer
             uint32_t ComputeStorageBufferAlignment(uint32_t buffer_size);
             VkDeviceSize ComputeRawDataAlignment(size_t data_size);                                                         // Calcule le segment de mémoire occupé par une donnée en tenant compte du nonCoherentAtomSize
             bool AcquireNextImage(uint32_t& swapchain_image_index, VkSemaphore semaphore);
-            bool PresentImage(RENDERING_RESOURCES& rendering_resource, VkSemaphore semaphore, uint32_t swap_chain_image_index);
+            bool PresentImage(RENDERING_RESOURCES& rendering_resource, std::vector<VkSemaphore> semaphores, std::vector<VkPipelineStageFlags> stages, uint32_t swap_chain_image_index);
 
             bool AllocateCommandBuffer(VkCommandPool& pool, std::vector<VkCommandBuffer>& buffers, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
             VkFence CreateFence();
@@ -224,18 +228,11 @@ namespace Engine
 
             // Envoi de données vers un data buffer
             size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, VkDeviceSize data_size, VkDeviceSize destination_offset);
-            size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks);
+            size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks, VkQueue queue = Vulkan::GetTransferQueue().handle);
             // Envoi d'une image vers un buffer d'image
             // bool SendToBuffer(IMAGE_BUFFER& buffer, const void* data, VkDeviceSize data_size, uint32_t width, uint32_t height);
             size_t SendToBuffer(IMAGE_BUFFER& buffer, Tools::IMAGE_MAP const& image);
             bool MoveData(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, VkDeviceSize data_size, VkDeviceSize source_offset, VkDeviceSize destination_offset);
-
-            // Applique une birrière de changement de queue family à un data buffer
-            /*bool TransitionBufferQueueFamily(
-                              DATA_BUFFER& buffer, COMMAND_BUFFER command_buffer, DEVICE_QUEUE queue,
-                              VkAccessFlags source_mask, VkAccessFlags dest_mask,
-                              uint32_t source_queue_index, uint32_t dest_queue_index,
-                              VkPipelineStageFlags source_stage, VkPipelineStageFlags dest_stage);*/
 
             // Création d'un buffer d'image
             IMAGE_BUFFER CreateImageBuffer(VkImageUsageFlags usage, VkImageAspectFlags aspect, uint32_t width, uint32_t height, VkFormat format = VK_FORMAT_R8G8B8A8_UNORM);
@@ -310,6 +307,7 @@ namespace Engine
             DEVICE_QUEUE present_queue;
             DEVICE_QUEUE graphics_queue;
             DEVICE_QUEUE transfer_queue;
+            DEVICE_QUEUE compute_queue;
 
             // Logical device
             VkDevice device;
@@ -328,10 +326,8 @@ namespace Engine
             VkRenderPass render_pass;
 
             // Ressources utilisées pour les créations de buffers, copies de données et transitions de layouts
-            // VkCommandPool main_command_pool;
-            // COMMAND_BUFFER main_command_buffer;
-            // DATA_BUFFER staging_buffer;
-            // void* staging_pointer;
+            VkCommandPool graphics_command_pool;
+            COMMAND_BUFFER graphics_command_buffer;
             VkCommandPool transfert_command_pool;
             COMMAND_BUFFER transfer_command_buffer;
             STAGING_BUFFER transfer_staging;
@@ -370,6 +366,7 @@ namespace Engine
             bool IsDeviceEligible(VkPhysicalDevice test_physical_device, std::vector<VkQueueFamilyProperties>& queue_family_properties);
             uint32_t SelectPresentQueue(VkPhysicalDevice test_physical_device, std::vector<VkQueueFamilyProperties>& queue_family_properties);
             uint32_t SelectPreferredQueue(VkPhysicalDevice test_physical_device, std::vector<VkQueueFamilyProperties>& queue_family_properties, VkQueueFlagBits queue_type, uint32_t common_queue);
+            uint32_t SelectDedicatedQueue(VkPhysicalDevice test_physical_device, std::vector<VkQueueFamilyProperties>& queue_family_properties, VkQueueFlagBits queue_type, std::vector<uint32_t> other_queues);
 
             // Swap Chain
             VkExtent2D GetSwapChainExtent(VkSurfaceCapabilitiesKHR surface_capabilities);

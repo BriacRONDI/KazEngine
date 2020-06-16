@@ -20,30 +20,69 @@ namespace Engine
             this->render_groups.clear();
 
             // Secondary graphics command buffers
-            for(auto command_buffer : this->command_buffers)
-                if(command_buffer != nullptr) vkFreeCommandBuffers(Vulkan::GetDevice(), this->command_pool, 1, &command_buffer);
+            for(auto command_buffer : this->graphics_command_buffers)
+                if(command_buffer != nullptr) vkFreeCommandBuffers(Vulkan::GetDevice(), this->graphics_command_pool, 1, &command_buffer);
+
+            // Compute command pool
+            if(this->compute_command_pool != nullptr) vkDestroyCommandPool(Vulkan::GetDevice(), this->compute_command_pool, nullptr);
+
+            // Semaphores
+            for(auto& semaphore : this->compute_semaphores)
+                if(semaphore != nullptr) vkDestroySemaphore(Vulkan::GetDevice(), semaphore, nullptr);
         }
 
-        this->need_update.clear();
-        this->command_buffers.clear();
+        this->need_graphics_update.clear();
+        this->need_compute_update.clear();
+        this->graphics_command_buffers.clear();
+        this->compute_command_buffers.clear();
         this->entities.clear();
         this->render_groups.clear();
         this->skeleton_descriptor.Clear();
         this->texture_descriptor.Clear();
+        this->compute_semaphores.clear();
+
+        this->compute_command_pool = nullptr;
     }
 
-    EntityRender::EntityRender(VkCommandPool command_pool) : command_pool(command_pool)
+    EntityRender::EntityRender(VkCommandPool command_pool) : graphics_command_pool(command_pool)
     {
         this->Clear();
 
         uint32_t frame_count = Vulkan::GetConcurrentFrameCount();
-        this->command_buffers.resize(frame_count);
-        this->need_update.resize(frame_count, true);
+        this->need_graphics_update.resize(frame_count, true);
+        this->need_compute_update.resize(frame_count, true);
 
-        if(!Vulkan::GetInstance().AllocateCommandBuffer(command_pool, this->command_buffers, VK_COMMAND_BUFFER_LEVEL_SECONDARY)) {
+        this->graphics_command_buffers.resize(frame_count);
+        if(!Vulkan::GetInstance().AllocateCommandBuffer(this->graphics_command_pool, this->graphics_command_buffers, VK_COMMAND_BUFFER_LEVEL_SECONDARY)) {
             #if defined(DISPLAY_LOGS)
-            std::cout << "Dynamics::Dynamics() => AllocateCommandBuffer [draw] : Failed" << std::endl;
+            std::cout << "EntityRender::EntityRender() => AllocateCommandBuffer [draw] : Failed" << std::endl;
             #endif
+            return;
+        }
+
+        if(!Vulkan::GetInstance().CreateCommandPool(this->compute_command_pool, Vulkan::GetInstance().GetComputeQueue().index)) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "EntityRender::EntityRender() => CreateCommandPool [compute] : Failed" << std::endl;
+            #endif
+            return;
+        }
+
+        this->compute_command_buffers.resize(frame_count);
+        if(!Vulkan::GetInstance().AllocateCommandBuffer(this->compute_command_pool, this->compute_command_buffers)) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "EntityRender::EntityRender() => AllocateCommandBuffer [compute] : Failed" << std::endl;
+            #endif
+            return;
+        }
+
+        this->compute_semaphores.resize(frame_count);
+        for(uint8_t i=0; i<frame_count; i++) {
+            if(!Vulkan::GetInstance().CreateSemaphore(this->compute_semaphores[i])) {
+                #if defined(DISPLAY_LOGS)
+                std::cout << "EntityRender::EntityRender() => CreateSemaphore [compute] : Failed" << std::endl;
+                #endif
+                return;
+            }
         }
 
         this->SetupDescriptorSets();
@@ -128,7 +167,7 @@ namespace Engine
         push_constant.offset = 0;
         push_constant.size = sizeof(LoadedMesh::PUSH_CONSTANT_MATERIAL);
 
-        auto camera_layout = Camera::GetInstance().GetDescriptorSet(0).GetLayout();
+        auto camera_layout = Camera::GetInstance().GetDescriptorSet().GetLayout();
         auto texture_layout = this->texture_descriptor.GetLayout();
         
         bool success = Vulkan::GetInstance().CreatePipeline(
@@ -346,7 +385,8 @@ namespace Engine
                         this->render_groups[i].indirect_descriptor.WriteData(&indirect, sizeof(VkDrawIndirectCommand), 0, static_cast<uint32_t>(emc.chunk->offset));
                         drawable_bind.entities.push_back(emc);
 
-                        for(uint8_t i=0; i<this->need_update.size(); i++) this->need_update[i] = true;
+                        for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
+                        for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
                         this->entities.push_back(&entity);
                         return true;
                     }
@@ -444,7 +484,8 @@ namespace Engine
 
                 // Finish
                 this->entities.push_back(&entity);
-                for(uint8_t i=0; i<this->need_update.size(); i++) this->need_update[i] = true;
+                for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
+                for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
                 return true;
             }
         }
@@ -461,15 +502,96 @@ namespace Engine
 
     void EntityRender::Refresh(uint8_t frame_index)
     {
-        this->need_update[frame_index] = true;
-        vkResetCommandBuffer(this->command_buffers[frame_index], VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+        this->need_graphics_update[frame_index] = true;
+        this->need_compute_update[frame_index] = true;
+        vkResetCommandBuffer(this->graphics_command_buffers[frame_index], VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+        vkResetCommandBuffer(this->compute_command_buffers[frame_index], VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+    }
+
+    void EntityRender::UpdateDescriptorSet(uint8_t frame_index)
+    {
+        for(auto& render : this->render_groups) {
+            if(render.indirect_descriptor.NeedUpdate(frame_index)) {
+                this->need_compute_update[frame_index] = true;
+                vkResetCommandBuffer(this->compute_command_buffers[frame_index], VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+                render.indirect_descriptor.Update(frame_index);
+            }
+        }
+    }
+
+    VkSemaphore EntityRender::SubmitComputeShader(uint8_t frame_index)
+    {
+        if(!this->BuildComputeCommandBuffer(frame_index)) return nullptr;
+
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.pNext = nullptr;
+        submit_info.commandBufferCount = 1;
+        submit_info.waitSemaphoreCount = 0;
+        submit_info.pCommandBuffers = &this->compute_command_buffers[frame_index];
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = &this->compute_semaphores[frame_index];
+        submit_info.pWaitSemaphores = nullptr;
+        submit_info.pWaitDstStageMask = nullptr;
+
+        VkResult result = vkQueueSubmit(Vulkan::GetComputeQueue().handle, 1, &submit_info, nullptr);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "DrawScene => vkQueueSubmit : Failed" << std::endl;
+            #endif
+            return nullptr;
+        }
+
+        return this->compute_semaphores[frame_index];
+    }
+
+    bool EntityRender::BuildComputeCommandBuffer(uint8_t frame_index)
+    {
+        if(!this->need_compute_update[frame_index]) return true;
+        this->need_compute_update[frame_index] = false;
+
+        VkCommandBuffer command_buffer = this->compute_command_buffers[frame_index];
+
+        VkCommandBufferBeginInfo command_buffer_begin_info = {};
+        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        command_buffer_begin_info.pNext = nullptr; 
+        command_buffer_begin_info.flags = 0;
+        command_buffer_begin_info.pInheritanceInfo = nullptr;
+
+		VkResult result = vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "BuildComputeCommandBuffer => vkBeginCommandBuffer : Failed" << std::endl;
+            #endif
+            return false;
+        }
+
+        for(uint8_t i=0; i<this->render_groups.size(); i++) {
+		    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->render_groups[i].compute_pipeline.handle);
+
+            std::vector<VkDescriptorSet> bind_descriptor_sets = {
+                Camera::GetInstance().GetDescriptorSet().Get(frame_index),
+                Entity::GetDescriptor().Get(frame_index),
+                this->render_groups[i].indirect_descriptor.Get(frame_index)
+            };
+
+            vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->render_groups[i].compute_pipeline.layout, 0,
+                                    static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(), 0, nullptr);
+
+            uint32_t count = static_cast<uint32_t>(this->render_groups[i].indirect_descriptor.GetChunk()->range / sizeof(VkDrawIndirectCommand));
+		    vkCmdDispatch(command_buffer, count, 1, 1);
+        }
+
+		vkEndCommandBuffer(command_buffer);
+
+        return true;
     }
 
     VkCommandBuffer EntityRender::GetCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer)
     {
-        VkCommandBuffer command_buffer = this->command_buffers[frame_index];
-        if(!this->need_update[frame_index]) return command_buffer;
-        this->need_update[frame_index] = false;
+        VkCommandBuffer command_buffer = this->graphics_command_buffers[frame_index];
+        if(!this->need_graphics_update[frame_index]) return command_buffer;
+        this->need_graphics_update[frame_index] = false;
 
         VkCommandBufferInheritanceInfo inheritance_info = {};
         inheritance_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
@@ -516,8 +638,7 @@ namespace Engine
             vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.handle);
 
             std::vector<VkDescriptorSet> bind_descriptor_sets_1 = {
-                // this->texture_descriptor.Get(),
-                Camera::GetInstance().GetDescriptorSet(frame_index).Get()
+                Camera::GetInstance().GetDescriptorSet().Get(frame_index)
             };
 
             if(this->render_groups[i].mask & Model::Mesh::RENDER_TEXTURE)

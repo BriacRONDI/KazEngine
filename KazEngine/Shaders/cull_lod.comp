@@ -1,12 +1,13 @@
 #version 450
 
-layout (set=0, binding=0) uniform Camera
+layout (set=0, binding=0, std140) readonly uniform Camera
 {
 	mat4 projection;
 	mat4 view;
+	vec4 frustum_planes[6];
 } camera;
 
-layout (set=1, binding=0) readonly buffer Entity
+layout (set=1, binding=0, std140) readonly buffer Entity
 {
 	mat4 model[];
 };
@@ -19,13 +20,23 @@ struct INDIRECT_COMMAND
 	uint firstInstance;
 };
 
-layout (set=2, binding=0) writeonly buffer IndirectDraws
+layout (set=2, binding=0, std140) writeonly buffer IndirectDraws
 {
-	INDIRECT_COMMAND indirect_draws[ ];
+	INDIRECT_COMMAND indirect_draws[];
 };
+
+bool InsideFrustum(vec4 pos, float radius)
+{
+	for(int i=0; i<6; i++)
+		if(dot(pos, camera.frustum_planes[i]) + radius < 0.0) return false;
+	return true;
+}
 
 void main()
 {
-	uint idx = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * gl_NumWorkGroups.x * gl_WorkGroupSize.x;
-	indirect_draws[idx].instanceCount = 0;
+	uint idx = gl_GlobalInvocationID.x;
+	
+	vec4 entity_positon = model[idx][3];
+	if(!InsideFrustum(entity_positon, -3.0)) indirect_draws[idx].instanceCount = 0;
+	else indirect_draws[idx].instanceCount = 1;
 }

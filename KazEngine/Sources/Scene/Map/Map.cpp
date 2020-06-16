@@ -94,7 +94,7 @@ namespace Engine
         std::vector<VkVertexInputBindingDescription> vertex_binding_description;
         auto vertex_attribute_description = Vulkan::CreateVertexInputDescription({{Vulkan::POSITION, Vulkan::UV}}, vertex_binding_description);
 
-        auto camera_layout = Camera::GetInstance().GetDescriptorSet(0).GetLayout();
+        auto camera_layout = Camera::GetInstance().GetDescriptorSet().GetLayout();
         auto texture_layout = this->texture_descriptor.GetLayout();
         auto selection_layout = this->selection_descriptor.GetLayout();
         auto entity_layout = Entity::GetDescriptor().GetLayout();
@@ -224,7 +224,7 @@ namespace Engine
         vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
         std::vector<VkDescriptorSet> bind_descriptor_sets = {
-            Camera::GetInstance().GetDescriptorSet(frame_index).Get(),
+            Camera::GetInstance().GetDescriptorSet().Get(frame_index),
             this->texture_descriptor.Get(),
             this->selection_descriptor.Get(frame_index),
             Entity::GetDescriptor().Get(frame_index)

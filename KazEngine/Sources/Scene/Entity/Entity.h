@@ -16,8 +16,6 @@ namespace Engine
             
             Maths::Matrix4x4 matrix;
             bool selected;
-            // static std::shared_ptr<Chunk> static_data_chunk;
-            
             
             Entity(bool pick_chunk = true);
             virtual ~Entity();
@@ -32,7 +30,6 @@ namespace Engine
             bool InSelectBox(Maths::Plane left_plane, Maths::Plane right_plane, Maths::Plane top_plane, Maths::Plane bottom_plane);
             bool IntersectRay(Maths::Vector3 const& ray_origin, Maths::Vector3 const& ray_direction);
             virtual inline uint32_t GetInstanceId() { return static_cast<uint32_t>(this->static_instance_chunk->offset / sizeof(Maths::Matrix4x4)); }
-            // static bool InitilizeInstanceChunk(DescriptorSet* descriptor);
             static bool Initialize();
             static inline DescriptorSet& GetDescriptor() { return *Entity::descriptor; }
             static void Clear();

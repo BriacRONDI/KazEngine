@@ -22,11 +22,12 @@ namespace Engine
             VkCommandBuffer GetCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer);
             std::vector<Entity*> SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
             Entity* ToggleSelection(Point<uint32_t> mouse_position);
-            inline void Refresh() { for(int i=0; i<this->need_update.size(); i++) this->Refresh(i); }
+            inline void Refresh() { for(int i=0; i<this->need_graphics_update.size(); i++) this->Refresh(i); }
             void Refresh(uint8_t frame_index);
-            
+            VkSemaphore SubmitComputeShader(uint8_t frame_index);
             bool AddEntity(Entity& entity);
             void Update(uint8_t frame_index);
+            void UpdateDescriptorSet(uint8_t frame_index);
 
         private :
 
@@ -56,7 +57,6 @@ namespace Engine
                 Vulkan::PIPELINE compute_pipeline;
                 uint16_t mask;
                 std::vector<std::shared_ptr<Chunk>> instance_buffer_chunks;
-                // std::shared_ptr<Chunk> indirect_commands_chunk;
                 DescriptorSet indirect_descriptor;
                 std::vector<DRAWABLE_BIND> drawables;
             };
@@ -69,9 +69,13 @@ namespace Engine
             DescriptorSet texture_descriptor;
             DescriptorSet skeleton_descriptor;
 
-            std::vector<bool> need_update;
-            VkCommandPool command_pool;
-            std::vector<VkCommandBuffer> command_buffers;
+            std::vector<bool> need_graphics_update;
+            std::vector<bool> need_compute_update;
+            VkCommandPool graphics_command_pool;
+            VkCommandPool compute_command_pool;
+            std::vector<VkCommandBuffer> graphics_command_buffers;
+            std::vector<VkCommandBuffer> compute_command_buffers;
+            std::vector<VkSemaphore> compute_semaphores;
             std::vector<RENDER_GOURP> render_groups;
             std::vector<Entity*> entities;
             std::map<std::string, SKELETON_BUFFER_INFOS> skeletons;
@@ -81,6 +85,6 @@ namespace Engine
             bool LoadSkeleton(std::string name);
             bool SetupDescriptorSets();
             bool SetupPipelines();
-            // bool SetupComputePipeline();
+            bool BuildComputeCommandBuffer(uint8_t frame_index);
     };
 }

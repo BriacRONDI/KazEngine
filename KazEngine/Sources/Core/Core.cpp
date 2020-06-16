@@ -269,46 +269,51 @@ namespace Engine
     void Core::Loop()
     {
         static uint32_t current_semaphore_index = (current_semaphore_index + 1) % this->swap_chain_semaphores.size();
-        VkSemaphore semaphore = this->swap_chain_semaphores[current_semaphore_index];
+        VkSemaphore present_semaphore = this->swap_chain_semaphores[current_semaphore_index];
 
         // Acquire image
-        uint32_t swap_chain_image_index;
-        if(!Vulkan::GetInstance().AcquireNextImage(swap_chain_image_index, semaphore)) return;
+        uint32_t image_index;
+        if(!Vulkan::GetInstance().AcquireNextImage(image_index, present_semaphore)) return;
 
         // Update global timer
         Timer::Update();
 
         // Update uniform buffer
-        Camera::GetInstance().Update(swap_chain_image_index);
-        this->map->Update(swap_chain_image_index);
-        this->entity_render->Update(swap_chain_image_index);
-        this->user_interface->Update(swap_chain_image_index);
-        DataBank::GetManagedBuffer().Flush(this->transfer_buffers[swap_chain_image_index], swap_chain_image_index);
+        Camera::GetInstance().Update(image_index);
+        this->map->Update(image_index);
+        this->entity_render->Update(image_index);
+        this->user_interface->Update(image_index);
+        DataBank::GetManagedBuffer().Flush(this->transfer_buffers[image_index], image_index);
 
-        VkResult result = vkWaitForFences(Vulkan::GetDevice(), 1, &this->resources[swap_chain_image_index].fence, VK_FALSE, 1000000000);
+        VkResult result = vkWaitForFences(Vulkan::GetDevice(), 1, &this->resources[image_index].fence, VK_FALSE, 1000000000);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             std::cout << "Core::BuildRenderPass => vkWaitForFences : Timeout" << std::endl;
             #endif
             return;
         }
-        vkResetFences(Vulkan::GetDevice(), 1, &this->resources[swap_chain_image_index].fence);
+        vkResetFences(Vulkan::GetDevice(), 1, &this->resources[image_index].fence);
 
-        // this->map->UpdateDescriptorSets(swap_chain_image_index);
-        if(Entity::GetDescriptor().NeedUpdate(swap_chain_image_index)) {
-            this->map->Refresh(swap_chain_image_index);
-            this->entity_render->Refresh(swap_chain_image_index);
-            Entity::GetDescriptor().Update(swap_chain_image_index);
+        if(Entity::GetDescriptor().NeedUpdate(image_index)) {
+            this->map->Refresh(image_index);
+            this->entity_render->Refresh(image_index);
+            Entity::GetDescriptor().Update(image_index);
         }
 
-        this->map->UpdateDescriptorSet(swap_chain_image_index);
+        this->map->UpdateDescriptorSet(image_index);
+        this->entity_render->UpdateDescriptorSet(image_index);
 
         // Build image
-        this->BuildRenderPass(swap_chain_image_index);
-        this->user_interface->BuildCommandBuffer(swap_chain_image_index, this->resources[swap_chain_image_index].framebuffer);
+        this->BuildRenderPass(image_index);
+        this->user_interface->BuildCommandBuffer(image_index, this->resources[image_index].framebuffer);
+
+        VkSemaphore compute_semaphore = this->entity_render->SubmitComputeShader(image_index);
+
+        std::vector<VkSemaphore> wait_semaphores = {present_semaphore, compute_semaphore};
+        std::vector<VkPipelineStageFlags> semaphore_stages = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT};
 
         // Present image
-        if(!Vulkan::GetInstance().PresentImage(this->resources[swap_chain_image_index], semaphore, swap_chain_image_index)) {
+        if(!Vulkan::GetInstance().PresentImage(this->resources[image_index], wait_semaphores, semaphore_stages, image_index)) {
 
             // On recréé la matrice de projection en cas de changement de ratio
             auto& surface = Vulkan::GetDrawSurface();

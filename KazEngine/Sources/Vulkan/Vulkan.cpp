@@ -90,9 +90,6 @@ namespace Engine
         // Depth Buffer
         this->ReleaseDepthBuffer();
 
-        // Libère les buffers principaux
-        // this->ReleaseMainBuffers();
-
         this->ReleaseTransferResources();
 
         // Render Pass
@@ -599,6 +596,43 @@ namespace Engine
             }
         }
 
+        #if defined(DISPLAY_LOGS)
+        for(uint32_t i=0; i<queue_family_properties.size(); i++) {
+            std::cout << "Queue[" << i << "] : ";
+
+            bool delim = false;
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                std::cout << "GRAPHICS";
+                delim = true;
+            }
+
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_TRANSFER_BIT) {
+                if(delim) std::cout << " | ";
+                std::cout << "TRANSFER";
+                delim = true;
+            }
+
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
+                if(delim) std::cout << " | ";
+                std::cout << "COMPUTE";
+                delim = true;
+            }
+
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) {
+                if(delim) std::cout << " | ";
+                std::cout << "SPARSE_BINDING";
+                delim = true;
+            }
+
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_PROTECTED_BIT) {
+                if(delim) std::cout << " | ";
+                std::cout << "PROTECTED";
+            }
+
+            std::cout << std::endl;
+        }
+        #endif
+
         if(this->physical_device.handle == VK_NULL_HANDLE) {
             #if defined(DISPLAY_LOGS)
             std::cout << "CreateDevice : No eligible device found" << std::endl;
@@ -612,13 +646,16 @@ namespace Engine
         // Sélection des autres queues
         this->graphics_queue.index = this->SelectPreferredQueue(this->physical_device.handle, queue_family_properties, VK_QUEUE_GRAPHICS_BIT, this->present_queue.index);
         if(separate_transfer_queue)
-            this->transfer_queue.index = this->SelectPreferredQueue(this->physical_device.handle, queue_family_properties, VK_QUEUE_TRANSFER_BIT, this->present_queue.index);
+            this->transfer_queue.index = this->SelectDedicatedQueue(this->physical_device.handle, queue_family_properties, VK_QUEUE_TRANSFER_BIT, {this->graphics_queue.index});
         else this->transfer_queue.index = this->graphics_queue.index;
-       
+        this->compute_queue.index = this->SelectDedicatedQueue(this->physical_device.handle, queue_family_properties, VK_QUEUE_COMPUTE_BIT, {this->graphics_queue.index, this->transfer_queue.index});
+        this->compute_queue.index = this->graphics_queue.index;
+
         #if defined(DISPLAY_LOGS)
         std::cout << "CreateDevice : Graphics queue family : " << this->graphics_queue.index << ", count : " << queue_family_properties[this->graphics_queue.index].queueCount << std::endl;
         std::cout << "CreateDevice : Transfert queue family : " << this->transfer_queue.index << ", count : " << queue_family_properties[this->transfer_queue.index].queueCount << std::endl;
         std::cout << "CreateDevice : Present queue family : " << this->present_queue.index << ", count : " << queue_family_properties[this->present_queue.index].queueCount << std::endl;
+        std::cout << "CreateDevice : Compute queue family : " << this->compute_queue.index << ", count : " << queue_family_properties[this->compute_queue.index].queueCount << std::endl;
         #endif
 
         // Préparation de la création des queues
@@ -659,6 +696,13 @@ namespace Engine
             queue_info.queueCount = static_cast<uint32_t>(queue_priorities.size());
             queue_info.pQueuePriorities = &queue_priorities[0];
             queue_info.queueFamilyIndex = this->transfer_queue.index;
+            queue_infos.push_back(queue_info);
+        }
+
+        // Compute Queue
+        if(this->compute_queue.index != this->graphics_queue.index) {
+            queue_info.queueCount = 1;
+            queue_info.queueFamilyIndex = this->compute_queue.index;
             queue_infos.push_back(queue_info);
         }
 
@@ -780,23 +824,61 @@ namespace Engine
      */
     uint32_t Vulkan::SelectPreferredQueue(VkPhysicalDevice test_physical_device, std::vector<VkQueueFamilyProperties>& queue_family_properties, VkQueueFlagBits queue_type, uint32_t common_queue)
     {
-        uint32_t index = UINT32_MAX;
+        // If the desired queue is compatible, pick it
+        if(common_queue != UINT32_MAX && (queue_family_properties[common_queue].queueFlags & queue_type)) return common_queue;
 
-        // On cherche une queue dédiée en priorité
-        for(uint32_t i = 0; i < queue_family_properties.size(); i++)
-            if((queue_family_properties[i].queueFlags & ~VK_QUEUE_SPARSE_BINDING_BIT) == queue_type)
-                return i;
+        struct SELECTED_QUEUE {
+            uint32_t capabilities;
+            uint32_t index;
+        };
 
-        // Si la common queue est compatible, on prends celle-ci
-        if((queue_family_properties[common_queue].queueFlags & queue_type) != 0) return common_queue;
+        // else, pick the one with most capabilities
+        std::vector<uint32_t> queue_capabilities(queue_family_properties.size());
+        SELECTED_QUEUE selected = {0, 0};
+        for(uint32_t i=0; i<queue_family_properties.size(); i++) {
+            if(!(queue_family_properties[i].queueFlags & queue_type)) continue;
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) queue_capabilities[i]++;
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_TRANSFER_BIT) queue_capabilities[i]++;
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_COMPUTE_BIT) queue_capabilities[i]++;
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) queue_capabilities[i]++;
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_PROTECTED_BIT) queue_capabilities[i]++;
+            if(queue_capabilities[i] > selected.capabilities) selected = {queue_capabilities[i], i};
+        }
 
-        // En dernier choix, on prend la queue family qui propose le plus de queues parmi celles restantes
-        for(uint32_t i = 0; i < queue_family_properties.size(); i++)
-            if((queue_family_properties[i].queueFlags & queue_type) != 0
-                && (index > queue_family_properties.size() || queue_family_properties[i].queueCount > queue_family_properties[index].queueCount))
-                    index = i;
+        return selected.index;
+    }
 
-        return index;
+    /**
+     * Select a dedicated queue family
+     */
+    uint32_t Vulkan::SelectDedicatedQueue(VkPhysicalDevice test_physical_device, std::vector<VkQueueFamilyProperties>& queue_family_properties, VkQueueFlagBits queue_type, std::vector<uint32_t> other_queues)
+    {
+        struct SELECTED_QUEUE {
+            uint32_t capabilities;
+            uint32_t index;
+        };
+
+        std::vector<uint32_t> queue_capabilities(queue_family_properties.size());
+        SELECTED_QUEUE selected = {UINT32_MAX, 0};
+        for(uint32_t i=0; i<queue_family_properties.size(); i++) {
+
+            // The queue family is not compatible
+            if(!(queue_family_properties[i].queueFlags & queue_type)) continue;
+
+            // The queue family is already used
+            if(std::find(other_queues.begin(), other_queues.end(), i) != other_queues.end()) continue;
+
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) queue_capabilities[i]++;
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_TRANSFER_BIT) queue_capabilities[i]++;
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_COMPUTE_BIT) queue_capabilities[i]++;
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) queue_capabilities[i]++;
+            if(queue_family_properties[i].queueFlags & VK_QUEUE_PROTECTED_BIT) queue_capabilities[i]++;
+
+            // Select the queue with less capabilities
+            if(queue_capabilities[i] < selected.capabilities) selected = {queue_capabilities[i], i};
+        }
+
+        return selected.index;
     }
 
     /**
@@ -807,6 +889,7 @@ namespace Engine
         vkGetDeviceQueue(this->device, this->present_queue.index, 0, &this->present_queue.handle);
         vkGetDeviceQueue(this->device, this->graphics_queue.index, 0, &this->graphics_queue.handle);
         vkGetDeviceQueue(this->device, this->transfer_queue.index, 0, &this->transfer_queue.handle);
+        vkGetDeviceQueue(this->device, this->compute_queue.index, 0, &this->compute_queue.handle);
 
         std::vector<VkQueueFamilyProperties> queue_family_properties = this->QueryDeviceProperties(this->physical_device.handle);
     }
@@ -1156,23 +1239,26 @@ namespace Engine
         subpass.preserveAttachmentCount = 0;
         subpass.pPreserveAttachments = nullptr;
 
-        VkSubpassDependency dependency[2];
+        std::vector<VkSubpassDependency> dependencies;
 
-        dependency[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-	    dependency[0].dstSubpass = 0;
-	    dependency[0].srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	    dependency[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	    dependency[0].srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	    dependency[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	    dependency[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+        VkSubpassDependency dependency;
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	    dependency.dstSubpass = 0;
+	    dependency.srcStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	    dependency.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	    dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+        dependencies.push_back(dependency);
 
-	    dependency[1].srcSubpass = 0;
-	    dependency[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-	    dependency[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-	    dependency[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-	    dependency[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-	    dependency[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-	    dependency[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+	    dependency.srcSubpass = 0;
+	    dependency.dstSubpass = VK_SUBPASS_EXTERNAL;
+	    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	    dependency.dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	    dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	    dependency.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+	    dependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+        dependencies.push_back(dependency);
 
         VkRenderPassCreateInfo rp_info = {};
         rp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1181,8 +1267,8 @@ namespace Engine
         rp_info.pAttachments = attachment;
         rp_info.subpassCount = 1;
         rp_info.pSubpasses = &subpass;
-        rp_info.dependencyCount = 2;
-        rp_info.pDependencies = dependency;
+        rp_info.dependencyCount = static_cast<uint32_t>(dependencies.size());
+        rp_info.pDependencies = dependencies.data();
 
         VkResult result = vkCreateRenderPass(this->device, &rp_info, nullptr, &this->render_pass);
         if(result != VK_SUCCESS) {
@@ -1541,11 +1627,14 @@ namespace Engine
     {
         // Transfert Command Pool
         if(!this->CreateCommandPool(this->transfert_command_pool, this->transfer_queue.index)) return false;
+        if(!this->CreateCommandPool(this->graphics_command_pool, this->graphics_queue.index)) return false;
 
         // Transfert Command buffer
         std::vector<COMMAND_BUFFER> buffers(1);
         if(!this->CreateCommandBuffer(this->transfert_command_pool, buffers)) return false;
         this->transfer_command_buffer = buffers[0];
+        if(!this->CreateCommandBuffer(this->graphics_command_pool, buffers)) return false;
+        this->graphics_command_buffer = buffers[0];
         buffers.clear();
 
         // Staging buffer
@@ -1556,7 +1645,7 @@ namespace Engine
                                                    queue_families)) return false;
 
         constexpr auto offset = 0;
-        VkResult result = vkMapMemory(Vulkan::GetDevice(), this->transfer_staging.memory, offset, 1024 * 1024 * 5, 0, (void**)&this->transfer_staging.pointer);
+        VkResult result = vkMapMemory(Vulkan::GetDevice(), this->transfer_staging.memory, offset, TRANSFER_BUFFER_SIZE, 0, (void**)&this->transfer_staging.pointer);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             std::cout << "AllocateTransferResources => vkMapMemory(staging_buffer) : Failed" << std::endl;
@@ -1572,6 +1661,10 @@ namespace Engine
         std::vector<COMMAND_BUFFER> buffers = {this->transfer_command_buffer};
         this->ReleaseCommandBuffer(this->transfert_command_pool, buffers);
         this->transfer_command_buffer = {};
+
+        buffers = {this->graphics_command_buffer};
+        this->ReleaseCommandBuffer(this->graphics_command_pool, buffers);
+        this->graphics_command_buffer = {};
 
         this->transfer_staging.Clear();
     }
@@ -1758,14 +1851,14 @@ namespace Engine
                                        VkPipelineStageFlags source_stage, VkPipelineStageFlags dest_stage)
     {
         // On évite que plusieurs opérations aient lieu en même temps en utilisant une fence
-        VkResult result = vkWaitForFences(this->device, 1, &this->transfer_command_buffer.fence, VK_FALSE, 1000000000);
+        VkResult result = vkWaitForFences(this->device, 1, &this->graphics_command_buffer.fence, VK_FALSE, SECONDS_TO_NANO(1));
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             std::cout << "TransitionImageLayout => vkWaitForFences : Timeout" << std::endl;
             #endif
             return false;
         }
-        vkResetFences(this->device, 1, &this->transfer_command_buffer.fence);
+        vkResetFences(this->device, 1, &this->graphics_command_buffer.fence);
 
         VkCommandBufferBeginInfo command_buffer_begin_info;
         command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1773,7 +1866,7 @@ namespace Engine
         command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         command_buffer_begin_info.pInheritanceInfo = nullptr;
 
-        vkBeginCommandBuffer(this->transfer_command_buffer.handle, &command_buffer_begin_info);
+        vkBeginCommandBuffer(this->graphics_command_buffer.handle, &command_buffer_begin_info);
 
         VkImageMemoryBarrier image_memory_barrier;
         image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1782,8 +1875,6 @@ namespace Engine
         image_memory_barrier.dstAccessMask = dest_mask;
         image_memory_barrier.oldLayout = old_layout;
         image_memory_barrier.newLayout = new_layout;
-        image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         image_memory_barrier.image = buffer.handle;
         image_memory_barrier.subresourceRange.aspectMask = buffer.aspect;
         image_memory_barrier.subresourceRange.baseMipLevel = 0;
@@ -1791,14 +1882,22 @@ namespace Engine
         image_memory_barrier.subresourceRange.baseArrayLayer = 0;
         image_memory_barrier.subresourceRange.layerCount = 1;
 
+        if(this->graphics_queue.index == this->transfer_queue.index) {
+            image_memory_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            image_memory_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        }else{
+            image_memory_barrier.srcQueueFamilyIndex = this->transfer_queue.index;
+            image_memory_barrier.dstQueueFamilyIndex = this->graphics_queue.index;
+        }
+
         vkCmdPipelineBarrier(
-            this->transfer_command_buffer.handle,
+            this->graphics_command_buffer.handle,
             source_stage, dest_stage,
             0, 0, nullptr, 0, nullptr, 1,
             &image_memory_barrier
         );
 
-        vkEndCommandBuffer(this->transfer_command_buffer.handle);
+        vkEndCommandBuffer(this->graphics_command_buffer.handle);
 
         VkSubmitInfo submit_info = {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1807,9 +1906,9 @@ namespace Engine
         submit_info.pWaitSemaphores = nullptr;
         submit_info.pWaitDstStageMask = nullptr;
         submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &this->transfer_command_buffer.handle;
+        submit_info.pCommandBuffers = &this->graphics_command_buffer.handle;
 
-        result = vkQueueSubmit(this->graphics_queue.handle, 1, &submit_info, this->transfer_command_buffer.fence);
+        result = vkQueueSubmit(this->graphics_queue.handle, 1, &submit_info, this->graphics_command_buffer.fence);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             std::cout << "TransitionImageLayout => vkQueueSubmit : Failed" << std::endl;
@@ -1827,7 +1926,7 @@ namespace Engine
     /**
      * Application d'une barrière de transition pour indiquer
      * un changement de queue family lors des accès au buffer.
-     * Cela est notament le cas pour les transferts de données qui pasent que la transfer queue à la graphics queue
+     * Cela est notament le cas pour les transferts de données qui passent de la transfer queue à la graphics queue
      */
     /*bool Vulkan::TransitionBufferQueueFamily(
             DATA_BUFFER& buffer, COMMAND_BUFFER command_buffer, DEVICE_QUEUE queue,
@@ -2054,7 +2153,7 @@ namespace Engine
         return flush_size;
     }
 
-    size_t Vulkan::SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks)
+    size_t Vulkan::SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks, VkQueue queue)
     {
         // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
         VkResult result = vkWaitForFences(this->device, 1, &command_buffer.fence, VK_FALSE, 1000000000);
@@ -2119,7 +2218,7 @@ namespace Engine
         submit_info.signalSemaphoreCount = 0;
         submit_info.pSignalSemaphores = nullptr;
 
-        result = vkQueueSubmit(this->transfer_queue.handle, 1, &submit_info, command_buffer.fence);
+        result = vkQueueSubmit(queue, 1, &submit_info, command_buffer.fence);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
             switch(result) {
@@ -2137,7 +2236,6 @@ namespace Engine
     /**
      * Envoi d'une image vers un buffer de la carte graphique en passant par un staging buffer
      */
-    // bool Vulkan::SendToBuffer(IMAGE_BUFFER& buffer, const void* data, VkDeviceSize data_size, uint32_t width, uint32_t height)
     size_t Vulkan::SendToBuffer(IMAGE_BUFFER& buffer, Tools::IMAGE_MAP const& image)
     {
         // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
@@ -2218,6 +2316,32 @@ namespace Engine
         vkCmdCopyBufferToImage(this->transfer_command_buffer.handle,
             this->transfer_staging.handle, buffer.handle,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &buffer_image_copy_info);
+
+
+        if(this->graphics_queue.index != this->transfer_queue.index) {
+            VkImageMemoryBarrier image_memory_barrier;
+            image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            image_memory_barrier.pNext = nullptr;
+            image_memory_barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+            image_memory_barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            image_memory_barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            image_memory_barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            image_memory_barrier.image = buffer.handle;
+            image_memory_barrier.subresourceRange.aspectMask = buffer.aspect;
+            image_memory_barrier.subresourceRange.baseMipLevel = 0;
+            image_memory_barrier.subresourceRange.levelCount = 1;
+            image_memory_barrier.subresourceRange.baseArrayLayer = 0;
+            image_memory_barrier.subresourceRange.layerCount = 1;
+            image_memory_barrier.srcQueueFamilyIndex = this->transfer_queue.index;
+            image_memory_barrier.dstQueueFamilyIndex = this->graphics_queue.index;
+
+            vkCmdPipelineBarrier(
+                this->transfer_command_buffer.handle,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr, 1,
+                &image_memory_barrier
+            );
+        }
 
         vkEndCommandBuffer(this->transfer_command_buffer.handle);
 
@@ -2319,17 +2443,6 @@ namespace Engine
      */
     bool Vulkan::AcquireNextImage(uint32_t& swapchain_image_index, VkSemaphore semaphore)
     {
-        // On attend la find de la génération de l'image avant de la présenter
-        /*VkResult result = vkWaitForFences(this->device, 1, &rendering_resource.graphics_command_buffer.fence, VK_FALSE, 1000000000);
-        if(result != VK_SUCCESS) {
-            #if defined(DISPLAY_LOGS)
-            #if defined(DISPLAY_LOGS)
-            std::cout << "DrawScene => vkWaitForFences : Timeout" << std::endl;
-            #endif
-            return false;
-        }
-        vkResetFences(this->device, 1, &rendering_resource.graphics_command_buffer.fence);*/
-
         VkResult result = vkAcquireNextImageKHR(this->device, this->swap_chain.handle, UINT64_MAX, semaphore, VK_NULL_HANDLE, &swapchain_image_index);
         switch(result) {
             #if defined(DISPLAY_LOGS)
@@ -2372,20 +2485,18 @@ namespace Engine
         return true;
     }
 
-    bool Vulkan::PresentImage(RENDERING_RESOURCES& resources, VkSemaphore semaphore, uint32_t swap_chain_image_index)
+    bool Vulkan::PresentImage(RENDERING_RESOURCES& resources, std::vector<VkSemaphore> semaphores, std::vector<VkPipelineStageFlags> stages, uint32_t swap_chain_image_index)
     {
-        VkPipelineStageFlags wait_dst_stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
         VkSubmitInfo submit_info = {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit_info.pNext = nullptr;
         submit_info.commandBufferCount = static_cast<uint32_t>(resources.comand_buffers.size());
-        submit_info.waitSemaphoreCount = 1;
+        submit_info.waitSemaphoreCount = static_cast<uint32_t>(semaphores.size());
         submit_info.pCommandBuffers = resources.comand_buffers.data();
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = &resources.semaphore;
-        submit_info.pWaitSemaphores = &semaphore;
-        submit_info.pWaitDstStageMask = &wait_dst_stage_mask;
+        submit_info.pWaitSemaphores = semaphores.data();
+        submit_info.pWaitDstStageMask = stages.data();
 
         VkResult result = vkQueueSubmit(this->graphics_queue.handle, 1, &submit_info, resources.fence);
         if(result != VK_SUCCESS) {

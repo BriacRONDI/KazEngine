@@ -122,7 +122,7 @@ namespace Engine
     {
         if(!this->flush_chunks[instance_id].empty()) {
             size_t bytes_sent = Vulkan::GetInstance().SendToBuffer(this->buffers[instance_id], command_buffer, this->staging_buffers[instance_id],
-                                                                   this->flush_chunks[instance_id]);
+                                                                   this->flush_chunks[instance_id], Vulkan::GetGraphicsQueue().handle);
             if(!bytes_sent) return false;
             this->flush_chunks[instance_id].clear();
         }

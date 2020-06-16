@@ -42,7 +42,7 @@ namespace Engine
             inline Maths::Vector3 GetUpVector() const { return {-this->camera.view[1], -this->camera.view[5], -this->camera.view[9]}; }
             inline float GetNearClipDistance() const { return this->near_clip_distance; }
             inline float GetFarClipDistance() const { return this->far_clip_distance; }
-            inline DescriptorSet& GetDescriptorSet(uint8_t frame_index) { return this->descriptor[frame_index]; }
+            inline DescriptorSet& GetDescriptorSet() { return this->camera_descriptor; }
             inline void Freeze() { this->frozen = true; }
             inline void UnFreeze() { this->frozen = false; }
             inline bool IsRtsMode() { return this->rts_mode; }
@@ -86,8 +86,7 @@ namespace Engine
             Maths::Matrix4x4 rotation;              // Matrice de rotation
 
             Frustum frustum;                        // Frustum de la caméra
-            std::vector<DescriptorSet> descriptor;
-            std::shared_ptr<Chunk> chunk;
+            DescriptorSet camera_descriptor;
 
             Camera();
             virtual ~Camera();

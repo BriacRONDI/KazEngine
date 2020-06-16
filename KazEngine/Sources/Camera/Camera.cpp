@@ -31,10 +31,10 @@ namespace Engine
         this->camera.position       = {0.0f, 0.0f, 0.0f};
         this->rts_mode              = true;
         
-        auto binding = DescriptorSet::CreateSimpleBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT);
-        this->chunk = DataBank::GetManagedBuffer().ReserveChunk(Vulkan::GetInstance().ComputeUniformBufferAlignment(sizeof(CAMERA_UBO)));
-        this->descriptor.resize(DataBank::GetManagedBuffer().GetInstanceCount());
-        for(uint8_t i=0; i<DataBank::GetManagedBuffer().GetInstanceCount(); i++) this->descriptor[i].Create({binding}, {DataBank::GetManagedBuffer().GetBufferInfos(this->chunk, i)});
+        if(!camera_descriptor.Create({
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
+            sizeof(Maths::Matrix4x4) * 2 + sizeof(std::array<Maths::Vector4,6>)}
+        }, Vulkan::GetConcurrentFrameCount())) return;
 
         this->frustum.Setup(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
         this->last_ubo.resize(Vulkan::GetConcurrentFrameCount());
@@ -55,7 +55,8 @@ namespace Engine
         if(Mouse::GetInstance().IsClipped() && this->rts_mode && !this->frozen) this->RtsScroll();
 
         if(this->camera != this->last_ubo[frame_index]) {
-            DataBank::GetManagedBuffer().WriteData(&this->camera, sizeof(Camera::CAMERA_UBO), this->chunk->offset, frame_index);
+            this->camera_descriptor.WriteData(&this->camera, sizeof(Maths::Matrix4x4) * 2, 0);
+            this->camera_descriptor.WriteData(&this->frustum.GetPlanes(), sizeof(std::array<Maths::Vector4,6>), 0, static_cast<uint32_t>(sizeof(Maths::Matrix4x4) * 2));
             this->last_ubo[frame_index] = this->camera;
         }
     }
@@ -104,6 +105,7 @@ namespace Engine
             this->translation = Maths::Matrix4x4::TranslationMatrix(position);
             this->camera.view = this->rotation * this->translation;
             this->camera.position = this->position;
+            this->frustum.UpdatePlanes(this->camera.projection * this->camera.view);
         }
     }
 
@@ -133,6 +135,7 @@ namespace Engine
             this->rotation = Maths::Matrix4x4::RotationMatrix(this->moving_vertical_angle, {1.0f, 0.0f, 0.0f})
                            * Maths::Matrix4x4::RotationMatrix(this->moving_horizontal_angle, {0.0f, 1.0f, 0.0f});
             this->camera.view = this->rotation * this->translation;
+            this->frustum.UpdatePlanes(this->camera.projection * this->camera.view);
 
         }else if(Mouse::GetInstance().IsButtonPressed(MOUSE_BUTTON::MOUSE_BUTTON_MIDDLE)) {
 
@@ -149,6 +152,7 @@ namespace Engine
             this->translation = Maths::Matrix4x4::TranslationMatrix(position);
             this->camera.view = this->rotation * this->translation;
             this->camera.position = position;
+            this->frustum.UpdatePlanes(this->camera.projection * this->camera.view);
             
         }else if(Mouse::GetInstance().IsButtonPressed(MOUSE_BUTTON::MOUSE_BUTTON_RIGHT)) {
 
@@ -161,6 +165,7 @@ namespace Engine
             this->translation = Maths::Matrix4x4::TranslationMatrix(position);
             this->camera.view = this->rotation * this->translation;
             this->camera.position = position;
+            this->frustum.UpdatePlanes(this->camera.projection * this->camera.view);
         }
     }
 
@@ -209,6 +214,7 @@ namespace Engine
                 this->position = this->position + strafe_x + strafe_y;
                 this->translation = Maths::Matrix4x4::TranslationMatrix(this->position);
                 this->camera.position = this->position;
+                this->frustum.UpdatePlanes(this->camera.projection * this->camera.view);
 
             }else if(button == MOUSE_BUTTON::MOUSE_BUTTON_RIGHT) {
 
@@ -223,6 +229,7 @@ namespace Engine
                 this->translation = Maths::Matrix4x4::TranslationMatrix(this->position);
                 this->camera.view = this->rotation * this->translation;
                 this->camera.position = this->position;
+                this->frustum.UpdatePlanes(this->camera.projection * this->camera.view);
             }
         }
     }
@@ -234,6 +241,7 @@ namespace Engine
         this->camera.position = this->position;
         this->translation = Maths::Matrix4x4::TranslationMatrix(this->position);
         this->camera.view = this->rotation * this->translation;
+        this->frustum.UpdatePlanes(this->camera.projection * this->camera.view);
     }
 
     void Camera::MouseWheelDown()
@@ -243,6 +251,7 @@ namespace Engine
         this->camera.position = this->position;
         this->translation = Maths::Matrix4x4::TranslationMatrix(this->position);
         this->camera.view = this->rotation * this->translation;
+        this->frustum.UpdatePlanes(this->camera.projection * this->camera.view);
     }
 
     void Camera::SetPosition(Maths::Vector3 const& position)
@@ -251,6 +260,7 @@ namespace Engine
         this->translation = Maths::Matrix4x4::TranslationMatrix(this->position);
         this->camera.view = this->rotation * this->translation;
         this->camera.position = position;
+        this->frustum.UpdatePlanes(this->camera.projection * this->camera.view);
     }
 
     /**
@@ -268,5 +278,6 @@ namespace Engine
 
         this->rotation = Maths::Matrix4x4::RotationMatrix(this->vertical_angle, {1.0f, 0.0f, 0.0f}) * Maths::Matrix4x4::RotationMatrix(this->horizontal_angle, {0.0f, 1.0f, 0.0f});
         this->camera.view = this->rotation * this->translation;
+        this->frustum.UpdatePlanes(this->camera.projection * this->camera.view);
     }
 }

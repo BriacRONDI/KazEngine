@@ -29,20 +29,9 @@ layout (location = 0) out vec4 outColor;
 void main()
 {
 	outColor = texture(inTexture, inUV);
-	
-	/*if(selection_count > 0) {
-		for(int i=0; i<selection_count; i++) {
-			float dist = distance(entity_positon[i], inPosition);
-			if(dist <= selection_radius + selection_border) {
-				float t = 1.0 + smoothstep(selection_radius, selection_radius + selection_border, dist) - smoothstep(selection_radius - selection_border, selection_radius, dist);
-				outColor = mix(selection_color, outColor, t);
-			}
-		}
-	}*/
-	
+
 	if(selection_count > 0) {
 		for(int i=0; i<selection_count; i++) {
-			// vec3 entity_positon = vec3(entity[entity_id[i]].model[3]);
 			vec3 entity_positon = vec3(model[entity_id[i]][3]);
 			float dist = distance(entity_positon, inPosition);
 			if(dist <= selection_radius + selection_border) {
@@ -51,17 +40,4 @@ void main()
 			}
 		}
 	}
-	
-	
-	/*if(map.display_selection > 0) {
-		float dist = distance(map.selection_position, inPosition);
-		float t = 1.0 + smoothstep(selection_radius, selection_radius + selection_border, dist) - smoothstep(selection_radius - selection_border, selection_radius, dist);
-		outColor = mix(selection_color, outColor, t);
-	}
-	
-	if(map.display_destination > 0 && distance(map.selection_position, map.destination_position) > selection_radius + destination_radius) {
-		float dist = distance(map.destination_position, inPosition);
-		float t = smoothstep(destination_radius, destination_radius + destination_border, dist);
-		outColor = mix(destination_color, outColor, t);
-	}*/
 }

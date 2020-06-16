@@ -5,9 +5,6 @@
 #include "../Vulkan/Vulkan.h"
 #include "./Chunk/Chunk.h"
 
-#define SIZE_KILOBYTE(kb) 1024 * kb
-#define SIZE_MEGABYTE(mb) 1024 * SIZE_KILOBYTE(mb)
-
 namespace Engine
 {
     class ManagedBuffer
