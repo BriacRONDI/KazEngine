@@ -32,6 +32,7 @@ namespace Engine
             bool ResizeChild(std::shared_ptr<Chunk> child, size_t size, bool& relocated, size_t alignment = 0);
             void FreeChild(std::shared_ptr<Chunk> child);
             bool Defragment(size_t alignment, std::vector<DEFRAG_CHUNK>& defrag, std::shared_ptr<Chunk> extend_me = nullptr, size_t extension = 0);
+            static inline bool CompareOffsets(std::shared_ptr<Chunk> a, std::shared_ptr<Chunk> b) { return (a->offset < b->offset); }
 
         private :
 
@@ -43,6 +44,6 @@ namespace Engine
             std::shared_ptr<Chunk> ReserveRange(size_t size, std::shared_ptr<Chunk> child);
             std::shared_ptr<Chunk> ReserveRange(size_t size, size_t alignment, std::shared_ptr<Chunk> child);
             inline std::shared_ptr<Chunk> MoveOrAppendChild(size_t offset, size_t range, std::shared_ptr<Chunk> child);
-            static inline bool CompareOffsets(std::shared_ptr<Chunk> a, std::shared_ptr<Chunk> b) { return (a->offset < b->offset); }
+            
     };
 }

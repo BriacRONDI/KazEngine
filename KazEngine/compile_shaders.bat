@@ -11,6 +11,7 @@ CALL :COMPILE interface.frag
 CALL :COMPILE cross.vert
 CALL :COMPILE cross.frag
 CALL :COMPILE cull_lod.comp
+CALL :COMPILE cull_lod_anim.comp
 pause
 
 :COMPILE

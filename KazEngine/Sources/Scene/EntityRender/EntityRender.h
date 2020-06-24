@@ -5,6 +5,7 @@
 #include "../../DataBank/DataBank.h"
 #include "../../Camera/Camera.h"
 #include "../Entity/SkeletonEntity.h"
+#include "../Entity/IEntityListener.h"
 #include "../../LoadedMesh/LoadedMesh.h"
 
 #define ENTITY_ID_BINDING   0
@@ -12,7 +13,7 @@
 
 namespace Engine
 {
-    class EntityRender
+    class EntityRender : public IEntityListener
     {
         public :
             
@@ -20,14 +21,20 @@ namespace Engine
             inline ~EntityRender() { this->Clear(); }
             EntityRender(VkCommandPool command_pool);
             VkCommandBuffer GetCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer);
-            std::vector<Entity*> SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
-            Entity* ToggleSelection(Point<uint32_t> mouse_position);
+            // std::vector<Entity*> SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
+            // Entity* ToggleSelection(Point<uint32_t> mouse_position);
             inline void Refresh() { for(int i=0; i<this->need_graphics_update.size(); i++) this->Refresh(i); }
             void Refresh(uint8_t frame_index);
             VkSemaphore SubmitComputeShader(uint8_t frame_index);
-            bool AddEntity(Entity& entity);
-            void Update(uint8_t frame_index);
+            // void Update(uint8_t frame_index);
             void UpdateDescriptorSet(uint8_t frame_index);
+
+            /////////////////////
+            // IEntityListener //
+            /////////////////////
+
+            virtual inline void NewEntity(Entity& entity) {};
+            virtual void AddMesh(Entity& entity, std::shared_ptr<Model::Mesh> mesh);
 
         private :
 
@@ -43,6 +50,7 @@ namespace Engine
                 uint32_t instance_id;
             };
 
+            struct RENDER_GOURP;
             struct DRAWABLE_BIND {
                 LoadedMesh mesh;
                 uint32_t texture_id;
@@ -50,6 +58,7 @@ namespace Engine
                 std::vector<uint32_t> dynamic_offsets;
                 bool has_skeleton;
                 std::vector<ENTITY_MESH_CHUNK> entities;
+                bool AddInstance(RENDER_GOURP& group, Entity& entity);
             };
 
             struct RENDER_GOURP {
@@ -77,7 +86,7 @@ namespace Engine
             std::vector<VkCommandBuffer> compute_command_buffers;
             std::vector<VkSemaphore> compute_semaphores;
             std::vector<RENDER_GOURP> render_groups;
-            std::vector<Entity*> entities;
+            // std::vector<Entity*> entities;
             std::map<std::string, SKELETON_BUFFER_INFOS> skeletons;
             std::map<std::string, uint32_t> textures;
 
@@ -86,5 +95,6 @@ namespace Engine
             bool SetupDescriptorSets();
             bool SetupPipelines();
             bool BuildComputeCommandBuffer(uint8_t frame_index);
+            // bool AddEntity(Entity& entity);
     };
 }

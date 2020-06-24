@@ -4,6 +4,8 @@ namespace Engine
 {
     void EntityRender::Clear()
     {
+        Entity::RemoveListener(this);
+
         if(Vulkan::HasInstance()) {
 
             vkDeviceWaitIdle(Vulkan::GetDevice());
@@ -35,7 +37,7 @@ namespace Engine
         this->need_compute_update.clear();
         this->graphics_command_buffers.clear();
         this->compute_command_buffers.clear();
-        this->entities.clear();
+        // this->entities.clear();
         this->render_groups.clear();
         this->skeleton_descriptor.Clear();
         this->texture_descriptor.Clear();
@@ -47,6 +49,8 @@ namespace Engine
     EntityRender::EntityRender(VkCommandPool command_pool) : graphics_command_pool(command_pool)
     {
         this->Clear();
+
+        Entity::AddListener(this);
 
         uint32_t frame_count = Vulkan::GetConcurrentFrameCount();
         this->need_graphics_update.resize(frame_count, true);
@@ -143,6 +147,7 @@ namespace Engine
         std::vector<VkVertexInputBindingDescription> vertex_binding_description;
         std::vector<VkVertexInputAttributeDescription> vertex_attribute_description;
         std::vector<VkPipelineShaderStageCreateInfo> shader_stages;
+        VkPipelineShaderStageCreateInfo compute_shader_stage;
         Vulkan::PIPELINE graphics_pipeline;
         Vulkan::PIPELINE compute_pipeline;
         DescriptorSet indirect_descriptor;
@@ -187,16 +192,17 @@ namespace Engine
         auto indirect_layout = indirect_descriptor.GetLayout();
         auto entity_layout = Entity::GetDescriptor().GetLayout();
 
-        VkPipelineShaderStageCreateInfo compute_shader_stage = Vulkan::GetInstance().LoadShaderModule("./Shaders/cull_lod.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+        compute_shader_stage = Vulkan::GetInstance().LoadShaderModule("./Shaders/cull_lod.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
         success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout}, {}, compute_pipeline);
         
+        vkDestroyShaderModule(Vulkan::GetDevice(), compute_shader_stage.module, nullptr);
+
         if(!success) {
             indirect_descriptor.Clear();
-            vkDestroyShaderModule(Vulkan::GetDevice(), compute_shader_stage.module, nullptr);
             return false;
         }
 
-        SkeletonEntity::InitilizeInstanceChunk();
+        SkeletonEntity::Initialize();
 
         this->render_groups.push_back({
             graphics_pipeline, compute_pipeline,
@@ -239,10 +245,13 @@ namespace Engine
         }, instance_count)) return false;
 
         indirect_layout = indirect_descriptor.GetLayout();
+        auto animation_layout = SkeletonEntity::GetDescriptor().GetLayout();
 
-        success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout}, {}, compute_pipeline);
-        vkDestroyShaderModule(Vulkan::GetDevice(), compute_shader_stage.module, nullptr);
+        compute_shader_stage = Vulkan::GetInstance().LoadShaderModule("./Shaders/cull_lod_anim.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+        success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout, animation_layout}, {}, compute_pipeline);
         
+        vkDestroyShaderModule(Vulkan::GetDevice(), compute_shader_stage.module, nullptr);
+
         if(!success) {
             indirect_descriptor.Clear();
             return false;
@@ -251,7 +260,7 @@ namespace Engine
         this->render_groups.push_back({
             graphics_pipeline, compute_pipeline,
             Model::Mesh::RENDER_POSITION | Model::Mesh::RENDER_UV | Model::Mesh::RENDER_TEXTURE | Model::Mesh::RENDER_SKELETON,
-            {SkeletonEntity::absolute_skeleton_data_chunk, SkeletonEntity::animation_data_chunk},
+            { SkeletonEntity::absolute_skeleton_data_chunk, SkeletonEntity::GetDescriptor().GetChunk() },
             std::move(indirect_descriptor)
         });
 
@@ -341,7 +350,39 @@ namespace Engine
         return false;
     }
 
-    bool EntityRender::AddEntity(Entity& entity)
+    bool EntityRender::DRAWABLE_BIND::AddInstance(RENDER_GOURP& group, Entity& entity)
+    {
+        ENTITY_MESH_CHUNK emc;
+        emc.chunk = group.indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
+
+        if(emc.chunk == nullptr) {
+            if(!group.indirect_descriptor.ResizeChunk(group.indirect_descriptor.GetChunk()->range
+                                                                        + sizeof(VkDrawIndirectCommand) * 10)) {
+                #if defined(DISPLAY_LOGS)
+                std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                #endif
+                return false;
+            }else{
+                emc.chunk = group.indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
+                if(emc.chunk == nullptr) {
+                    #if defined(DISPLAY_LOGS)
+                    std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                    #endif
+                    return false;
+                }
+            }
+        }
+
+        emc.entity = &entity;
+        emc.instance_id = entity.GetInstanceId();
+        VkDrawIndirectCommand indirect = this->mesh.GetIndirectCommand(emc.instance_id);
+        group.indirect_descriptor.WriteData(&indirect, sizeof(VkDrawIndirectCommand), 0, static_cast<uint32_t>(emc.chunk->offset));
+        this->entities.push_back(emc);
+
+        return true;
+    }
+
+    /*bool EntityRender::AddEntity(Entity& entity)
     {
         auto meshes = entity.GetMeshes();
         if(meshes == nullptr) return false;
@@ -358,36 +399,11 @@ namespace Engine
                 for(auto& drawable_bind : this->render_groups[i].drawables) {
                     if(drawable_bind.mesh.IsSameMesh(mesh)) {
 
-                        ENTITY_MESH_CHUNK emc;
-                        emc.chunk = this->render_groups[i].indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
-
-                        if(emc.chunk == nullptr) {
-                            if(!this->render_groups[i].indirect_descriptor.ResizeChunk(this->render_groups[i].indirect_descriptor.GetChunk()->range
-                                                                                     + sizeof(VkDrawIndirectCommand) * 10)) {
-                                #if defined(DISPLAY_LOGS)
-                                std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
-                                #endif
-                                return false;
-                            }else{
-                                emc.chunk = this->render_groups[i].indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
-                                if(emc.chunk == nullptr) {
-                                    #if defined(DISPLAY_LOGS)
-                                    std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
-                                    #endif
-                                    return false;
-                                }
-                            }
-                        }
-
-                        emc.entity = &entity;
-                        emc.instance_id = entity.GetInstanceId();
-                        VkDrawIndirectCommand indirect = drawable_bind.mesh.GetIndirectCommand(emc.instance_id);
-                        this->render_groups[i].indirect_descriptor.WriteData(&indirect, sizeof(VkDrawIndirectCommand), 0, static_cast<uint32_t>(emc.chunk->offset));
-                        drawable_bind.entities.push_back(emc);
+                        drawable_bind.AddInstance(this->render_groups[i], entity);
 
                         for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
                         for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
-                        this->entities.push_back(&entity);
+                        // this->entities.push_back(&entity);
                         return true;
                     }
                 }
@@ -483,7 +499,7 @@ namespace Engine
                 this->render_groups[i].drawables.push_back(std::move(new_bind));
 
                 // Finish
-                this->entities.push_back(&entity);
+                // this->entities.push_back(&entity);
                 for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
                 for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
                 return true;
@@ -491,14 +507,14 @@ namespace Engine
         }
 
         return false;
-    }
+    }*/
 
-    void EntityRender::Update(uint8_t frame_index)
+    /*void EntityRender::Update(uint8_t frame_index)
     {
         for(auto entity : this->entities) {
             entity->Update(frame_index);
         }
-    }
+    }*/
 
     void EntityRender::Refresh(uint8_t frame_index)
     {
@@ -515,6 +531,101 @@ namespace Engine
                 this->need_compute_update[frame_index] = true;
                 vkResetCommandBuffer(this->compute_command_buffers[frame_index], VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
                 render.indirect_descriptor.Update(frame_index);
+            }
+        }
+    }
+
+    void EntityRender::AddMesh(Entity& entity, std::shared_ptr<Model::Mesh> mesh)
+    {
+        for(uint8_t i=0; i<this->render_groups.size(); i++) {
+            for(auto mesh : *entity.GetMeshes()) {
+
+                if(mesh->render_mask != this->render_groups[i].mask) continue;
+
+                ////////////////////////////
+                // Search for loaded mesh //
+                ////////////////////////////
+
+                for(auto& drawable_bind : this->render_groups[i].drawables) {
+                    if(drawable_bind.mesh.IsSameMesh(mesh)) {
+
+                        drawable_bind.AddInstance(this->render_groups[i], entity);
+
+                        for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
+                        for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
+                        return;
+                    }
+                }
+
+                // No loaded mesh found
+                DRAWABLE_BIND new_bind;
+
+                //////////////////
+                // Load Texture //
+                //////////////////
+
+                if(mesh->render_mask & Model::Mesh::RENDER_TEXTURE) {
+                    for(auto& material : mesh->materials) {
+                        if(DataBank::HasMaterial(material.first)) {
+                            if(!DataBank::GetMaterial(material.first).texture.empty()) {
+                                if(!this->textures.count(DataBank::GetMaterial(material.first).texture)
+                                    && !this->LoadTexture(DataBank::GetMaterial(material.first).texture))
+                                        return;
+                                    
+                                new_bind.texture_id = this->textures[DataBank::GetMaterial(material.first).texture];
+                            }
+                        }else{
+                            #if defined(DISPLAY_LOGS)
+                            std::cout << "Dynamics::AddEntity() => Material[" + material.first + "] : Not in data bank" << std::endl;
+                            #endif
+                            return;
+                        }
+                    }
+                }
+
+                ///////////////
+                // Load Mesh //
+                ///////////////
+
+                if(!new_bind.mesh.Load(mesh, this->textures)) {
+                    #if defined(DISPLAY_LOGS)
+                    std::cout << "Dynamics::AddEntity() => Drawable.Load(" + mesh->name + ") : Failed" << std::endl;
+                    #endif
+                    return;
+                }
+
+                ///////////////////
+                // Load Skeleton //
+                ///////////////////
+
+                if(mesh->render_mask & Model::Mesh::RENDER_SKELETON) {
+
+                    if(!this->skeletons.count(mesh->skeleton) && !this->LoadSkeleton(mesh->skeleton)) return;
+
+                    new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.end(), {
+                        this->skeletons[mesh->skeleton].skeleton_dynamic_offset,
+                        this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].first,
+                        this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].second,
+                        this->skeletons[mesh->skeleton].animations_data_dynamic_offset
+                    });
+                    new_bind.has_skeleton = true;
+                }else{
+                    new_bind.has_skeleton = false;
+                }
+
+                ///////////////////////
+                // Setup loaded mesh //
+                ///////////////////////
+
+                new_bind.AddInstance(this->render_groups[i], entity);
+
+                // Add loaded mesh
+                this->render_groups[i].drawables.push_back(std::move(new_bind));
+
+                // Finish
+                for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
+                for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
+                return;
             }
         }
     }
@@ -574,6 +685,9 @@ namespace Engine
                 Entity::GetDescriptor().Get(frame_index),
                 this->render_groups[i].indirect_descriptor.Get(frame_index)
             };
+
+            if(this->render_groups[i].mask & Model::Mesh::RENDER_SKELETON)
+                bind_descriptor_sets.push_back(SkeletonEntity::GetDescriptor().Get(frame_index));
 
             vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->render_groups[i].compute_pipeline.layout, 0,
                                     static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(), 0, nullptr);
@@ -676,93 +790,5 @@ namespace Engine
 
         // Succès
         return command_buffer;
-    }
-
-    std::vector<Entity*> EntityRender::SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end)
-    {
-        auto& camera = Engine::Camera::GetInstance();
-        Area<float> const& near_plane_size = camera.GetFrustum().GetNearPlaneSize();
-        Maths::Vector3 camera_position = -camera.GetUniformBuffer().position;
-        Surface& draw_surface = Engine::Vulkan::GetDrawSurface();
-        Area<float> float_draw_surface = {static_cast<float>(draw_surface.width), static_cast<float>(draw_surface.height)};
-
-        float x1 = static_cast<float>(box_start.X) - float_draw_surface.Width / 2.0f;
-        float x2 = static_cast<float>(box_end.X) - float_draw_surface.Width / 2.0f;
-
-        float y1 = static_cast<float>(box_start.Y) - float_draw_surface.Height / 2.0f;
-        float y2 = static_cast<float>(box_end.Y) - float_draw_surface.Height / 2.0f;
-
-        x1 /= float_draw_surface.Width / 2.0f;
-        x2 /= float_draw_surface.Width / 2.0f;
-        y1 /= float_draw_surface.Height / 2.0f;
-        y2 /= float_draw_surface.Height / 2.0f;
-
-        float left_x = std::min<float>(x1, x2);
-        float right_x = std::max<float>(x1, x2);
-        float top_y = std::min<float>(y1, y2);
-        float bottom_y = std::max<float>(y1, y2);
-
-        Maths::Vector3 base_near = camera_position + camera.GetFrontVector() * camera.GetNearClipDistance();
-        Maths::Vector3 base_with = camera.GetRightVector() * near_plane_size.Width;
-        Maths::Vector3 base_height = camera.GetUpVector() * near_plane_size.Height;
-
-        Maths::Vector3 top_left_position = base_near + base_with * left_x - base_height * top_y;
-        Maths::Vector3 bottom_right_position = base_near + base_with * right_x - base_height * bottom_y;
-
-        Maths::Vector3 top_left_ray = (top_left_position - camera_position).Normalize();
-        Maths::Vector3 bottom_right_ray = (bottom_right_position - camera_position).Normalize();
-
-        Maths::Plane left_plane = {top_left_position, top_left_ray.Cross(-camera.GetUpVector())};
-        Maths::Plane right_plane = {bottom_right_position, bottom_right_ray.Cross(camera.GetUpVector())};
-        Maths::Plane top_plane = {top_left_position, top_left_ray.Cross(-camera.GetRightVector())};
-        Maths::Plane bottom_plane = {bottom_right_position, bottom_right_ray.Cross(camera.GetRightVector())};
-
-        std::vector<Entity*> return_value;
-        for(Entity* entity : this->entities) {
-            if(entity->InSelectBox(left_plane, right_plane, top_plane, bottom_plane)) {
-                entity->selected = VK_TRUE;
-                return_value.push_back(entity);
-            }else{
-                entity->selected = VK_FALSE;
-            }
-        }
-
-        return return_value;
-    }
-
-    Entity* EntityRender::ToggleSelection(Point<uint32_t> mouse_position)
-    {
-        auto& camera = Engine::Camera::GetInstance();
-        Area<float> const& near_plane_size = camera.GetFrustum().GetNearPlaneSize();
-        Maths::Vector3 camera_position = -camera.GetUniformBuffer().position;
-        Surface& draw_surface = Engine::Vulkan::GetDrawSurface();
-        Area<float> float_draw_surface = {static_cast<float>(draw_surface.width), static_cast<float>(draw_surface.height)};
-
-        Point<float> real_mouse = {
-            static_cast<float>(mouse_position.X) - float_draw_surface.Width / 2.0f,
-            static_cast<float>(mouse_position.Y) - float_draw_surface.Height / 2.0f
-        };
-
-        real_mouse.X /= float_draw_surface.Width / 2.0f;
-        real_mouse.Y /= float_draw_surface.Height / 2.0f;
-
-        Maths::Vector3 mouse_world_position = camera_position + camera.GetFrontVector() * camera.GetNearClipDistance() + camera.GetRightVector()
-                                            * near_plane_size.Width * real_mouse.X - camera.GetUpVector() * near_plane_size.Height * real_mouse.Y;
-        Maths::Vector3 mouse_ray = mouse_world_position - camera_position;
-        mouse_ray = mouse_ray.Normalize();
-
-        Entity* selected_entity = nullptr;
-        for(Entity* entity : this->entities) {
-            if(selected_entity != nullptr) {
-                entity->selected = VK_FALSE;
-            }else if(entity->IntersectRay(camera_position, mouse_ray)) {
-                selected_entity = entity;
-                entity->selected = VK_TRUE;
-            }else {
-                entity->selected = VK_FALSE;
-            }
-        }
-
-        return selected_entity;
     }
 }

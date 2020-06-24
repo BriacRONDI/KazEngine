@@ -37,6 +37,6 @@ void main()
 	uint idx = gl_GlobalInvocationID.x;
 	
 	vec4 entity_positon = model[idx][3];
-	if(!InsideFrustum(entity_positon, -3.0)) indirect_draws[idx].instanceCount = 0;
+	if(!InsideFrustum(entity_positon, -2.0)) indirect_draws[idx].instanceCount = 0;
 	else indirect_draws[idx].instanceCount = 1;
 }

@@ -1,0 +1,88 @@
+#version 450
+
+layout (set=0, binding=0, std140) readonly uniform Camera
+{
+	mat4 projection;
+	mat4 view;
+	vec4 frustum_planes[6];
+} camera;
+
+layout (set=1, binding=0, std140) readonly buffer Entity
+{
+	mat4 model[];
+};
+
+struct INDIRECT_COMMAND 
+{
+	uint indexCount;
+	uint instanceCount;
+	uint firstVertex;
+	uint firstInstance;
+};
+
+layout (set=2, binding=0, std140) writeonly buffer IndirectDraws
+{
+	INDIRECT_COMMAND indirect_draws[];
+};
+
+struct FRAME
+{
+	uint animation_id;
+	uint frame_id;
+};
+
+layout (set=3, binding=0, std430) writeonly buffer Frame
+{
+	FRAME frames[];
+};
+
+struct ANIMATION
+{
+	uint frame_count;
+	uint loop;
+	uint play;
+	uint duration;
+	uint start;
+	float speed;
+};
+
+layout (set=3, binding=1, std430) readonly buffer Animation
+{
+	ANIMATION animations[];
+};
+
+layout (set=3, binding=2) readonly uniform AnimationTimer
+{
+	uint time;
+};
+
+bool InsideFrustum(vec4 pos, float radius)
+{
+	for(int i=0; i<6; i++)
+		if(dot(pos, camera.frustum_planes[i]) + radius < 0.0) return false;
+	return true;
+}
+
+void main()
+{
+	uint idx = gl_GlobalInvocationID.x;
+	
+	vec4 entity_positon = model[idx][3];
+	if(!InsideFrustum(entity_positon, -2.0)) {
+		indirect_draws[idx].instanceCount = 0;
+	} else {
+		indirect_draws[idx].instanceCount = 1;
+		
+		ANIMATION animation = animations[idx];
+		if(animation.play > 0) {
+			if(animation.loop > 0) {
+				// uint duration = time - animation.start;
+				float progression = float(time - animation.start) / float(animation.duration);
+				uint last_frame_id = animation.frame_count - 1;
+				frames[idx].frame_id = uint(mod(progression * last_frame_id, last_frame_id));
+			}else{
+				frames[idx].frame_id = 0;
+			}
+		}
+	}
+}

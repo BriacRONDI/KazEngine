@@ -8,36 +8,15 @@ layout (location = 2)  in vec4  inBoneWeights;
 layout (location = 3)  in ivec4 inBoneIDs;
 
 layout (location = 4)  in mat4 model;
-// layout (location = 8)  in uint selected;
-// layout (location = 9)  in uint padding;
 
 layout (location = 8)  in uint animation_id;
 layout (location = 9)  in uint frame_id;
-
 
 layout (set=1, binding=0) uniform Camera
 {
 	mat4 projection;
 	mat4 view;
 } camera;
-
-
-/*layout (set=2, binding=0) buffer ID
-{
-	uint entity_id[];
-};
-
-struct Properties {
-	mat4 model;
-	uint animation_id;
-	uint frame_id;
-	// ivec2 padding;
-};
-
-layout (set=2, binding=1) buffer Entity
-{
-	Properties entity[];
-};*/
 
 layout (set=2, binding=0) buffer Skeleton
 {
@@ -74,9 +53,7 @@ vec3 MatrixMultT(mat4 matrix, vec3 vertex)
 void main() 
 {
 	mat4 boneTransform = mat4(0);
-	// Properties entity_props = entity[entity_id[gl_InstanceIndex]];
 	mat4 modelView = camera.view * model;
-	// mat4 modelView = camera.view * entity_props.model;
 	bool has_bone = false;
 	float total_weight = 0.0f;
 
@@ -84,11 +61,7 @@ void main()
 
 	for(int i=0; i<MAX_BONE_PER_VERTEX; i++) {
 		if(inBoneWeights[i] == 0) break;
-		
-		// uint frame_id = animations.first_frame_id[entity_props.animation_id];
-		// boneTransform += skeleton.bones[animations.bone_count * entity_props.frame_id + inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
 		boneTransform += skeleton.bones[animations.bone_count * frame_id + inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
-		// boneTransform += skeleton.bones[0] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
 		total_weight += inBoneWeights[i];
 		has_bone = true;
 	}

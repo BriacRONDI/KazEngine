@@ -1519,6 +1519,22 @@ namespace Engine
         return true;
     }
 
+    bool Vulkan::CreateCommandBuffer(VkCommandPool pool, COMMAND_BUFFER& command_buffer, VkCommandBufferLevel level, bool create_fence)
+    {
+        VkCommandBufferAllocateInfo cmd = {};
+        cmd.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmd.pNext = nullptr;
+        cmd.commandPool = pool;
+        cmd.level = level;
+        cmd.commandBufferCount = 1;
+
+        VkResult result = vkAllocateCommandBuffers(this->device, &cmd, &command_buffer.handle);
+        if(result != VK_SUCCESS) return false;
+
+        command_buffer.fence = this->CreateFence();
+        return command_buffer.fence != nullptr;
+    }
+
     /**
      * Création d'une liste de command buffers avec leur fence
      */
@@ -1576,6 +1592,12 @@ namespace Engine
                 vkDestroyFence(this->device, buffer.fence, nullptr);
         if(pool != VK_NULL_HANDLE) vkDestroyCommandPool(this->device, pool, nullptr);
         command_buffers.clear();
+    }
+
+    void Vulkan::ReleaseCommandBuffer(VkCommandPool pool, COMMAND_BUFFER& command_buffer)
+    {
+        if(command_buffer.fence != nullptr) vkDestroyFence(this->device, command_buffer.fence, nullptr);
+        if(pool != nullptr) vkDestroyCommandPool(this->device, pool, nullptr);
     }
 
     /**
@@ -2231,6 +2253,89 @@ namespace Engine
         }
 
         return bytes_sent;
+    }
+
+    size_t Vulkan::PrepareSend(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks)
+    {
+        // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
+        VkResult result = vkWaitForFences(this->device, 1, &command_buffer.fence, VK_FALSE, 1000000000);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "SendToBuffer[data] => vkWaitForFences : Timeout" << std::endl;
+            #endif
+            return 0;
+        }
+        vkResetFences(this->device, 1, &command_buffer.fence);
+
+        ////////////////////////////////
+        //   Copie des données vers   //
+        //      le staging buffer     //
+        ////////////////////////////////
+
+        // Flush staging buffer
+        VkMappedMemoryRange flush_range = {};
+        flush_range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+        flush_range.pNext = nullptr;
+        flush_range.memory = staging_buffer.memory;
+        flush_range.offset = 0;
+        flush_range.size = VK_WHOLE_SIZE;
+        vkFlushMappedMemoryRanges(this->device, 1, &flush_range);
+
+        ///////////////////////////////////////////
+        //       Envoi des données vers          //
+        //   la mémoire de la carte graphique    //
+        ///////////////////////////////////////////
+
+        // Préparation de la copie de l'image depuis le staging buffer vers un vertex buffer
+        VkCommandBufferBeginInfo command_buffer_begin_info = {};
+        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        command_buffer_begin_info.pNext = nullptr; 
+        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        command_buffer_begin_info.pInheritanceInfo = nullptr;
+
+        vkBeginCommandBuffer(command_buffer.handle, &command_buffer_begin_info);
+
+        size_t bytes_sent = 0;
+        for(auto& chunk : chunks) {
+            VkBufferCopy buffer_copy_info = {};
+            buffer_copy_info.srcOffset = chunk.offset;
+            buffer_copy_info.dstOffset = chunk.offset;
+            buffer_copy_info.size = chunk.range;
+
+            vkCmdCopyBuffer(command_buffer.handle, staging_buffer.handle, buffer.handle, 1, &buffer_copy_info);
+            bytes_sent += chunk.range;
+        }
+
+        vkEndCommandBuffer(command_buffer.handle);
+        return bytes_sent;
+    }
+
+    bool Vulkan::SendPrepared(COMMAND_BUFFER const& command_buffer, VkQueue queue)
+    {
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.pNext = nullptr;
+        submit_info.waitSemaphoreCount = 0;
+        submit_info.pWaitSemaphores = nullptr;
+        submit_info.pWaitDstStageMask = nullptr;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffer.handle;
+        submit_info.signalSemaphoreCount = 0;
+        submit_info.pSignalSemaphores = nullptr;
+
+        VkResult result = vkQueueSubmit(queue, 1, &submit_info, command_buffer.fence);
+        if(result != VK_SUCCESS) {
+            #if defined(DISPLAY_LOGS)
+            switch(result) {
+                case VK_ERROR_OUT_OF_HOST_MEMORY : std::cout << "SendToBuffer[data] => vkQueueSubmit : VK_ERROR_OUT_OF_HOST_MEMORY" << std::endl;
+                case VK_ERROR_OUT_OF_DEVICE_MEMORY : std::cout << "SendToBuffer[data] => vkQueueSubmit : VK_ERROR_OUT_OF_DEVICE_MEMORY" << std::endl;
+                case VK_ERROR_DEVICE_LOST : std::cout << "SendToBuffer[data] => vkQueueSubmit : VK_ERROR_DEVICE_LOST" << std::endl;
+            }
+            #endif
+            return false;
+        }
+
+        return true;
     }
 
     /**

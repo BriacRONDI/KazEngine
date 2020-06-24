@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <unordered_map>
 #include <set>
 #include "../Vulkan/Vulkan.h"
@@ -31,6 +32,8 @@ namespace Engine
             inline uint8_t GetInstanceCount() const { return this->instance_count; }
             bool ResizeChunk(std::shared_ptr<Chunk> chunk, size_t size, bool& relocated, VkDeviceSize alignment = 0);
             inline void ReadStagingBuffer(std::vector<char>& output, VkDeviceSize offset, uint8_t instance_id) { std::memcpy(output.data(), this->staging_buffers[instance_id].pointer + offset, output.size()); }
+            inline Vulkan::STAGING_BUFFER& GetStagingBuffer(uint8_t instance_id) { return this->staging_buffers[instance_id]; };
+            inline void UpdateFlushRange(size_t start_offset, size_t data_size, uint8_t instance_id);
 
         private :
 
@@ -44,8 +47,8 @@ namespace Engine
             std::vector<Vulkan::DATA_BUFFER> buffers;
             Chunk chunk;
             std::vector<std::vector<Chunk>> flush_chunks;
-
-            inline void UpdateFlushRange(size_t start_offset, size_t end_offset, uint8_t instance_id);
+            std::vector<std::unique_ptr<std::mutex>> mutex;
+            
             static bool AllocateStagingBuffer(Vulkan::STAGING_BUFFER& staging_buffer, std::vector<uint32_t> queue_families, VkDeviceSize size);
     };
 }

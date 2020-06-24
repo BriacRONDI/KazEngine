@@ -6,6 +6,7 @@ namespace Engine
     {
         // Entity
         Entity::Clear();
+        SkeletonEntity::Clear();
 
         // User Interface
         if(this->user_interface != nullptr) {
@@ -238,12 +239,12 @@ namespace Engine
 
     void Core::SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end)
     {
-        this->map->UpdateSelection(this->entity_render->SquareSelection(box_start, box_end));
+        this->map->UpdateSelection(Entity::SquareSelection(box_start, box_end));
     }
 
     void Core::ToggleSelection(Point<uint32_t> mouse_position)
     {
-        Entity* entity = this->entity_render->ToggleSelection(mouse_position);
+        Entity* entity = Entity::ToggleSelection(mouse_position);
         if(entity == nullptr) this->map->UpdateSelection({});
         else this->map->UpdateSelection({entity});
     }
@@ -268,6 +269,9 @@ namespace Engine
 
     void Core::Loop()
     {
+        std::chrono::high_resolution_clock timer;
+        auto start_time = timer.now();
+
         static uint32_t current_semaphore_index = (current_semaphore_index + 1) % this->swap_chain_semaphores.size();
         VkSemaphore present_semaphore = this->swap_chain_semaphores[current_semaphore_index];
 
@@ -278,12 +282,22 @@ namespace Engine
         // Update global timer
         Timer::Update();
 
+        auto prepare_time = timer.now();
+
         // Update uniform buffer
         Camera::GetInstance().Update(image_index);
+        auto update_camera_time = timer.now();
         this->map->Update(image_index);
-        this->entity_render->Update(image_index);
+        auto update_map_time = timer.now();
+        auto update_entities_time = timer.now();
         this->user_interface->Update(image_index);
+        auto update_interface_time = timer.now();
+
+        SkeletonEntity::UpdateAnimationTimer();
+
         DataBank::GetManagedBuffer().Flush(this->transfer_buffers[image_index], image_index);
+
+        auto update_time = timer.now();
 
         VkResult result = vkWaitForFences(Vulkan::GetDevice(), 1, &this->resources[image_index].fence, VK_FALSE, 1000000000);
         if(result != VK_SUCCESS) {
@@ -294,23 +308,37 @@ namespace Engine
         }
         vkResetFences(Vulkan::GetDevice(), 1, &this->resources[image_index].fence);
 
+        auto fence_time = timer.now();
+
         if(Entity::GetDescriptor().NeedUpdate(image_index)) {
             this->map->Refresh(image_index);
             this->entity_render->Refresh(image_index);
             Entity::GetDescriptor().Update(image_index);
         }
 
+        if(SkeletonEntity::GetDescriptor().NeedUpdate(image_index)) {
+            this->entity_render->Refresh(image_index);
+            SkeletonEntity::GetDescriptor().Update(image_index);
+        }
+
         this->map->UpdateDescriptorSet(image_index);
         this->entity_render->UpdateDescriptorSet(image_index);
+
+        auto descriptor_time = timer.now();
 
         // Build image
         this->BuildRenderPass(image_index);
         this->user_interface->BuildCommandBuffer(image_index, this->resources[image_index].framebuffer);
 
+        auto build_time = timer.now();
+
         VkSemaphore compute_semaphore = this->entity_render->SubmitComputeShader(image_index);
 
         std::vector<VkSemaphore> wait_semaphores = {present_semaphore, compute_semaphore};
         std::vector<VkPipelineStageFlags> semaphore_stages = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT};
+
+        // std::vector<VkSemaphore> wait_semaphores = {present_semaphore};
+        // std::vector<VkPipelineStageFlags> semaphore_stages = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
 
         // Present image
         if(!Vulkan::GetInstance().PresentImage(this->resources[image_index], wait_semaphores, semaphore_stages, image_index)) {
@@ -328,5 +356,21 @@ namespace Engine
             this->user_interface->Refresh();
             this->entity_render->Refresh();
         }
+
+        auto finish_time = timer.now();
+
+        auto total_duration = finish_time - start_time;
+        float prepare_duration = (float)((prepare_time - start_time).count() * 100.0f) / total_duration.count();
+        float update_duration = (float)((update_time - prepare_time).count() * 100.0f) / total_duration.count();
+        float fence_duration = (float)((fence_time - update_time).count() * 100.0f) / total_duration.count();
+        float descriptor_duration = (float)((descriptor_time - fence_time).count() * 100.0f) / total_duration.count();
+        float build_duration = (float)((build_time - descriptor_time).count() * 100.0f) / total_duration.count();
+        float present_duration = (float)((finish_time - build_time).count() * 100.0f) / total_duration.count();
+
+        float update_camera_duration = (float)((update_camera_time - prepare_time).count() * 100.0f) / (update_time - prepare_time).count();
+        float update_map_duration = (float)((update_map_time - update_camera_time).count() * 100.0f) / (update_time - prepare_time).count();
+        float update_entities_duration = (float)((update_entities_time - update_map_time).count() * 100.0f) / (update_time - prepare_time).count();
+        float update_interface_duration = (float)((update_interface_time - update_entities_time).count() * 100.0f) / (update_time - prepare_time).count();
+        float flush_duration = (float)((update_time - update_interface_time).count() * 100.0f) / (update_time - prepare_time).count();
     }
 }

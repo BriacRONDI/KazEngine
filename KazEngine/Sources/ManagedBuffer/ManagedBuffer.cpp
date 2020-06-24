@@ -14,6 +14,7 @@ namespace Engine
         this->staging_buffers.clear();
         this->buffers.clear();
         this->flush_chunks.clear();
+        this->mutex.clear();
 
         this->instance_count = 0;
     }
@@ -29,6 +30,7 @@ namespace Engine
         this->staging_buffers.resize(instance_count);
         this->buffers.resize(instance_count);
         this->flush_chunks.resize(instance_count);
+        this->mutex.resize(instance_count);
 
         for(uint8_t i=0; i<instance_count; i++) {
             if(allocate_staging_buffer && !ManagedBuffer::AllocateStagingBuffer(this->staging_buffers[i], queue_families, size)) {
@@ -40,6 +42,8 @@ namespace Engine
                 this->Clear();
                 return false;
             }
+
+            this->mutex[i] = std::unique_ptr<std::mutex>(new std::mutex);
         }
 
         return true;
@@ -72,6 +76,8 @@ namespace Engine
     inline void ManagedBuffer::UpdateFlushRange(size_t start_offset, size_t data_size, uint8_t instance_id)
     {
         if(!data_size) return;
+
+        std::unique_lock<std::mutex> lock(*this->mutex[instance_id]);
         std::vector<Chunk>& flush = this->flush_chunks[instance_id];
         size_t end_offset = start_offset + data_size;
         
@@ -102,6 +108,7 @@ namespace Engine
             if(overlap_count == 2) flush.erase(flush.begin() + overlap_start + 1);
             else if(overlap_count > 2) flush.erase(flush.begin() + overlap_start + 1, flush.begin() + overlap_start + overlap_count - 1);
         }
+        lock.unlock();
     }
 
     void ManagedBuffer::WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize global_offset, uint8_t instance_id)
@@ -120,12 +127,17 @@ namespace Engine
 
     bool ManagedBuffer::Flush(Vulkan::COMMAND_BUFFER const& command_buffer, uint8_t instance_id)
     {
+        std::unique_lock<std::mutex> lock(*this->mutex[instance_id]);
         if(!this->flush_chunks[instance_id].empty()) {
             size_t bytes_sent = Vulkan::GetInstance().SendToBuffer(this->buffers[instance_id], command_buffer, this->staging_buffers[instance_id],
                                                                    this->flush_chunks[instance_id], Vulkan::GetGraphicsQueue().handle);
-            if(!bytes_sent) return false;
+            if(!bytes_sent) {
+                lock.unlock();
+                return false;
+            }
             this->flush_chunks[instance_id].clear();
         }
+        lock.unlock();
         
         return true;
     }
