@@ -149,6 +149,9 @@
     <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
     <ClCompile Include="Sources\Core\Core.cpp" />
     <ClCompile Include="Sources\DescriptorSet\DescriptorSet.cpp" />
+    <ClCompile Include="Sources\Entity\DynamicEntity\DynamicEntity.cpp" />
+    <ClCompile Include="Sources\Entity\Entity.cpp" />
+    <ClCompile Include="Sources\Entity\StaticEntity\StaticEntity.cpp" />
     <ClCompile Include="Sources\Main.cpp" />
     <ClCompile Include="Sources\ManagedBuffer\Chunk\Chunk.cpp" />
     <ClCompile Include="Sources\ManagedBuffer\ManagedBuffer.cpp" />
@@ -158,8 +161,6 @@
     <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp" />
     <ClCompile Include="Sources\Platform\Win32\Window\Window.cpp" />
     <ClCompile Include="Sources\Scene\EntityRender\EntityRender.cpp" />
-    <ClCompile Include="Sources\Scene\Entity\Entity.cpp" />
-    <ClCompile Include="Sources\Scene\Entity\SkeletonEntity.cpp" />
     <ClCompile Include="Sources\Scene\Map\Map.cpp" />
     <ClCompile Include="Sources\Platform\Common\Timer\Timer.cpp" />
     <ClCompile Include="Sources\UserInterface\UserInterface.cpp" />
@@ -176,6 +177,10 @@
     <ClInclude Include="Sources\COre\Core.h" />
     <ClInclude Include="Sources\DescriptorSet\DescriptorSet.h" />
     <ClInclude Include="Sources\Engine.h" />
+    <ClInclude Include="Sources\Entity\DynamicEntity\DynamicEntity.h" />
+    <ClInclude Include="Sources\Entity\Entity.h" />
+    <ClInclude Include="Sources\Entity\IEntityListener.h" />
+    <ClInclude Include="Sources\Entity\StaticEntity\StaticEntity.h" />
     <ClInclude Include="Sources\ManagedBuffer\Chunk\Chunk.h" />
     <ClInclude Include="Sources\ManagedBuffer\ManagedBuffer.h" />
     <ClInclude Include="Sources\LoadedMesh\LoadedMesh.h" />
@@ -189,9 +194,6 @@
     <ClInclude Include="Sources\Platform\Common\Mouse\IMouseListener.h" />
     <ClInclude Include="Sources\Platform\Common\Mouse\Mouse.h" />
     <ClInclude Include="Sources\Scene\EntityRender\EntityRender.h" />
-    <ClInclude Include="Sources\Scene\Entity\Entity.h" />
-    <ClInclude Include="Sources\Scene\Entity\IEntityListener.h" />
-    <ClInclude Include="Sources\Scene\Entity\SkeletonEntity.h" />
     <ClInclude Include="Sources\Scene\Map\Map.h" />
     <ClInclude Include="Sources\Platform\Common\Timer\Timer.h" />
     <ClInclude Include="Sources\UserInterface\IUserInteraction.h" />

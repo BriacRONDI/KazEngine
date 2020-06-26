@@ -195,7 +195,7 @@ namespace Engine
     void UserInterface::Update(uint8_t frame_index)
     {
         if(this->update_selection_square[frame_index]) {
-            this->selection_descriptor.WriteData(&this->selection_square, sizeof(MOUSE_SELECTION_SQUARE), 0, frame_index);
+            this->selection_descriptor.WriteData(&this->selection_square, sizeof(MOUSE_SELECTION_SQUARE), 0, 0, frame_index);
             this->update_selection_square[frame_index] = false;
         }
     }

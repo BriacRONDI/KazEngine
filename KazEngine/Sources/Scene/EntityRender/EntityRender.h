@@ -4,8 +4,9 @@
 #include "../../ManagedBuffer/ManagedBuffer.h"
 #include "../../DataBank/DataBank.h"
 #include "../../Camera/Camera.h"
-#include "../Entity/SkeletonEntity.h"
-#include "../Entity/IEntityListener.h"
+#include "../../Entity/DynamicEntity/DynamicEntity.h"
+#include "../../Entity/StaticEntity/StaticEntity.h"
+#include "../../Entity/IEntityListener.h"
 #include "../../LoadedMesh/LoadedMesh.h"
 
 #define ENTITY_ID_BINDING   0
@@ -21,19 +22,15 @@ namespace Engine
             inline ~EntityRender() { this->Clear(); }
             EntityRender(VkCommandPool command_pool);
             VkCommandBuffer GetCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer);
-            // std::vector<Entity*> SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
-            // Entity* ToggleSelection(Point<uint32_t> mouse_position);
             inline void Refresh() { for(int i=0; i<this->need_graphics_update.size(); i++) this->Refresh(i); }
             void Refresh(uint8_t frame_index);
             VkSemaphore SubmitComputeShader(uint8_t frame_index);
-            // void Update(uint8_t frame_index);
             void UpdateDescriptorSet(uint8_t frame_index);
 
             /////////////////////
             // IEntityListener //
             /////////////////////
 
-            virtual inline void NewEntity(Entity& entity) {};
             virtual void AddMesh(Entity& entity, std::shared_ptr<Model::Mesh> mesh);
 
         private :

@@ -69,13 +69,6 @@ namespace Engine
         // Selection //
         ///////////////
 
-        // this->selection_chunk = this->entities_descriptor.ReserveRange(sizeof(uint32_t) * 1000, Vulkan::SboAlignment(), 0);
-
-        /*if(!this->entities_descriptor.Create({
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(uint32_t) * 101},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(Maths::Matrix4x4) * 100}
-        }, instance_count, {nullptr, Entity::static_data_chunk})) return false;*/
-
         if(!this->selection_descriptor.Create({
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(uint32_t) * 101},
         }, instance_count)) return false;
@@ -97,7 +90,7 @@ namespace Engine
         auto camera_layout = Camera::GetInstance().GetDescriptorSet().GetLayout();
         auto texture_layout = this->texture_descriptor.GetLayout();
         auto selection_layout = this->selection_descriptor.GetLayout();
-        auto entity_layout = Entity::GetDescriptor().GetLayout();
+        auto entity_layout = DynamicEntity::GetMatrixDescriptor().GetLayout();
 
         bool success = Vulkan::GetInstance().CreatePipeline(
             true, {camera_layout, texture_layout, selection_layout, entity_layout},
@@ -138,7 +131,7 @@ namespace Engine
         return true;
     }
 
-    void Map::UpdateSelection(std::vector<Entity*> entities)
+    void Map::UpdateSelection(std::vector<DynamicEntity*> entities)
     {
         uint32_t count = static_cast<uint32_t>(entities.size());
         
@@ -227,7 +220,7 @@ namespace Engine
             Camera::GetInstance().GetDescriptorSet().Get(frame_index),
             this->texture_descriptor.Get(),
             this->selection_descriptor.Get(frame_index),
-            Entity::GetDescriptor().Get(frame_index)
+            DynamicEntity::GetMatrixDescriptor().Get(frame_index)
         };
 
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline.handle);

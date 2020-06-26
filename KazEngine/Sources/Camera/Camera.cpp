@@ -56,7 +56,7 @@ namespace Engine
 
         if(this->camera != this->last_ubo[frame_index]) {
             this->camera_descriptor.WriteData(&this->camera, sizeof(Maths::Matrix4x4) * 2, 0);
-            this->camera_descriptor.WriteData(&this->frustum.GetPlanes(), sizeof(std::array<Maths::Vector4,6>), 0, static_cast<uint32_t>(sizeof(Maths::Matrix4x4) * 2));
+            this->camera_descriptor.WriteData(&this->frustum.GetPlanes(), sizeof(std::array<Maths::Vector4,6>), static_cast<uint32_t>(sizeof(Maths::Matrix4x4) * 2));
             this->last_ubo[frame_index] = this->camera;
         }
     }

@@ -37,7 +37,6 @@ namespace Engine
         this->need_compute_update.clear();
         this->graphics_command_buffers.clear();
         this->compute_command_buffers.clear();
-        // this->entities.clear();
         this->render_groups.clear();
         this->skeleton_descriptor.Clear();
         this->texture_descriptor.Clear();
@@ -190,7 +189,7 @@ namespace Engine
         }, instance_count)) return false;
 
         auto indirect_layout = indirect_descriptor.GetLayout();
-        auto entity_layout = Entity::GetDescriptor().GetLayout();
+        auto entity_layout = StaticEntity::GetMatrixDescriptor().GetLayout();
 
         compute_shader_stage = Vulkan::GetInstance().LoadShaderModule("./Shaders/cull_lod.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
         success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout}, {}, compute_pipeline);
@@ -202,12 +201,10 @@ namespace Engine
             return false;
         }
 
-        SkeletonEntity::Initialize();
-
         this->render_groups.push_back({
             graphics_pipeline, compute_pipeline,
             Model::Mesh::RENDER_POSITION | Model::Mesh::RENDER_UV | Model::Mesh::RENDER_TEXTURE,
-            {Entity::GetDescriptor().GetChunk()},
+            {StaticEntity::GetMatrixDescriptor().GetChunk()},
             std::move(indirect_descriptor)
         });
 
@@ -245,7 +242,7 @@ namespace Engine
         }, instance_count)) return false;
 
         indirect_layout = indirect_descriptor.GetLayout();
-        auto animation_layout = SkeletonEntity::GetDescriptor().GetLayout();
+        auto animation_layout = DynamicEntity::GetAnimationDescriptor().GetLayout();
 
         compute_shader_stage = Vulkan::GetInstance().LoadShaderModule("./Shaders/cull_lod_anim.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
         success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout, animation_layout}, {}, compute_pipeline);
@@ -260,7 +257,7 @@ namespace Engine
         this->render_groups.push_back({
             graphics_pipeline, compute_pipeline,
             Model::Mesh::RENDER_POSITION | Model::Mesh::RENDER_UV | Model::Mesh::RENDER_TEXTURE | Model::Mesh::RENDER_SKELETON,
-            { SkeletonEntity::absolute_skeleton_data_chunk, SkeletonEntity::GetDescriptor().GetChunk() },
+            { DynamicEntity::GetMatrixDescriptor().GetChunk(), DynamicEntity::GetAnimationDescriptor().GetChunk() },
             std::move(indirect_descriptor)
         });
 
@@ -376,145 +373,11 @@ namespace Engine
         emc.entity = &entity;
         emc.instance_id = entity.GetInstanceId();
         VkDrawIndirectCommand indirect = this->mesh.GetIndirectCommand(emc.instance_id);
-        group.indirect_descriptor.WriteData(&indirect, sizeof(VkDrawIndirectCommand), 0, static_cast<uint32_t>(emc.chunk->offset));
+        group.indirect_descriptor.WriteData(&indirect, sizeof(VkDrawIndirectCommand), static_cast<uint32_t>(emc.chunk->offset));
         this->entities.push_back(emc);
 
         return true;
     }
-
-    /*bool EntityRender::AddEntity(Entity& entity)
-    {
-        auto meshes = entity.GetMeshes();
-        if(meshes == nullptr) return false;
-
-        for(uint8_t i=0; i<this->render_groups.size(); i++) {
-            for(auto mesh : *entity.GetMeshes()) {
-
-                if(mesh->render_mask != this->render_groups[i].mask) continue;
-
-                ////////////////////////////
-                // Search for loaded mesh //
-                ////////////////////////////
-
-                for(auto& drawable_bind : this->render_groups[i].drawables) {
-                    if(drawable_bind.mesh.IsSameMesh(mesh)) {
-
-                        drawable_bind.AddInstance(this->render_groups[i], entity);
-
-                        for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
-                        for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
-                        // this->entities.push_back(&entity);
-                        return true;
-                    }
-                }
-
-                // No loaded mesh found
-                DRAWABLE_BIND new_bind;
-
-                //////////////////
-                // Load Texture //
-                //////////////////
-
-                if(mesh->render_mask & Model::Mesh::RENDER_TEXTURE) {
-                    for(auto& material : mesh->materials) {
-                        if(DataBank::HasMaterial(material.first)) {
-                            if(!DataBank::GetMaterial(material.first).texture.empty()) {
-                                if(!this->textures.count(DataBank::GetMaterial(material.first).texture)
-                                    && !this->LoadTexture(DataBank::GetMaterial(material.first).texture))
-                                        return false;
-                                    
-                                new_bind.texture_id = this->textures[DataBank::GetMaterial(material.first).texture];
-                            }
-                        }else{
-                            #if defined(DISPLAY_LOGS)
-                            std::cout << "Dynamics::AddEntity() => Material[" + material.first + "] : Not in data bank" << std::endl;
-                            #endif
-                            return false;
-                        }
-                    }
-                }
-
-                ///////////////
-                // Load Mesh //
-                ///////////////
-
-                if(!new_bind.mesh.Load(mesh, this->textures)) {
-                    #if defined(DISPLAY_LOGS)
-                    std::cout << "Dynamics::AddEntity() => Drawable.Load(" + mesh->name + ") : Failed" << std::endl;
-                    #endif
-                    return false;
-                }
-
-                ///////////////////
-                // Load Skeleton //
-                ///////////////////
-
-                if(mesh->render_mask & Model::Mesh::RENDER_SKELETON) {
-
-                    if(!this->skeletons.count(mesh->skeleton) && !this->LoadSkeleton(mesh->skeleton)) return false;
-
-                    new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.end(), {
-                        this->skeletons[mesh->skeleton].skeleton_dynamic_offset,
-                        this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].first,
-                        this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].second,
-                        this->skeletons[mesh->skeleton].animations_data_dynamic_offset
-                    });
-                    new_bind.has_skeleton = true;
-                }else{
-                    new_bind.has_skeleton = false;
-                }
-
-                ///////////////////////
-                // Setup loaded mesh //
-                ///////////////////////
-
-                ENTITY_MESH_CHUNK emc;
-                emc.chunk = this->render_groups[i].indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
-
-                if(emc.chunk == nullptr) {
-                    if(!this->render_groups[i].indirect_descriptor.ResizeChunk(this->render_groups[i].indirect_descriptor.GetChunk()->range
-                                                                             + sizeof(VkDrawIndirectCommand) * 10)) {
-                        #if defined(DISPLAY_LOGS)
-                        std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
-                        #endif
-                        return false;
-                    }else{
-                        emc.chunk = this->render_groups[i].indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
-                        if(emc.chunk == nullptr) {
-                            #if defined(DISPLAY_LOGS)
-                            std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
-                            #endif
-                            return false;
-                        }
-                    }
-                }
-
-                emc.entity = &entity;
-                emc.instance_id = entity.GetInstanceId();
-                VkDrawIndirectCommand indirect = new_bind.mesh.GetIndirectCommand(emc.instance_id);
-                this->render_groups[i].indirect_descriptor.WriteData(&indirect, sizeof(VkDrawIndirectCommand), 0, static_cast<uint32_t>(emc.chunk->offset));
-                new_bind.entities.push_back(emc);
-
-                // Add loaded mesh
-                this->render_groups[i].drawables.push_back(std::move(new_bind));
-
-                // Finish
-                // this->entities.push_back(&entity);
-                for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
-                for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
-                return true;
-            }
-        }
-
-        return false;
-    }*/
-
-    /*void EntityRender::Update(uint8_t frame_index)
-    {
-        for(auto entity : this->entities) {
-            entity->Update(frame_index);
-        }
-    }*/
 
     void EntityRender::Refresh(uint8_t frame_index)
     {
@@ -538,7 +401,7 @@ namespace Engine
     void EntityRender::AddMesh(Entity& entity, std::shared_ptr<Model::Mesh> mesh)
     {
         for(uint8_t i=0; i<this->render_groups.size(); i++) {
-            for(auto mesh : *entity.GetMeshes()) {
+            for(auto mesh : entity.GetMeshes()) {
 
                 if(mesh->render_mask != this->render_groups[i].mask) continue;
 
@@ -680,14 +543,22 @@ namespace Engine
         for(uint8_t i=0; i<this->render_groups.size(); i++) {
 		    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->render_groups[i].compute_pipeline.handle);
 
-            std::vector<VkDescriptorSet> bind_descriptor_sets = {
-                Camera::GetInstance().GetDescriptorSet().Get(frame_index),
-                Entity::GetDescriptor().Get(frame_index),
-                this->render_groups[i].indirect_descriptor.Get(frame_index)
-            };
+            std::vector<VkDescriptorSet> bind_descriptor_sets;
 
-            if(this->render_groups[i].mask & Model::Mesh::RENDER_SKELETON)
-                bind_descriptor_sets.push_back(SkeletonEntity::GetDescriptor().Get(frame_index));
+            if(this->render_groups[i].mask & Model::Mesh::RENDER_SKELETON) {
+                bind_descriptor_sets = {
+                    Camera::GetInstance().GetDescriptorSet().Get(frame_index),
+                    DynamicEntity::GetMatrixDescriptor().Get(frame_index),
+                    this->render_groups[i].indirect_descriptor.Get(frame_index),
+                    DynamicEntity::GetAnimationDescriptor().Get(frame_index)
+                };
+            }else{
+                bind_descriptor_sets = {
+                    Camera::GetInstance().GetDescriptorSet().Get(frame_index),
+                    StaticEntity::GetMatrixDescriptor().Get(frame_index),
+                    this->render_groups[i].indirect_descriptor.Get(frame_index)
+                };
+            }
 
             vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->render_groups[i].compute_pipeline.layout, 0,
                                     static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(), 0, nullptr);

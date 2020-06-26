@@ -5,8 +5,8 @@ namespace Engine
     void Core::Clear()
     {
         // Entity
-        Entity::Clear();
-        SkeletonEntity::Clear();
+        StaticEntity::Clear();
+        DynamicEntity::Clear();
 
         // User Interface
         if(this->user_interface != nullptr) {
@@ -74,7 +74,8 @@ namespace Engine
                                      frame_count, true, {Vulkan::GetGraphicsQueue().index});
 
         // Initialize Entity
-        Entity::Initialize();
+        StaticEntity::Initialize();
+        DynamicEntity::Initialize();
 
         // Initialize Camera
         Camera::CreateInstance();
@@ -239,12 +240,12 @@ namespace Engine
 
     void Core::SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end)
     {
-        this->map->UpdateSelection(Entity::SquareSelection(box_start, box_end));
+        this->map->UpdateSelection(DynamicEntity::SquareSelection(box_start, box_end));
     }
 
     void Core::ToggleSelection(Point<uint32_t> mouse_position)
     {
-        Entity* entity = Entity::ToggleSelection(mouse_position);
+        DynamicEntity* entity = DynamicEntity::ToggleSelection(mouse_position);
         if(entity == nullptr) this->map->UpdateSelection({});
         else this->map->UpdateSelection({entity});
     }
@@ -293,7 +294,7 @@ namespace Engine
         this->user_interface->Update(image_index);
         auto update_interface_time = timer.now();
 
-        SkeletonEntity::UpdateAnimationTimer();
+        DynamicEntity::UpdateAnimationTimer();
 
         DataBank::GetManagedBuffer().Flush(this->transfer_buffers[image_index], image_index);
 
@@ -310,15 +311,16 @@ namespace Engine
 
         auto fence_time = timer.now();
 
-        if(Entity::GetDescriptor().NeedUpdate(image_index)) {
-            this->map->Refresh(image_index);
+        if(StaticEntity::GetMatrixDescriptor().NeedUpdate(image_index)) {
+            // this->map->Refresh(image_index);
             this->entity_render->Refresh(image_index);
-            Entity::GetDescriptor().Update(image_index);
+            StaticEntity::UpdateMatrixDescriptor(image_index);
         }
 
-        if(SkeletonEntity::GetDescriptor().NeedUpdate(image_index)) {
+        if(DynamicEntity::GetMatrixDescriptor().NeedUpdate(image_index)) {
+            this->map->Refresh(image_index);
             this->entity_render->Refresh(image_index);
-            SkeletonEntity::GetDescriptor().Update(image_index);
+            DynamicEntity::UpdateMatrixDescriptor(image_index);
         }
 
         this->map->UpdateDescriptorSet(image_index);

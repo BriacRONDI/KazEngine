@@ -28,15 +28,15 @@ namespace Engine
             uint32_t Allocate(std::vector<VkDescriptorBufferInfo> const& buffers_infos);
             bool PrepareBindlessTexture(uint32_t texture_count = 32);
             int32_t AllocateTexture(Tools::IMAGE_MAP const& image);
-            inline VkDescriptorSet Get(uint32_t instance_id = 0) { return this->sets[instance_id]; }
-            inline VkDescriptorSetLayout GetLayout() { return this->layout; }
-            inline std::shared_ptr<Chunk> GetChunk(uint8_t binding = 0) { return this->bindings[binding].chunk; }
+            inline VkDescriptorSet Get(uint32_t instance_id = 0) const { return this->sets[instance_id]; }
+            inline VkDescriptorSetLayout GetLayout() const { return this->layout; }
+            inline std::shared_ptr<Chunk> GetChunk(uint8_t binding = 0) const { return this->bindings[binding].chunk; }
 
-            inline void WriteData(const void* data, VkDeviceSize data_size, uint8_t binding, uint8_t instance_id, uint32_t relative_offset = 0)
+            inline void WriteData(const void* data, VkDeviceSize data_size, size_t relative_offset, uint8_t binding, uint8_t instance_id)
             { DataBank::GetManagedBuffer().WriteData(data, data_size, this->bindings[binding].chunk->offset + relative_offset, instance_id); }
 
-            inline void WriteData(const void* data, VkDeviceSize data_size, uint8_t binding, uint32_t relative_offset = 0)
-            { for(uint8_t i=0; i<this->sets.size(); i++) { this->WriteData(data, data_size, binding, i, relative_offset); } }
+            inline void WriteData(const void* data, VkDeviceSize data_size, size_t relative_offset, uint8_t binding = 0)
+            { for(uint8_t i=0; i<this->sets.size(); i++) { this->WriteData(data, data_size, relative_offset, binding, i); } }
 
             inline std::shared_ptr<Chunk> ReserveRange(size_t size, uint8_t binding = 0) { return this->bindings[binding].chunk->ReserveRange(size); }
             std::shared_ptr<Chunk> ReserveRange(size_t size, size_t alignment, uint8_t binding = 0);
@@ -44,7 +44,7 @@ namespace Engine
             bool ResizeChunk(size_t size, uint8_t binding = 0, VkDeviceSize alignment = 0);
             inline void Update() { for(uint8_t i=0; i<this->sets.size(); i++) this->Update(i); }
             bool Update(uint8_t instance_id);
-            bool NeedUpdate(uint8_t instance_id);
+            bool NeedUpdate(uint8_t instance_id) const;
             inline void FreeChunk(std::shared_ptr<Chunk> chunk, uint8_t binding) { this->bindings[binding].chunk->FreeChild(chunk); }
             inline void AwaitUpdate(uint8_t binding) { for(uint8_t i=0; i<this->bindings[binding].awaiting_update.size(); i++) this->bindings[binding].awaiting_update[i] = true; }
 

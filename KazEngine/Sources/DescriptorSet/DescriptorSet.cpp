@@ -858,7 +858,7 @@ namespace Engine
         return updated;
     }
 
-    bool DescriptorSet::NeedUpdate(uint8_t instance_id)
+    bool DescriptorSet::NeedUpdate(uint8_t instance_id) const
     {
         for(auto& binding : this->bindings)
             if(binding.awaiting_update[instance_id])

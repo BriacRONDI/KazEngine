@@ -1,6 +1,5 @@
 #pragma once
 
-#include <mutex>
 #include <unordered_map>
 #include <set>
 #include "../Vulkan/Vulkan.h"
@@ -47,7 +46,6 @@ namespace Engine
             std::vector<Vulkan::DATA_BUFFER> buffers;
             Chunk chunk;
             std::vector<std::vector<Chunk>> flush_chunks;
-            std::vector<std::unique_ptr<std::mutex>> mutex;
             
             static bool AllocateStagingBuffer(Vulkan::STAGING_BUFFER& staging_buffer, std::vector<uint32_t> queue_families, VkDeviceSize size);
     };

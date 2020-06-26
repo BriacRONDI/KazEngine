@@ -72,12 +72,12 @@ int main(int argc, char** argv)
     auto cube_material = Engine::DataBank::GetMaterialFromPackage(data_buffer, "/mono_textured_cube/Ciment");
     Engine::DataBank::AddMaterial(cube_material, "Ciment");
 
-    Engine::Entity cube1;
+    Engine::StaticEntity cube1;
     cube1.SetMatrix(Maths::Matrix4x4::TranslationMatrix({-2.0f, -1.0f, 0.0f}));
     cube1.AddMesh(cube_mesh);
     // engine.GetEntityRender().AddEntity(cube1);
 
-    Engine::Entity cube2;
+    Engine::StaticEntity cube2;
     cube2.SetMatrix(Maths::Matrix4x4::TranslationMatrix({2.0f, -1.0f, 0.0f}));
     cube2.AddMesh(cube_mesh);
     // engine.GetEntityRender().AddEntity(cube2);
@@ -97,7 +97,7 @@ int main(int argc, char** argv)
     auto simple_guy_material = Engine::DataBank::GetMaterialFromPackage(data_buffer, "/SimpleGuy/AO");
     Engine::DataBank::AddMaterial(simple_guy_material, "AO");
 
-    Engine::SkeletonEntity guy;
+    Engine::DynamicEntity guy;
     guy.AddMesh(simple_guy_mesh);
     // engine.GetEntityRender().AddEntity(guy);
     guy.PlayAnimation("Armature|Walk", 1.0f, true);
@@ -177,7 +177,7 @@ int main(int argc, char** argv)
         static int count = 0;
         if(/*count < 1000 && dynamic_entity_add_start.GetProgression() >= 1.0f &&*/ Engine::Keyboard::GetInstance().IsPressed(VK_SPACE)) {
 
-            auto new_entity = std::shared_ptr<Engine::SkeletonEntity>(new Engine::SkeletonEntity);
+            auto new_entity = std::shared_ptr<Engine::DynamicEntity>(new Engine::DynamicEntity);
             new_entity->AddMesh(simple_guy_mesh);
             count++;
 

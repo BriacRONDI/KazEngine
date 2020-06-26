@@ -4,7 +4,7 @@
 #include "../../ManagedBuffer/ManagedBuffer.h"
 #include "../../Camera/Camera.h"
 #include "../../DataBank/DataBank.h"
-#include "../Entity/Entity.h"
+#include "../../Entity/DynamicEntity/DynamicEntity.h"
 #include <Maths.h>
 
 namespace Engine
@@ -20,7 +20,7 @@ namespace Engine
             void Update(uint8_t frame_index);
             inline void Refresh() { for(int i=0; i<this->need_update.size(); i++) this->Refresh(i); }
             void Refresh(uint8_t frame_index);
-            void UpdateSelection(std::vector<Entity*> entities);
+            void UpdateSelection(std::vector<DynamicEntity*> entities);
             void UpdateDescriptorSet(uint8_t frame_index);
             
             /////////////////////

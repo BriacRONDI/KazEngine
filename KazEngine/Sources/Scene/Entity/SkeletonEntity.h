@@ -39,10 +39,8 @@ namespace Engine
             void PlayAnimation(std::string animation, float speed = 1.0f, bool loop = false);
             inline void StopAnimation() { this->animation.clear(); }
             void MoveTo(Maths::Vector3 destination, float speed = 1.0f);
-            // static bool InitilizeInstanceChunk();
             static bool Initialize();
             virtual inline uint32_t GetStaticDataOffset() { return static_cast<uint32_t>(SkeletonEntity::skeleton_data_chunk->offset + this->static_instance_chunk->offset); }
-            // virtual std::vector<Chunk> UpdateData(uint8_t instance_id);
             static inline DescriptorSet& GetDescriptor() { return *SkeletonEntity::animation_descriptor; }
             static void Clear();
             static void UpdateAnimationTimer();
@@ -51,11 +49,8 @@ namespace Engine
 
             std::shared_ptr<Chunk> frame_chunk;
             std::shared_ptr<Chunk> animation_chunk;
-            // Timer animation_timer;
             Timer move_timer;
             std::string animation;
-            // bool loop_animation;
-            // float animation_speed;
             bool moving;
             Maths::Vector3 move_origin;
             Maths::Vector3 move_destination;
