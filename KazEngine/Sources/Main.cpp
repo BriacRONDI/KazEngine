@@ -117,34 +117,32 @@ int main(int argc, char** argv)
     std::vector<std::shared_ptr<Engine::Entity>> guys;
 
     /*for(int i=0; i<100; i++) {
-        auto new_entity = std::shared_ptr<Engine::SkeletonEntity>(new Engine::SkeletonEntity);
+        auto new_entity = std::shared_ptr<Engine::DynamicEntity>(new Engine::DynamicEntity);
         new_entity->AddMesh(simple_guy_mesh);
 
-        if(engine.GetEntityRender().AddEntity(*new_entity)) {
-            guys.resize(guys.size() + 1);
-            guys[guys.size()-1] = new_entity;
+        guys.resize(guys.size() + 1);
+        guys[guys.size()-1] = new_entity;
 
-            new_entity->PlayAnimation("Armature|Walk", 1.0f, true);
+        new_entity->PlayAnimation("Armature|Walk", 1.0f, true);
+    }
 
-            uint32_t count_z = static_cast<uint32_t>(std::sqrt(guys.size()));
-            uint32_t count_x = count_z;
+    uint32_t count_z = static_cast<uint32_t>(std::sqrt(guys.size()));
+    uint32_t count_x = count_z;
 
-            uint32_t last = 0, rest = 0;
-            if(guys.size() > 2) {
-                last = (count_z - 1) + (count_z - 1) * count_z;
-                rest = static_cast<uint32_t>(guys.size() - last - 1);
-            }
+    uint32_t last = 0, rest = 0;
+    if(guys.size() > 2) {
+        last = (count_z - 1) + (count_z - 1) * count_z;
+        rest = static_cast<uint32_t>(guys.size() - last - 1);
+    }
 
-            for(uint32_t z=0; z<count_z; z++) {
-                for(uint32_t x=0; x<count_x; x++) {
-                    guys[x + z * count_z]->matrix = Maths::Matrix4x4::TranslationMatrix({x - count_x * 0.5f + 0.5f, 0.0f, -1.0f * z - 5.0f});
-                }
-            }
-
-            for(uint32_t x=0; x<rest; x++) {
-                guys[x + last + 1]->matrix = Maths::Matrix4x4::TranslationMatrix({x - rest * 0.5f + 0.5f, 0.0f, -1.0f * count_z - 6.0f});
-            }
+    for(uint32_t z=0; z<count_z; z++) {
+        for(uint32_t x=0; x<count_x; x++) {
+            guys[x + z * count_z]->SetMatrix(Maths::Matrix4x4::TranslationMatrix({x - count_x * 0.5f + 0.5f, 0.0f, -1.0f * z - 5.0f}));
         }
+    }
+
+    for(uint32_t x=0; x<rest; x++) {
+        guys[x + last + 1]->SetMatrix(Maths::Matrix4x4::TranslationMatrix({x - rest * 0.5f + 0.5f, 0.0f, -1.0f * count_z - 6.0f}));
     }*/
 
     // Main loop
@@ -175,16 +173,20 @@ int main(int argc, char** argv)
         //////////////
 
         static int count = 0;
-        if(/*count < 1000 && dynamic_entity_add_start.GetProgression() >= 1.0f &&*/ Engine::Keyboard::GetInstance().IsPressed(VK_SPACE)) {
+        if(/*count < 1000 && */dynamic_entity_add_start.GetProgression() >= 1.0f && Engine::Keyboard::GetInstance().IsPressed(VK_SPACE)) {
 
-            auto new_entity = std::shared_ptr<Engine::DynamicEntity>(new Engine::DynamicEntity);
-            new_entity->AddMesh(simple_guy_mesh);
-            count++;
+            uint32_t step = 1;
+            for(uint32_t i=0; i<step; i++) {
+                auto new_entity = std::shared_ptr<Engine::DynamicEntity>(new Engine::DynamicEntity);
+                new_entity->AddMesh(simple_guy_mesh);
 
-            guys.resize(guys.size() + 1);
-            guys[guys.size()-1] = new_entity;
+                guys.resize(guys.size() + 1);
+                guys[guys.size()-1] = new_entity;
 
-            new_entity->PlayAnimation("Armature|Walk", 1.0f, true);
+                new_entity->PlayAnimation("Armature|Walk", 1.0f, true);
+
+                count++;
+            }
 
             uint32_t count_z = static_cast<uint32_t>(std::sqrt(guys.size()));
             uint32_t count_x = count_z;

@@ -312,7 +312,6 @@ namespace Engine
         auto fence_time = timer.now();
 
         if(StaticEntity::GetMatrixDescriptor().NeedUpdate(image_index)) {
-            // this->map->Refresh(image_index);
             this->entity_render->Refresh(image_index);
             StaticEntity::UpdateMatrixDescriptor(image_index);
         }

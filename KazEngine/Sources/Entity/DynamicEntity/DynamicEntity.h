@@ -54,7 +54,7 @@ namespace Engine
 
             static DescriptorSet matrix_descriptor;
             static DescriptorSet animation_descriptor;
-            static std::vector<DynamicEntity> entities;
+            static std::vector<DynamicEntity*> entities;
             static std::chrono::system_clock::time_point animation_time;
     };
 }

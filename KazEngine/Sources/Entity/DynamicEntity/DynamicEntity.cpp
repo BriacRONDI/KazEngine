@@ -4,7 +4,7 @@ namespace Engine
 {
     DescriptorSet DynamicEntity::matrix_descriptor;
     DescriptorSet DynamicEntity::animation_descriptor;
-    std::vector<DynamicEntity> DynamicEntity::entities;
+    std::vector<DynamicEntity*> DynamicEntity::entities;
     std::chrono::system_clock::time_point DynamicEntity::animation_time;
 
     bool DynamicEntity::Initialize()
@@ -32,6 +32,10 @@ namespace Engine
 
     DynamicEntity::DynamicEntity()
     {
+        this->selected = false;
+        this->animation = {};
+        this->frame = {};
+
         this->matrix_chunk = this->matrix_descriptor.ReserveRange(sizeof(Maths::Matrix4x4));
         if(this->matrix_chunk == nullptr) {
             if(!this->matrix_descriptor.ResizeChunk(this->matrix_descriptor.GetChunk()->range + sizeof(Maths::Matrix4x4) * 10, 0, Vulkan::SboAlignment())) {
@@ -69,6 +73,9 @@ namespace Engine
         }
 
         DynamicEntity::matrix_descriptor.WriteData(&this->matrix, sizeof(Maths::Matrix4x4), this->matrix_chunk->offset);
+        DynamicEntity::animation_descriptor.WriteData(&this->frame, sizeof(FRAME_DATA), this->frame_chunk->offset, DESCRIPTOR_BIND_FRAME);
+        DynamicEntity::animation_descriptor.WriteData(&this->animation, sizeof(ANIMATION_DATA), this->animation_chunk->offset, DESCRIPTOR_BIND_ANIMATION);
+        DynamicEntity::entities.push_back(this);
     }
 
     void DynamicEntity::SetMatrix(Maths::Matrix4x4 matrix)
@@ -83,13 +90,12 @@ namespace Engine
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - DynamicEntity::animation_time).count()
         );
 
-        DynamicEntity::animation_descriptor.WriteData(&time, sizeof(uint32_t), DESCRIPTOR_BIND_TIME);
+        DynamicEntity::animation_descriptor.WriteData(&time, sizeof(uint32_t), 0, DESCRIPTOR_BIND_TIME);
     }
 
     void DynamicEntity::PlayAnimation(std::string animation, float speed, bool loop)
     {
         if(DataBank::HasAnimation(animation)) {
-            // this->animation = animation;
             this->animation.speed = speed;
 
             this->frame.frame_id = 0;
@@ -104,9 +110,7 @@ namespace Engine
                 std::chrono::system_clock::now() - DynamicEntity::animation_time).count()
             );
 
-            DynamicEntity::animation_descriptor.WriteData(&this->animation, sizeof(ANIMATION_DATA),
-                                                          static_cast<uint32_t>(this->animation_chunk->offset),
-                                                          DESCRIPTOR_BIND_ANIMATION);
+            DynamicEntity::animation_descriptor.WriteData(&this->animation, sizeof(ANIMATION_DATA), this->animation_chunk->offset, DESCRIPTOR_BIND_ANIMATION);
         }
     }
 
@@ -162,14 +166,14 @@ namespace Engine
         mouse_ray = mouse_ray.Normalize();
 
         DynamicEntity* selected_entity = nullptr;
-        for(auto& entity : DynamicEntity::entities) {
+        for(auto entity : DynamicEntity::entities) {
             if(selected_entity != nullptr) {
-                entity.selected = false;
-            }else if(entity.IntersectRay(camera_position, mouse_ray)) {
-                selected_entity = &entity;
-                entity.selected = true;
+                entity->selected = false;
+            }else if(entity->IntersectRay(camera_position, mouse_ray)) {
+                selected_entity = entity;
+                entity->selected = true;
             }else {
-                entity.selected = false;
+                entity->selected = false;
             }
         }
 
@@ -216,12 +220,12 @@ namespace Engine
         Maths::Plane bottom_plane = {bottom_right_position, bottom_right_ray.Cross(camera.GetRightVector())};
 
         std::vector<DynamicEntity*> return_value;
-        for(auto& entity : DynamicEntity::entities) {
-            if(entity.InSelectBox(left_plane, right_plane, top_plane, bottom_plane)) {
-                entity.selected = true;
-                return_value.push_back(&entity);
+        for(auto entity : DynamicEntity::entities) {
+            if(entity->InSelectBox(left_plane, right_plane, top_plane, bottom_plane)) {
+                entity->selected = true;
+                return_value.push_back(entity);
             }else{
-                entity.selected = false;
+                entity->selected = false;
             }
         }
 

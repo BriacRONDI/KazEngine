@@ -144,12 +144,12 @@ namespace Engine
             }
         }
 
-        this->selection_descriptor.WriteData(&count, sizeof(uint32_t), 0, static_cast<uint32_t>(this->selection_chunk->offset));
+        this->selection_descriptor.WriteData(&count, sizeof(uint32_t), static_cast<uint32_t>(this->selection_chunk->offset));
 
         std::vector<uint32_t> selected_ids(count);
-        for(uint32_t i=0; i<count; i++) selected_ids[i] = entities[i]->GetId();
+        for(uint32_t i=0; i<count; i++) selected_ids[i] = entities[i]->GetInstanceId();
 
-        this->selection_descriptor.WriteData(selected_ids.data(), selected_ids.size() * sizeof(uint32_t), 0,
+        this->selection_descriptor.WriteData(selected_ids.data(), selected_ids.size() * sizeof(uint32_t),
                                              static_cast<uint32_t>(this->selection_chunk->offset + sizeof(uint32_t)));
     }
 
