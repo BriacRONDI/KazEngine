@@ -130,13 +130,21 @@ namespace Tools
 
     std::string GetFileDirectory(std::string const& path)
     {
+        if(path.empty()) return "/";
         if(path[path.size() - 1] == '\\' || path[path.size() - 1] == '/') return path;
 
         std::size_t pos = path.find_last_of('/');
         if(pos == std::string::npos) pos = path.find_last_of('\\');
-        if(pos != std::string::npos) return path.substr(0, pos);
+        if(pos != std::string::npos) return path.substr(0, pos + 1);
 
-        return std::string();
+        return "/";
+    }
+
+    std::string FinishBySlash(std::string const& path)
+    {
+        if(path.empty()) return "/";
+        if(path[path.size() - 1] == '\\' || path[path.size() - 1] == '/') return path;
+        return path + '/';
     }
 
     std::string GetFileName(std::string const& path)

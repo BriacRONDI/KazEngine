@@ -9,6 +9,7 @@ namespace DataPacker
             this->size = other.size;
             this->position = other.position;
             this->name = std::move(other.name);
+            this->dependancies = std::move(other.dependancies);
             this->children = std::move(other.children);
             other.type = DATA_TYPE::UNDEFINED;
             other.size = 0;
@@ -25,6 +26,7 @@ namespace DataPacker
             this->size = other.size;
             this->position = other.position;
             this->name = other.name;
+            this->dependancies = other.dependancies;
             this->children = other.children;
         }
         return *this;
@@ -41,6 +43,15 @@ namespace DataPacker
         uint8_t name_length = static_cast<uint8_t>(this->name.size());
         output.insert(output.end(), &name_length, &name_length + sizeof(uint8_t));
         output.insert(output.end(), this->name.begin(), this->name.end());
+
+        // Dependancies
+        uint8_t dependancy_count = static_cast<uint8_t>(this->dependancies.size());
+        output.insert(output.end(), &dependancy_count, &dependancy_count + sizeof(uint8_t));
+        for(auto& dependancy : this->dependancies) {
+            uint8_t dependancy_length = static_cast<uint8_t>(dependancy.size());
+            output.insert(output.end(), &dependancy_length, &dependancy_length + sizeof(uint8_t));
+            output.insert(output.end(), dependancy.begin(), dependancy.end());
+        }
 
         // Data size
         std::vector<char> serialized_size = Packer::SerializeUint32(this->size);
@@ -81,6 +92,21 @@ namespace DataPacker
             if(name_length > 0) name = std::string(memory.begin() + position, memory.begin() + position + name_length);
             position += name_length;
 
+            // Dependancy count
+            uint8_t dependancy_count = memory[position];
+            position++;
+
+            // Dependancies
+            std::vector<std::string> dependancies;
+            for(uint8_t i=0; i<dependancy_count; i++) {
+                uint8_t dependancy_length = memory[position];
+                position++;
+                if(dependancy_length > 0) {
+                    dependancies.push_back(std::string(memory.begin() + position, memory.begin() + position + dependancy_length));
+                    position += dependancy_length;
+                }
+            }
+
             // Data size
             uint32_t data_size = *reinterpret_cast<const uint32_t*>(&memory[position]);
             position += sizeof(uint32_t);
@@ -90,7 +116,7 @@ namespace DataPacker
             if(Packer::IsContainer(type)) children = Packer::UnpackMemory(memory, position, data_size);
 
             // Add unpacked data to result vector
-            package.push_back({type, data_size, node_position, name, children});
+            package.push_back({type, data_size, node_position, name, dependancies, children});
 
             // Unpack next node
             position += data_size;
@@ -100,7 +126,8 @@ namespace DataPacker
     }
 
     bool Packer::PackToMemory(std::vector<char>& memory, std::string const& path, DATA_TYPE const type,
-                              std::string const& name, std::unique_ptr<char> const& data, uint32_t data_size)
+                              std::string const& name, std::unique_ptr<char> const& data, uint32_t data_size,
+                              std::vector<std::string> dependancies)
     {
         // Read data table
         std::vector<DATA> package;
@@ -112,11 +139,16 @@ namespace DataPacker
         // Only PARENT_NODE or ROOT_NODE can contain data
         if(pack.type != DATA_TYPE::PARENT_NODE && pack.type != DATA_TYPE::ROOT_NODE) return false;
 
+        // Name must be unique in the same directory
+        DATA unique_test = Packer::FindPackedItem(package, Tools::FinishBySlash(path) + name);
+        if(unique_test.type != DATA_TYPE::UNDEFINED) return false;
+
         // Create the new node to insert
         DATA node;
         node.name = name;
         node.type = type;
         node.size = data_size;
+        node.dependancies = dependancies;
         if(pack.type == DATA_TYPE::ROOT_NODE) node.position = pack.size;
         else node.position = pack.position + pack.HeaderSize() + pack.size;
 
@@ -161,6 +193,48 @@ namespace DataPacker
         // Update parents size if necessary
         int32_t size_change = static_cast<int32_t>(name.size() - pack.name.size());
         pack.name = name;
+
+        std::string parent_path = path;
+        if(parent_path[parent_path.size() - 1] == '/') parent_path = parent_path.substr(0, parent_path.size() - 1);
+        size_t pos = parent_path.find_last_of('/');
+        
+        // Path is direct root child => no parent
+        if(pos == 0) return;
+
+        parent_path = parent_path.substr(0, pos);
+        Packer::UpdatePackSize(memory, package, parent_path, size_change);
+    }
+
+    void Packer::SetNodeDependancy(std::vector<char>& memory, std::string path, uint8_t index, std::string value)
+    {
+        // Read data table
+        std::vector<DATA> package;
+        if(memory.size() > 0) package = Packer::UnpackMemory(memory);
+        else return;
+
+        // Find data in table
+        DATA& pack = Packer::FindPackedItem(package, path);
+        if(pack.dependancies.size() < index) return;
+
+        // Compute dependancy position inside buffer
+        uint32_t position = static_cast<uint32_t>(pack.position + sizeof(DATA_TYPE) + sizeof(uint8_t) + pack.name.size() + sizeof(uint8_t) + sizeof(uint8_t));
+        if(index > 0) for(uint8_t i=0; i<index; i++) position += static_cast<uint32_t>(sizeof(uint8_t) + pack.dependancies[i].size());
+
+        // Erase old dependancy
+        memory.erase(memory.begin() + position, memory.begin() + position + pack.dependancies[index].size());
+
+        // Insert new dependancy
+        memory.insert(memory.begin() + position, value.begin(), value.end());
+
+        // Change dependancy size
+        memory[position - sizeof(uint8_t)] = static_cast<uint8_t>(value.size());
+
+        // Path is root
+        if(!path.size() || path == "/") return;
+
+        // Update parents size if necessary
+        int32_t size_change = static_cast<int32_t>(value.size() - pack.dependancies[index].size());
+        pack.dependancies[index] = value;
 
         std::string parent_path = path;
         if(parent_path[parent_path.size() - 1] == '/') parent_path = parent_path.substr(0, parent_path.size() - 1);
@@ -348,7 +422,7 @@ namespace DataPacker
             if(pack.name == name) {
 
                 // Update node size
-                uint32_t size_position = static_cast<uint32_t>(pack.position + sizeof(DATA_TYPE) + sizeof(uint8_t) + pack.name.size());
+                uint32_t size_position = static_cast<uint32_t>(pack.position + sizeof(DATA_TYPE) + sizeof(uint8_t) + pack.name.size() + pack.HeaderDependanciesSize());
                 uint32_t new_size = pack.size + size_change;
                 *reinterpret_cast<uint32_t*>(memory.data() + size_position) = new_size;
 
@@ -407,6 +481,21 @@ namespace DataPacker
 
         // No element found
         return default_node;
+    }
+
+    void Packer::FixDependancies(std::vector<char>& memory, std::string old_path, std::string new_path, std::vector<DATA> package, std::string parent_path)
+    {
+        for(auto& item : package) {
+            for(uint8_t i=0; i<item.dependancies.size(); i++) {
+                if(item.dependancies[i].size() >= old_path.size() && item.dependancies[i].substr(0, old_path.size()) == old_path) {
+                    std::string new_dependancy_path = new_path;
+                    if(item.dependancies[i].size() > old_path.size()) new_dependancy_path += item.dependancies[i].substr(old_path.size());
+                    Packer::SetNodeDependancy(memory, parent_path + item.name, i, new_dependancy_path);
+                }
+            }
+
+            Packer::FixDependancies(memory, old_path, new_path, item.children, parent_path + item.name + "/");
+        }
     }
 
     std::string Packer::ParseString(std::vector<char> const& memory, uint32_t position, uint32_t size)

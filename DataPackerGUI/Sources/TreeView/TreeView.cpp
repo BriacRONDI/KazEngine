@@ -8,8 +8,8 @@ namespace DataPackerGUI
     TreeView::TreeView(HWND hwnd)
     {
         // Hook TreeView messages
-        if(TreeView::hook_handle[0] == nullptr) TreeView::hook_handle[0] = SetWindowsHookEx(WH_GETMESSAGE, GetMsgProc, nullptr, GetCurrentThreadId());
-        if(TreeView::hook_handle[1] == nullptr) TreeView::hook_handle[1] = SetWindowsHookEx(WH_CALLWNDPROC, Hookproc, nullptr, GetCurrentThreadId());
+        if(TreeView::hook_handle[0] == nullptr) TreeView::hook_handle[0] = SetWindowsHookEx(WH_GETMESSAGE, TreeView::GetMsgProc, nullptr, GetCurrentThreadId());
+        if(TreeView::hook_handle[1] == nullptr) TreeView::hook_handle[1] = SetWindowsHookEx(WH_CALLWNDPROC, TreeView::Hookproc, nullptr, GetCurrentThreadId());
 
         this->refcount = 0;
         HRESULT drag_register = RegisterDragDrop(hwnd, this);
@@ -332,10 +332,13 @@ namespace DataPackerGUI
                         break;
                     }
 
-                    case TVN_ITEMCHANGED :
+                    case TVN_SELCHANGED :
                     {
-                        NMTVITEMCHANGE & item_change = *reinterpret_cast<NMTVITEMCHANGE *>(uMsg.lParam);
-                        int a = 0;
+                        NMTREEVIEW& nm_treeview = *reinterpret_cast<NMTREEVIEW*>(uMsg.lParam);
+                        if(nm_treeview.itemNew.hItem != nullptr) {
+                            std::string path = target->GetPath(nm_treeview.itemNew.hItem);
+                            for(auto& listener : target->Listeners) listener->OnTvItemSelect(path);
+                        }
                         break;
                     }
                 }
@@ -358,12 +361,6 @@ namespace DataPackerGUI
             if(target == nullptr) return CallNextHookEx(TreeView::hook_handle[0], nCode, wParam, lParam);
 
             switch(uMsg.message) {
-
-                /*case WM_DROPFILES :
-                {
-                    MessageBox(nullptr, L"Filed dropped !", L"Message", MB_OK);
-                    break;
-                }*/
 
                 case WM_RBUTTONUP :
                 {

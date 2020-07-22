@@ -27,6 +27,9 @@
     <ClCompile Include="Sources\Import\FBX\FbxParser.cpp">
       <Filter>Fichiers sources</Filter>
     </ClCompile>
+    <ClCompile Include="Sources\ListView\ListView.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Sources\FileManager\FileManager.h">
@@ -48,6 +51,12 @@
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
     <ClInclude Include="Sources\Import\Parser\Parser.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\ListView\ListView.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\ListView\IListViewListener.h">
       <Filter>Fichiers d%27en-tête</Filter>
     </ClInclude>
   </ItemGroup>
@@ -74,6 +83,15 @@
       <Filter>Fichiers de ressources</Filter>
     </Image>
     <Image Include="Resources\material_small.ico">
+      <Filter>Fichiers de ressources</Filter>
+    </Image>
+    <Image Include="C:\Users\Kazuya\Documents\Attestation déplacement\bone-outline-filled.x16.png">
+      <Filter>Fichiers de ressources</Filter>
+    </Image>
+    <Image Include="bone.ico">
+      <Filter>Fichiers de ressources</Filter>
+    </Image>
+    <Image Include="Resources\bone.ico">
       <Filter>Fichiers de ressources</Filter>
     </Image>
   </ItemGroup>

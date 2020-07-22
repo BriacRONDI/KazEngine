@@ -75,6 +75,13 @@ namespace Tools
     std::string GetFileDirectory(std::string const& path);
 
     /**
+     * Make this path always finish by /
+     * @param path Given path
+     * @return Given path finished by /
+     */
+    std::string FinishBySlash(std::string const& path);
+
+    /**
      * Get the name of a file in a full path
      * @param path Full path to file
      * @return File name with extension

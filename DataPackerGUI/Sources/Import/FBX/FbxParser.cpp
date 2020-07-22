@@ -2,7 +2,7 @@
 
 namespace DataPackerGUI
 {
-    std::vector<char> FbxParser::ParseData(std::vector<char> const& data, std::string const& texture_directory)
+    std::vector<char> FbxParser::ParseData(std::vector<char> const& data, std::string const& texture_directory, std::string const& package_directory)
     {
         this->data = &data;
 
@@ -61,19 +61,21 @@ namespace DataPackerGUI
         std::vector<char> memory;
         std::vector<std::string> added_textures;
         std::vector<std::string> added_materials;
-        DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "textures", {}, 0);
-        DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "materials", {}, 0);
-        DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "meshes", {}, 0);
+        std::vector<std::string> dependancies;
+        // DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "textures", {}, 0);
+        // DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "materials", {}, 0);
+        // DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "meshes", {}, 0);
 
-        if(!this->bone_trees.empty())
-            DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "bones", {}, 0);
+        // if(!this->bone_trees.empty())
+        //    DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "bones", {}, 0);
 
         // Empaquetage des squelettes
         for(auto const& tree : this->bone_trees) {
             std::vector<char> serialized = tree.second.Serialize();
             std::unique_ptr<char> serialized_tree(serialized.data());
             std::cout << "Empaquetage du squelette [" << tree.first << "] : ";
-            DataPacker::Packer::PackToMemory(memory, "/bones", DataPacker::Packer::DATA_TYPE::BONE_TREE, tree.first, serialized_tree, static_cast<uint32_t>(serialized.size()));
+            dependancies.push_back(package_directory + "/" + tree.first);
+            DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::BONE_TREE, tree.first, serialized_tree, static_cast<uint32_t>(serialized.size()));
             serialized_tree.release();
 
             Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
@@ -92,7 +94,10 @@ namespace DataPackerGUI
                     uint32_t serialized_material_size;
                     std::unique_ptr<char> serialized_material = this->engine_materials[material.first].Serialize(serialized_material_size);
                     std::cout << "Empaquetage de matériau [" << material.first << "] : ";
-                    DataPacker::Packer::PackToMemory(memory, "/materials", DataPacker::Packer::DATA_TYPE::MATERIAL_DATA, material.first, serialized_material, serialized_material_size);
+                    std::vector<std::string> textures;
+                    dependancies.push_back(package_directory + "/" + material.first);
+                    if(!this->engine_materials[material.first].texture.empty()) textures.push_back(package_directory + "/" + this->engine_materials[material.first].texture);
+                    DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::MATERIAL_DATA, material.first, serialized_material, serialized_material_size, textures);
 
                     Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
                     std::cout << "OK" << std::endl;
@@ -123,8 +128,8 @@ namespace DataPackerGUI
                         }else{
                             // Empaquetage de la texture
                             std::unique_ptr<char> file_content_ptr(file_content.data());
-                            DataPacker::Packer::PackToMemory(memory, "/textures", DataPacker::Packer::DATA_TYPE::IMAGE_FILE,
-                                                         filename, file_content_ptr, static_cast<uint32_t>(file_content.size()));
+                            DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::IMAGE_FILE, filename,
+                                                             file_content_ptr, static_cast<uint32_t>(file_content.size()));
                             file_content_ptr.release();
                         
                             Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
@@ -142,7 +147,7 @@ namespace DataPackerGUI
             uint32_t serialized_mesh_size;
             std::unique_ptr<char> serialized_mesh = mesh.Serialize(serialized_mesh_size);
             std::cout << "Empaquetage de mesh [" << mesh.name << "] : ";
-            DataPacker::Packer::PackToMemory(memory, "/meshes", DataPacker::Packer::DATA_TYPE::MESH_DATA, mesh.name, serialized_mesh, serialized_mesh_size);
+            DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::MESH_DATA, mesh.name, serialized_mesh, serialized_mesh_size, dependancies);
 
             Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
             std::cout << "OK" << std::endl;

@@ -4,13 +4,16 @@ namespace DataPackerGUI
 {
     FileManager* FileManager::instance = nullptr;
 
-    FileManager& FileManager::CreateInstance(HWND& hwnd, TreeView* tree_view)
+    FileManager& FileManager::CreateInstance(HWND& hwnd, TreeView* tree_view, ListView* list_view_main, ListView* list_view_inspect)
     {
         if(FileManager::instance == nullptr) {
             FileManager::instance = new FileManager;
             FileManager::instance->hwnd = hwnd;
             FileManager::instance->tree_view = tree_view;
+            FileManager::instance->list_view_main = list_view_main;
+            FileManager::instance->list_view_inspect = list_view_inspect;
             tree_view->AddListener(FileManager::instance);
+            list_view_main->AddListener(FileManager::instance);
         }
 
         return *FileManager::instance;
@@ -21,6 +24,7 @@ namespace DataPackerGUI
         if(FileManager::instance != nullptr) {
             if(FileManager::instance->tree_view != nullptr) {
                 FileManager::instance->tree_view->RemoveListener(FileManager::instance);
+                FileManager::instance->list_view_main->RemoveListener(FileManager::instance);
                 FileManager::instance->tree_view = nullptr;
             }
             delete FileManager::instance;
@@ -106,6 +110,7 @@ namespace DataPackerGUI
             else if(pack.type == DataPacker::Packer::MESH_DATA) image = 2;
             else if(pack.type == DataPacker::Packer::MATERIAL_DATA) image = 3;
             else if(pack.type == DataPacker::Packer::IMAGE_FILE) image = 4;
+            else if(pack.type == DataPacker::Packer::BONE_TREE) image = 5;
 
             HTREEITEM item = this->tree_view->InsertItem(pack.name, parent, TVI_LAST, image, image);
             this->BuildTreeFromPackage(item, pack.children);
@@ -228,6 +233,11 @@ namespace DataPackerGUI
         // Change item label and node name
         this->tree_view->SetItemName(item, label);
         DataPacker::Packer::SetNodeName(this->data, path, label);
+
+        // Any reference to this item and its children must be fixed
+        auto package = DataPacker::Packer::UnpackMemory(this->data);
+        DataPacker::Packer::FixDependancies(this->data, path, new_path, package);
+
         this->need_save = true;
         this->UpdateTitle();
     }
@@ -236,6 +246,12 @@ namespace DataPackerGUI
     {
         bool moved = DataPacker::Packer::MoveNode(this->data, source_path, dest_path);
         if(moved) {
+            
+            // Any reference to this item and its children must be fixed
+            auto package = DataPacker::Packer::UnpackMemory(this->data);
+            std::string moved_path = Tools::FinishBySlash(dest_path) + Tools::GetFileName(source_path);
+            DataPacker::Packer::FixDependancies(this->data, source_path, moved_path, package);
+
             this->RefreshTreeView();
             this->need_save = true;
             this->UpdateTitle();
@@ -288,13 +304,14 @@ namespace DataPackerGUI
                     
                     // Parse FBX
                     FbxParser parser;
-                    std::vector<char> package = parser.ParseData(fbx_data, texture_path);
+                    std::string package_directory = Tools::FinishBySlash(dest_path) + filename;
+                    std::vector<char> package = parser.ParseData(fbx_data, texture_path, package_directory);
 
                     // Pack data to destination path
                     std::unique_ptr<char> package_ptr(package.data());
-                    DataPacker::Packer::PackToMemory(this->data, dest_path, DataPacker::Packer::DATA_TYPE::MODEL_TREE, filename, package_ptr, static_cast<uint32_t>(package.size()));
+                    bool packed = DataPacker::Packer::PackToMemory(this->data, dest_path, DataPacker::Packer::DATA_TYPE::MODEL_TREE, filename, package_ptr, static_cast<uint32_t>(package.size()));
                     package_ptr.release();
-                    this->need_save = true;
+                    this->need_save = packed;
 
                 } else {
 
@@ -368,8 +385,92 @@ namespace DataPackerGUI
         else if(type == DataPacker::Packer::MESH_DATA) image = 2;
         else if(type == DataPacker::Packer::MATERIAL_DATA) image = 3;
         else if(type == DataPacker::Packer::IMAGE_FILE) image = 4;
+        else if(type == DataPacker::Packer::BONE_TREE) image = 5;
 
         HTREEITEM item = this->tree_view->FindItem(path);
         this->tree_view->SetItemImage(item, image);
+    }
+
+    void FileManager::OnTvItemSelect(std::string const& path)
+    {
+        DataPacker::Packer::DATA_TYPE type = DataPacker::Packer::GetNodeType(this->data, path);
+        this->list_view_main->Clear();
+
+        switch(type)
+        {
+            case DataPacker::Packer::MESH_DATA :
+            {   
+                auto data_tree = DataPacker::Packer::UnpackMemory(this->data);
+                auto node = DataPacker::Packer::FindPackedItem(data_tree, path);
+                std::shared_ptr<Model::Mesh> mesh(new Model::Mesh);
+                mesh->Deserialize(node.Data(this->data.data()));
+                this->list_view_main->Display(mesh);
+                EnableWindow(this->list_view_main->GetHwnd(), TRUE);
+                return;
+            }
+        }
+
+        EnableWindow(this->list_view_main->GetHwnd(), FALSE);
+        this->list_view_inspect->Hide();
+    }
+
+    void FileManager::OnLvItemSelect(ListView& list_view, int item_index)
+    {
+        HTREEITEM selected = this->tree_view->GetSelectedItem();
+        if(selected == nullptr) return;
+
+        std::string path = this->tree_view->GetPath(selected);
+        std::string field_name = list_view.GetSubItemText(item_index, 0);
+
+        if(field_name == "Vertices") {
+            auto data_tree = DataPacker::Packer::UnpackMemory(this->data);
+            auto node = DataPacker::Packer::FindPackedItem(data_tree, path);
+            std::shared_ptr<Model::Mesh> mesh(new Model::Mesh);
+            mesh->Deserialize(node.Data(this->data.data()));
+            this->list_view_inspect->Display(mesh->vertex_buffer);
+            this->list_view_inspect->Show();
+
+        } else if(field_name == "Indices") {
+            auto data_tree = DataPacker::Packer::UnpackMemory(this->data);
+            auto node = DataPacker::Packer::FindPackedItem(data_tree, path);
+            std::shared_ptr<Model::Mesh> mesh(new Model::Mesh);
+            mesh->Deserialize(node.Data(this->data.data()));
+            this->list_view_inspect->Display(mesh->index_buffer);
+            this->list_view_inspect->Show();
+
+        } else if(field_name == "UV") {
+            auto data_tree = DataPacker::Packer::UnpackMemory(this->data);
+            auto node = DataPacker::Packer::FindPackedItem(data_tree, path);
+            std::shared_ptr<Model::Mesh> mesh(new Model::Mesh);
+            mesh->Deserialize(node.Data(this->data.data()));
+            this->list_view_inspect->Display(mesh->uv_buffer);
+            this->list_view_inspect->Show();
+
+        } else if(field_name == "Dependances") {
+            auto data_tree = DataPacker::Packer::UnpackMemory(this->data);
+            auto node = DataPacker::Packer::FindPackedItem(data_tree, path);
+            this->list_view_inspect->Display(node.dependancies);
+            this->list_view_inspect->Show();
+
+        } else if(field_name == "Material") {
+
+            std::string field_value = list_view.GetSubItemText(item_index, 1);
+            auto data_tree = DataPacker::Packer::UnpackMemory(this->data);
+            auto node = DataPacker::Packer::FindPackedItem(data_tree, path);
+            std::shared_ptr<Model::Mesh> mesh(new Model::Mesh);
+            mesh->Deserialize(node.Data(this->data.data()));
+
+            std::string material_name = field_value.substr(1);
+            for(uint8_t i=0; i<mesh->materials.size(); i++) {
+                if(mesh->materials[i].first == material_name) {
+                    this->list_view_inspect->Display(mesh->materials[i]);
+                    this->list_view_inspect->Show();
+                    break;
+                }
+            }
+
+        } else {
+            this->list_view_inspect->Hide();
+        }
     }
 }

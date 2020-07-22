@@ -90,7 +90,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-release\include;$(SolutionDir)DataPacker\Sources;$(SolutionDir)Maths\Sources;$(SolutionDir)Tools\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-release\include;$(SolutionDir)DataPacker\Sources;$(SolutionDir)Maths\Sources;$(SolutionDir)Tools\Sources;$(SolutionDir)EngineModel\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>Default</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
@@ -100,7 +100,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-release\lib;$(SolutionDir)$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>Comdlg32.lib;Comctl32.lib;Ole32.lib;Shell32.lib;zlib.lib;Tools.lib;DataPacker.lib;EngineModel.lib;LogManager.lib</AdditionalDependencies>
+      <AdditionalDependencies>Comdlg32.lib;Comctl32.lib;Ole32.lib;Shell32.lib;zlib.lib;DataPacker.lib;EngineModel.lib;LogManager.lib;Gdi32.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -121,14 +121,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-debug\include;$(SolutionDir)Maths\Sources;$(SolutionDir)DataPacker\Sources;$(SolutionDir)Tools\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-debug\include;$(SolutionDir)Maths\Sources;$(SolutionDir)DataPacker\Sources;$(SolutionDir)Tools\Sources;$(SolutionDir)EngineModel\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-debug\lib;$(SolutionDir)$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>DataPacker.lib;Comdlg32.lib;Tools.lib;Comctl32.lib;Ole32.lib;Shell32.lib;zlibd.lib;EngineModel.lib;LogManager.lib</AdditionalDependencies>
+      <AdditionalDependencies>DataPacker.lib;Comdlg32.lib;Comctl32.lib;Ole32.lib;Shell32.lib;zlibd.lib;EngineModel.lib;LogManager.lib;Gdi32.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -149,6 +149,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Sources\FileManager\FileManager.cpp" />
+    <ClCompile Include="Sources\ListView\ListView.cpp" />
     <ClCompile Include="Sources\Main.cpp" />
     <ClCompile Include="Sources\Import\FBX\FbxParser.cpp" />
     <ClCompile Include="Sources\TreeView\TreeView.cpp" />
@@ -159,6 +160,8 @@
     <ClInclude Include="Sources\Import\FBX\FbxParser.h" />
     <ClInclude Include="Sources\Import\Import.h" />
     <ClInclude Include="Sources\Import\Parser\Parser.h" />
+    <ClInclude Include="Sources\ListView\IListViewListener.h" />
+    <ClInclude Include="Sources\ListView\ListView.h" />
     <ClInclude Include="Sources\TreeView\ITreeViewListener.h" />
     <ClInclude Include="Sources\TreeView\TreeView.h" />
   </ItemGroup>
@@ -166,7 +169,10 @@
     <ResourceCompile Include="Resources\Resource.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="bone.ico" />
+    <Image Include="C:\Users\Kazuya\Documents\Attestation déplacement\bone-outline-filled.x16.png" />
     <Image Include="Resources\3dmodels.ico" />
+    <Image Include="Resources\bone.ico" />
     <Image Include="Resources\closed_folder.ico" />
     <Image Include="Resources\icon.ico" />
     <Image Include="Resources\material.ico" />

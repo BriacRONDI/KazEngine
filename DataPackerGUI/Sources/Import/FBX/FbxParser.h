@@ -30,7 +30,7 @@ namespace DataPackerGUI
     {
         public :
         
-            virtual std::vector<char> ParseData(std::vector<char> const& data, std::string const& texture_directory = {});
+            virtual std::vector<char> ParseData(std::vector<char> const& data, std::string const& texture_directory = {}, std::string const& package_directory = "/");
 
         private :
 

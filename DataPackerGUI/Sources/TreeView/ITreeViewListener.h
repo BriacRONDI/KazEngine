@@ -36,5 +36,11 @@ namespace DataPackerGUI
              * @param dest_path Target item path
              */
             virtual void OnDropFiles(std::vector<std::wstring> const& files_path, std::string const& dest_path) = 0;
+
+            /**
+             * An item has been selected
+             * @param path of target item
+             */
+            virtual void OnTvItemSelect(std::string const& path) = 0;
     };
 }

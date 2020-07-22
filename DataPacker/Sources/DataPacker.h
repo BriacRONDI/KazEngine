@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <string>
+#include <Tools.h>
 #include "../../Maths/Sources/Maths.h"
 
 namespace DataPacker
@@ -38,6 +39,9 @@ namespace DataPacker
                 /// Data name
                 std::string name;
 
+                /// Object dependancies
+                std::vector<std::string> dependancies;
+
                 /// Children data if this node is parent
                 std::vector<DATA> children;
 
@@ -45,10 +49,10 @@ namespace DataPacker
                 DATA() : type(DATA_TYPE::UNDEFINED), size(0), position(0) {}
 
                 /// Copy constructor
-                DATA(DATA const& other) : type(other.type), size(other.size), position(other.position), name(other.name), children(other.children) {}
+                DATA(DATA const& other) : type(other.type), size(other.size), position(other.position), name(other.name), dependancies(other.dependancies), children(other.children) {}
 
                 /// Explicit values constructor
-                DATA(DATA_TYPE type, uint32_t size, uint32_t position, std::string const& name, std::vector<DATA> const& children) : type(type), size(size), position(position), name(name), children(children) {}
+                DATA(DATA_TYPE type, uint32_t size, uint32_t position, std::string const& name, std::vector<std::string> dependancies, std::vector<DATA> const& children) : type(type), size(size), position(position), name(name), dependancies(dependancies), children(children) {}
                 
                 /// Move constructor
                 DATA(DATA&& other) { *this = std::move(other); }
@@ -62,8 +66,11 @@ namespace DataPacker
                 /// Convert this struct to serialized string
                 std::vector<char> Serialize() const;
 
+                /// Compute serialized header dependancies size
+                inline uint32_t HeaderDependanciesSize() const { size_t size = 0; for(auto& dep : this->dependancies) size += dep.size(); return static_cast<uint32_t>(sizeof(uint8_t) * this->dependancies.size() + size + 1); }
+
                 /// Compute serialized header size
-                inline uint32_t HeaderSize() const { return this->type == DATA_TYPE::ROOT_NODE ? 0 : static_cast<uint32_t>(sizeof(DATA_TYPE) + sizeof(uint8_t) + this->name.size() + sizeof(uint32_t)); }
+                inline uint32_t HeaderSize() const { return this->type == DATA_TYPE::ROOT_NODE ? 0 : static_cast<uint32_t>(sizeof(DATA_TYPE) + sizeof(uint8_t) + this->name.size() + sizeof(uint32_t) + this->HeaderDependanciesSize()); }
 
                 /// Get a pointer on the target buffer
                 inline const char* Data(const char* buffer) { return buffer + this->position + this->HeaderSize(); }
@@ -86,11 +93,13 @@ namespace DataPacker
              * @param name Insertion name
              * @param data Serialized data to insert
              * @param data_size Serialized data size
+             * @param dependancies Object dependancies
              * @retval true Success
              * @retval false Data not inserted
              */
             static bool PackToMemory(std::vector<char>& memory, std::string const& path, DATA_TYPE const type,
-                                     std::string const& name, std::unique_ptr<char> const& data, uint32_t data_size);
+                                     std::string const& name, std::unique_ptr<char> const& data, uint32_t data_size,
+                                     std::vector<std::string> dependancies = {});
 
             /**
              * Change the name of the specified node
@@ -153,6 +162,25 @@ namespace DataPacker
              */
             static inline bool IsContainer(DATA_TYPE type) { return type == DATA_TYPE::ROOT_NODE || type == DATA_TYPE::PARENT_NODE || type == DATA_TYPE::MODEL_TREE; }
             
+            /**
+             * Repair broken references to a modified path
+             * @param memory Data buffer
+             * @param old_path Broken dependancy path
+             * @param new_path New dependancy path
+             * @param package Unpacked memory package
+             * @param parent_path Path to target node to update
+             */
+            static void FixDependancies(std::vector<char>& memory, std::string old_path, std::string new_path, std::vector<DATA> package, std::string parent_path = "/");
+
+            /**
+             * Change the value of the specified dependancy
+             * @param memory Data buffer
+             * @param path Specified node
+             * @param index Dependancy index
+             * @param value Dependancy value
+             */
+            static void SetNodeDependancy(std::vector<char>& memory, std::string path, uint8_t index, std::string value);
+
             static inline std::vector<char> SerializeUint32(uint32_t value) { return std::vector<char>(reinterpret_cast<char*>(&value), reinterpret_cast<char*>(&value) + sizeof(uint32_t)); }
             static std::vector<char> SerializeVector3Array(std::vector<Maths::Vector3> const& array);
             static std::vector<char> SerializeVector2Array(std::vector<Maths::Vector2> const& array);

@@ -10,18 +10,19 @@
 #include "../../DataPacker/Sources/DataPacker.h"
 #include "../TreeView/TreeView.h"
 #include "../Import/Import.h"
+#include "../ListView/ListView.h"
 
 namespace DataPackerGUI
 {
     /**
      * Allow GUI to open/close/save files
      */
-    class FileManager : public ITreeViewListener
+    class FileManager : public ITreeViewListener, public IListViewListener
     {
         public :
 
             /// Singleton instance creation
-            static FileManager& CreateInstance(HWND& hwnd, TreeView* tree_view);
+            static FileManager& CreateInstance(HWND& hwnd, TreeView* tree_view, ListView* list_view_main, ListView* list_view_inspect);
 
             /// Singleton instance access
             static inline FileManager& GetInstance() { return *FileManager::instance; }
@@ -31,6 +32,9 @@ namespace DataPackerGUI
 
             /// Get the linked TreeView
             inline TreeView& GetLinkedTreeView() { return *this->tree_view; }
+
+            /// Get the linked ListView
+            inline ListView& GetMainListView() { return *this->list_view_main; }
 
             /// Open a file
             void OpenFile();
@@ -86,6 +90,13 @@ namespace DataPackerGUI
             virtual void OnLabelEdit(std::string const& path, std::string const& label);
             virtual void OnDropItem(std::string const& source_path, std::string const& dest_path);
             virtual void OnDropFiles(std::vector<std::wstring> const& files_path, std::string const& dest_path);
+            virtual void OnTvItemSelect(std::string const& path);
+
+            ///////////////////////
+            // IListViewListener //
+            ///////////////////////
+
+            virtual void OnLvItemSelect(ListView& list_view, int item_index);
 
         private :
 
@@ -106,6 +117,12 @@ namespace DataPackerGUI
 
             /// Linked TreeView
             TreeView* tree_view = nullptr;
+
+            /// Object properties ListView
+            ListView* list_view_main = nullptr;
+
+            /// Properties values ListView
+            ListView* list_view_inspect = nullptr;
 
             /// Display filename in window title
             void UpdateTitle();

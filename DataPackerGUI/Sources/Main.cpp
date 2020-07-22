@@ -15,6 +15,7 @@
 #include "../Resources/resource.h"
 #include "./FileManager/FileManager.h"
 #include "./TreeView/TreeView.h"
+#include "./ListView/ListView.h"
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 HIMAGELIST InitImageList(HMODULE hinstance);
@@ -33,11 +34,19 @@ int main(char* argc, char** argv)
     HWND hwnd = CreateDialog(nullptr, MAKEINTRESOURCE(IDD_MAIN_WINDOW), nullptr, (DLGPROC)WindowProc);
 
     DataPackerGUI::TreeView tree_view(GetDlgItem(hwnd, IDC_TREE));
+    DataPackerGUI::ListView list_view_main(GetDlgItem(hwnd, IDC_LIST_MAIN));
+    DataPackerGUI::ListView list_view_inspect(GetDlgItem(hwnd, IDC_LIST_BUFFER));
+
+    list_view_main.InsertColumn("Field", 100);
+    list_view_main.InsertColumn("Value", 240);
+
+    // list_view_inspect.InsertColumn("ID", 30);
+    // list_view_inspect.InsertColumn("Value", 310);
+
     HIMAGELIST image_list = InitImageList(GetModuleHandle(nullptr));
     tree_view.SetImageList(image_list);
 
-    DataPackerGUI::FileManager& file_manager = DataPackerGUI::FileManager::CreateInstance(hwnd, &tree_view);
-
+    DataPackerGUI::FileManager& file_manager = DataPackerGUI::FileManager::CreateInstance(hwnd, &tree_view, &list_view_main, &list_view_inspect);
 
     while(true) 
     {
@@ -73,11 +82,11 @@ HIMAGELIST InitImageList(HMODULE hinstance)
     HIMAGELIST image_list = ImageList_Create(16, 16, ILC_COLORDDB | ILC_MASK, 6, 1);
 
     ImageList_AddIcon(image_list, LoadIcon(hinstance, MAKEINTRESOURCE(IDI_MAIN_ICON)));
-    // ImageList_AddIcon(image_list, LoadIcon(hinstance, MAKEINTRESOURCE(IDI_FOLDER_OPENED)));
     ImageList_AddIcon(image_list, LoadIcon(hinstance, MAKEINTRESOURCE(IDI_FOLDER_CLOSED)));
     ImageList_AddIcon(image_list, LoadIcon(hinstance, MAKEINTRESOURCE(IDI_MESH)));
     ImageList_AddIcon(image_list, LoadIcon(hinstance, MAKEINTRESOURCE(IDI_MATERIAL)));
     ImageList_AddIcon(image_list, LoadIcon(hinstance, MAKEINTRESOURCE(IDI_TEXTURE)));
+    ImageList_AddIcon(image_list, LoadIcon(hinstance, MAKEINTRESOURCE(IDI_BONE)));
 
     return image_list;
 }
@@ -118,9 +127,26 @@ LRESULT WINAPI WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         case WM_SIZE :
         {
             HWND tree = GetDlgItem(hwnd, IDC_TREE);
-            constexpr int margin = 11;
-            MoveWindow(tree, margin, margin, LOWORD(lParam) - margin * 2, HIWORD(lParam) - margin * 2, TRUE);
+            HWND main_list = GetDlgItem(hwnd, IDC_LIST_MAIN);
+            HWND prop_list = GetDlgItem(hwnd, IDC_LIST_BUFFER);
+            int margin = 11;
+            int tree_width = LOWORD(lParam) - margin * 3 - 344;
+            MoveWindow(tree, margin, margin, tree_width, HIWORD(lParam) - margin * 2, TRUE);
+            MoveWindow(main_list, tree_width + margin * 2, margin, 344, 130, TRUE);
+            MoveWindow(prop_list, tree_width + margin * 2, 146, 344, HIWORD(lParam) - 157, TRUE);
             return TRUE;
+        }
+
+        case WM_NOTIFY :
+        {
+            switch(((LPNMHDR)lParam)->code)
+            {
+                case NM_CUSTOMDRAW :
+                   SetWindowLongPtr(hwnd, DWLP_MSGRESULT, (LONG_PTR)DataPackerGUI::ListView::ProcessCustomDraw(lParam));
+                   return TRUE;
+            }
+
+            break;
         }
  
         case WM_COMMAND:

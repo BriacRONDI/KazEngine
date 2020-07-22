@@ -15,8 +15,13 @@
 #define IDI_ICON1                       112
 #define IDR_TREE_CONTEXT_BINARY         113
 #define IDR_TREE_CONTEXT_ROOT           114
-#define IDC_TREE1                       1001
+#define IDI_ICON2                       117
+#define IDI_BONE                        117
 #define IDC_TREE                        1001
+#define IDC_LIST                        1007
+#define IDC_LIST_MAIN                   1007
+#define IDC_LIST1                       1010
+#define IDC_LIST_BUFFER                 1010
 #define ID_FICHIER_OUVRIR               40001
 #define ID_FICHIER_OUVRIR40002          40002
 #define ID_FICHIER_ENREGISTRER          40003
@@ -53,9 +58,9 @@
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
-#define _APS_NEXT_RESOURCE_VALUE        115
+#define _APS_NEXT_RESOURCE_VALUE        118
 #define _APS_NEXT_COMMAND_VALUE         40031
-#define _APS_NEXT_CONTROL_VALUE         1002
+#define _APS_NEXT_CONTROL_VALUE         1011
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
