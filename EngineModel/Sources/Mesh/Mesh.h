@@ -34,11 +34,6 @@ namespace Model
                 uint32_t first_index;
             };
 
-            struct HIT_BOX {
-                Maths::Vector3 near_left_bottom_point;
-                Maths::Vector3 far_right_top_point;
-            };
-
             enum RENDER_MASK : uint16_t {
                 RENDER_INVALID          = 0b0000'0000'0000'0000,
                 RENDER_POSITION         = 0b0000'0000'0000'0001,
@@ -62,13 +57,11 @@ namespace Model
             std::vector<Deformer> deformers;
             std::string skeleton;
             uint16_t render_mask;
-            HIT_BOX* hit_box = nullptr;
             
             std::unique_ptr<char> BuildVBO(size_t& output_size, size_t& index_buffer_offset);
             void UpdateRenderMask(std::map<std::string, MATERIAL> const& materials);
             std::unique_ptr<char> Serialize(uint32_t& output_size);
             size_t Deserialize(const char* data);
-            void SetHitBox(HIT_BOX hit_box);
             ~Mesh();
 
         protected :

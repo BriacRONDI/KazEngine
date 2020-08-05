@@ -152,10 +152,10 @@
     <ClCompile Include="Sources\Entity\DynamicEntity\DynamicEntity.cpp" />
     <ClCompile Include="Sources\Entity\Entity.cpp" />
     <ClCompile Include="Sources\Entity\StaticEntity\StaticEntity.cpp" />
+    <ClCompile Include="Sources\LOD\LOD.cpp" />
     <ClCompile Include="Sources\Main.cpp" />
     <ClCompile Include="Sources\ManagedBuffer\Chunk\Chunk.cpp" />
     <ClCompile Include="Sources\ManagedBuffer\ManagedBuffer.cpp" />
-    <ClCompile Include="Sources\LoadedMesh\LoadedMesh.cpp" />
     <ClCompile Include="Sources\DataBank\DataBank.cpp" />
     <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp" />
     <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp" />
@@ -181,9 +181,9 @@
     <ClInclude Include="Sources\Entity\Entity.h" />
     <ClInclude Include="Sources\Entity\IEntityListener.h" />
     <ClInclude Include="Sources\Entity\StaticEntity\StaticEntity.h" />
+    <ClInclude Include="Sources\LOD\LOD.h" />
     <ClInclude Include="Sources\ManagedBuffer\Chunk\Chunk.h" />
     <ClInclude Include="Sources\ManagedBuffer\ManagedBuffer.h" />
-    <ClInclude Include="Sources\LoadedMesh\LoadedMesh.h" />
     <ClInclude Include="Sources\DataBank\DataBank.h" />
     <ClInclude Include="Sources\Platform\Common\Timer\ITimerListener.h" />
     <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h" />

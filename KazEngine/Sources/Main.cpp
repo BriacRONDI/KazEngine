@@ -59,11 +59,13 @@ int main(int argc, char** argv)
     debug_line3.properties.matrix = Maths::Matrix4x4::TranslationMatrix({0.0f, -3.0f, 0.0f}) * Maths::Matrix4x4::RotationMatrix({0.0f, -1.0f, 0.0f}, {1.0f, 0.0f, 0.0f});
     */
 
+    auto data_buffer = Tools::GetBinaryFileContents("data2.kea");
+
     ////////////////////////
     // MONO TEXTURED_CUBE //
     ////////////////////////
     
-    auto data_buffer = Tools::GetBinaryFileContents("data.kea");
+    /*auto data_buffer = Tools::GetBinaryFileContents("data.kea");
     auto concrete_jpg = Engine::DataBank::GetImageFromPackage(data_buffer, "/mono_textured_cube/concrete.jpg");
     Engine::DataBank::AddTexture(concrete_jpg, "concrete.jpg");
     auto cube_mesh = Engine::DataBank::GetMeshFromPackage(data_buffer, "/mono_textured_cube/MT_Cube");
@@ -75,12 +77,10 @@ int main(int argc, char** argv)
     Engine::StaticEntity cube1;
     cube1.SetMatrix(Maths::Matrix4x4::TranslationMatrix({-2.0f, -1.0f, 0.0f}));
     cube1.AddMesh(cube_mesh);
-    // engine.GetEntityRender().AddEntity(cube1);
 
     Engine::StaticEntity cube2;
     cube2.SetMatrix(Maths::Matrix4x4::TranslationMatrix({2.0f, -1.0f, 0.0f}));
-    cube2.AddMesh(cube_mesh);
-    // engine.GetEntityRender().AddEntity(cube2);
+    cube2.AddMesh(cube_mesh);*/
 
     ////////////////
     // SIMPLE GUY //
@@ -88,19 +88,25 @@ int main(int argc, char** argv)
 
     auto simple_guy_png = Engine::DataBank::GetImageFromPackage(data_buffer, "/SimpleGuy/SimpleGuy.2.0.png");
     Engine::DataBank::AddTexture(simple_guy_png, "SimpleGuy.2.0.png");
-    auto simple_guy_mesh = Engine::DataBank::GetMeshFromPackage(data_buffer, "/SimpleGuy/Body");
+    auto simple_guy_mesh = Engine::DataBank::GetMeshFromPackage(data_buffer, "/SimpleGuy/Body_LOD3");
     simple_guy_mesh->UpdateRenderMask({});
     simple_guy_mesh->render_mask |= Model::Mesh::RENDER_TEXTURE;
-    simple_guy_mesh->SetHitBox({{-0.25f, 0.0f, 0.25f},{0.25f, -1.3f, -0.25f}});
+    // simple_guy_mesh->SetHitBox({{-0.25f, 0.0f, 0.25f},{0.25f, -1.3f, -0.25f}});
     auto simple_guy_skeleton = Engine::DataBank::GetSkeletonFromPackage(data_buffer, "/SimpleGuy/Armature");
     Engine::DataBank::AddSkeleton(simple_guy_skeleton, "Armature");
     auto simple_guy_material = Engine::DataBank::GetMaterialFromPackage(data_buffer, "/SimpleGuy/AO");
     Engine::DataBank::AddMaterial(simple_guy_material, "AO");
 
+    std::shared_ptr<Engine::LODGroup> simple_guy_lod = std::shared_ptr<Engine::LODGroup>(new Engine::LODGroup);
+    simple_guy_lod->AddLOD(simple_guy_mesh, 0);
+    simple_guy_lod->SetHitBox({{-0.25f, 0.0f, 0.25f},{0.25f, -1.3f, -0.25f}});
+
     Engine::DynamicEntity guy;
-    guy.AddMesh(simple_guy_mesh);
+    // guy.AddMesh(simple_guy_mesh);
     // engine.GetEntityRender().AddEntity(guy);
+    guy.AddLOD(simple_guy_lod);
     guy.PlayAnimation("Armature|Walk", 1.0f, true);
+    
 
     Engine::Camera::GetInstance().SetPosition({0.0f, 5.0f, -4.0f});
     Engine::Camera::GetInstance().Rotate({0.0f, Maths::F_PI_4, 0.0f});
@@ -151,13 +157,14 @@ int main(int argc, char** argv)
         ///////////////
         // FRAMERATE //
         ///////////////
+        static int count = 0;
         frame_count++;
         if(refresh_timer.GetProgression() >= 1.0f) {
             float fps = static_cast<float>((float)frame_count / framerate_timer.GetProgression());
             if(Engine::Mouse::GetInstance().IsClipped()) {
-                main_window->SetTitle("KazEngine [" + Tools::to_string_with_precision(fps, 1) + " FPS] [" + std::to_string(guys.size()) + " Units] (Appuyez sur ESC pour liberer la souris)");
+                main_window->SetTitle("KazEngine [" + Tools::to_string_with_precision(fps, 1) + " FPS] [" + std::to_string(guys.size()) + " Units] [Frame " + std::to_string(count) + "] (Appuyez sur ESC pour liberer la souris)");
             }else{
-                main_window->SetTitle("KazEngine [" + Tools::to_string_with_precision(fps, 1) + " FPS] [" + std::to_string(guys.size()) + " Units] (Cliquez sur la fenetre pour capturer la souris)");
+                main_window->SetTitle("KazEngine [" + Tools::to_string_with_precision(fps, 1) + " FPS] [" + std::to_string(guys.size()) + " Units] [Frame " + std::to_string(count) + "] (Cliquez sur la fenetre pour capturer la souris)");
             }
 
             refresh_timer.Start(std::chrono::milliseconds(50));
@@ -172,13 +179,22 @@ int main(int argc, char** argv)
         // ENTITIES //
         //////////////
 
-        static int count = 0;
+        
+        if(/*count < 1000 && */dynamic_entity_add_start.GetProgression() >= 1.0f && Engine::Keyboard::GetInstance().IsPressed(VK_RETURN)) {
+            guy.SetAnimationFrame("Armature|Walk", count);
+            count++;
+            count = count % 31;
+
+            dynamic_entity_add_start.Start(std::chrono::milliseconds(100));
+        }
+
+        
         if(/*count < 1000 && */dynamic_entity_add_start.GetProgression() >= 1.0f && Engine::Keyboard::GetInstance().IsPressed(VK_SPACE)) {
 
             uint32_t step = 1;
             for(uint32_t i=0; i<step; i++) {
                 auto new_entity = std::shared_ptr<Engine::DynamicEntity>(new Engine::DynamicEntity);
-                new_entity->AddMesh(simple_guy_mesh);
+                // new_entity->AddMesh(simple_guy_mesh);
 
                 guys.resize(guys.size() + 1);
                 guys[guys.size()-1] = new_entity;

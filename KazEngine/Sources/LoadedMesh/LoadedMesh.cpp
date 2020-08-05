@@ -72,14 +72,6 @@ namespace Engine
 
         vkCmdBindVertexBuffers(command_buffer, 0, 1, &buffer, &this->vertex_buffer_chunk->offset);
 
-        /*std::vector<std::vector<VkDrawIndirectCommand>> staging_buffers(3);
-        for(uint8_t j=0; j<3; j++) {
-            std::vector<char> buffer(instance_count * sizeof(VkDrawIndirectCommand));
-            DataBank::GetManagedBuffer().ReadStagingBuffer(buffer, indirect_offset, j);
-            staging_buffers[j].resize(buffer.size() / sizeof(VkDrawIndirectCommand));
-            std::memcpy(staging_buffers[j].data(), buffer.data(), buffer.size());
-        }*/
-
         std::vector<VkBuffer> buffers = std::vector<VkBuffer>(instance_buffer_chunks.size(), buffer);
         std::vector<VkDeviceSize> instance_offsets(instance_buffer_chunks.size());
         for(uint8_t i=0; i<instance_buffer_chunks.size(); i++) instance_offsets[i] = instance_buffer_chunks[i]->offset;

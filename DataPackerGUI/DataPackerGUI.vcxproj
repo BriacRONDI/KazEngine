@@ -100,7 +100,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>D:\Libraries\zlib\libzlib-1.2.11-msvc2017-amd64-release\lib;$(SolutionDir)$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>Comdlg32.lib;Comctl32.lib;Ole32.lib;Shell32.lib;zlib.lib;DataPacker.lib;EngineModel.lib;LogManager.lib;Gdi32.lib</AdditionalDependencies>
+      <AdditionalDependencies>DataPacker.lib;Comdlg32.lib;Comctl32.lib;Ole32.lib;Shell32.lib;zlib.lib;EngineModel.lib;LogManager.lib;Gdi32.lib;Tools.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">

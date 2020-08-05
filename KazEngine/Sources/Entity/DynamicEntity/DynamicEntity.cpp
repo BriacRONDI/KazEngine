@@ -110,16 +110,37 @@ namespace Engine
                 std::chrono::system_clock::now() - DynamicEntity::animation_time).count()
             );
 
+            DynamicEntity::animation_descriptor.WriteData(&this->frame, sizeof(FRAME_DATA), this->frame_chunk->offset, DESCRIPTOR_BIND_FRAME);
+            DynamicEntity::animation_descriptor.WriteData(&this->animation, sizeof(ANIMATION_DATA), this->animation_chunk->offset, DESCRIPTOR_BIND_ANIMATION);
+        }
+    }
+
+    void DynamicEntity::StopAnimation()
+    {
+        this->animation = {};
+        this->frame = {};
+
+        DynamicEntity::animation_descriptor.WriteData(&this->frame, sizeof(FRAME_DATA), this->frame_chunk->offset, DESCRIPTOR_BIND_FRAME);
+        DynamicEntity::animation_descriptor.WriteData(&this->animation, sizeof(ANIMATION_DATA), this->animation_chunk->offset, DESCRIPTOR_BIND_ANIMATION);
+    }
+
+    void DynamicEntity::SetAnimationFrame(std::string animation, uint32_t frame_id)
+    {
+        if(DataBank::HasAnimation(animation)) {
+            this->frame.animation_id = DataBank::GetAnimation(animation).animation_id;
+            this->animation.start = frame_id;
+
+            DynamicEntity::animation_descriptor.WriteData(&this->frame, sizeof(FRAME_DATA), this->frame_chunk->offset, DESCRIPTOR_BIND_FRAME);
             DynamicEntity::animation_descriptor.WriteData(&this->animation, sizeof(ANIMATION_DATA), this->animation_chunk->offset, DESCRIPTOR_BIND_ANIMATION);
         }
     }
 
     bool DynamicEntity::InSelectBox(Maths::Plane left_plane, Maths::Plane right_plane, Maths::Plane top_plane, Maths::Plane bottom_plane)
     {
-        for(auto& mesh : this->meshes) {
-            if(mesh->hit_box != nullptr) {
-                Maths::Vector3 box_min = this->matrix * mesh->hit_box->near_left_bottom_point;
-                Maths::Vector3 box_max = this->matrix * mesh->hit_box->far_right_top_point;
+        for(auto& lod : this->lods) {
+            if(lod->GetHitBox() != nullptr) {
+                Maths::Vector3 box_min = this->matrix * lod->GetHitBox()->near_left_bottom_point;
+                Maths::Vector3 box_max = this->matrix * lod->GetHitBox()->far_right_top_point;
                 if(Maths::aabb_inside_half_space(left_plane, box_min, box_max) && Maths::aabb_inside_half_space(right_plane, box_min, box_max)
                 && Maths::aabb_inside_half_space(top_plane, box_min, box_max) && Maths::aabb_inside_half_space(bottom_plane, box_min, box_max))
                     return true;
@@ -131,11 +152,11 @@ namespace Engine
 
     bool DynamicEntity::IntersectRay(Maths::Vector3 const& ray_origin, Maths::Vector3 const& ray_direction)
     {
-        for(auto& mesh : this->meshes) {
-            if(mesh->hit_box != nullptr) {
+        for(auto& lod : this->lods) {
+            if(lod->GetHitBox() != nullptr) {
                 if(Maths::ray_box_aabb_intersect(ray_origin, ray_direction,
-                                                 this->matrix * mesh->hit_box->near_left_bottom_point,
-                                                 this->matrix * mesh->hit_box->far_right_top_point,
+                                                 this->matrix * lod->GetHitBox()->near_left_bottom_point,
+                                                 this->matrix * lod->GetHitBox()->far_right_top_point,
                                                  -2000.0f, 2000.0f))
                     return true;
             }

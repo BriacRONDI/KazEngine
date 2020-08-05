@@ -20,6 +20,8 @@ namespace Engine
             bool InSelectBox(Maths::Plane left_plane, Maths::Plane right_plane, Maths::Plane top_plane, Maths::Plane bottom_plane);
             bool IntersectRay(Maths::Vector3 const& ray_origin, Maths::Vector3 const& ray_direction);
             void PlayAnimation(std::string animation, float speed, bool loop);
+            void StopAnimation();
+            void SetAnimationFrame(std::string animation, uint32_t frame_id);
 
             static DynamicEntity* ToggleSelection(Point<uint32_t> mouse_position);
             static std::vector<DynamicEntity*> SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);

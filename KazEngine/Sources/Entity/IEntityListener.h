@@ -5,11 +5,12 @@
 namespace Engine
 {
     class Entity;
+    class LODGroup;
 
     class IEntityListener
     {
         public :
 
-            virtual void AddMesh(Entity& entity, std::shared_ptr<Model::Mesh> mesh) = 0;
+            virtual void AddLOD(Entity& entity, std::shared_ptr<LODGroup> lod) = 0;
     };
 }

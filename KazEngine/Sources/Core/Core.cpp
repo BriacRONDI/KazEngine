@@ -8,6 +8,9 @@ namespace Engine
         StaticEntity::Clear();
         DynamicEntity::Clear();
 
+        // LOD
+        LODGroup::Clear();
+
         // User Interface
         if(this->user_interface != nullptr) {
             this->user_interface->RemoveListener(this);
@@ -73,9 +76,12 @@ namespace Engine
         DataBank::GetManagedBuffer().Allocate(SIZE_MEGABYTE(100), MULTI_USAGE_BUFFER_MASK, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                                      frame_count, true, {Vulkan::GetGraphicsQueue().index});
 
+        // Initialize LOD
+        if(!LODGroup::Initialize()) return false;
+
         // Initialize Entity
-        StaticEntity::Initialize();
-        DynamicEntity::Initialize();
+        if(!StaticEntity::Initialize()) return false;
+        if(!DynamicEntity::Initialize()) return false;
 
         // Initialize Camera
         Camera::CreateInstance();

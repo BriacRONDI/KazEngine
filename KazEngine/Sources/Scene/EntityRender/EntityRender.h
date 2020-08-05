@@ -31,7 +31,7 @@ namespace Engine
             // IEntityListener //
             /////////////////////
 
-            virtual void AddMesh(Entity& entity, std::shared_ptr<Model::Mesh> mesh);
+            virtual void AddLOD(Entity& entity, std::shared_ptr<LODGroup> lod);
 
         private :
 
@@ -49,7 +49,8 @@ namespace Engine
 
             struct RENDER_GOURP;
             struct DRAWABLE_BIND {
-                LoadedMesh mesh;
+                // LoadedMesh mesh;
+                std::shared_ptr<LODGroup> lod;
                 uint32_t texture_id;
                 std::shared_ptr<Chunk> chunk;
                 std::vector<uint32_t> dynamic_offsets;

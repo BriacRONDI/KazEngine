@@ -61,7 +61,6 @@ namespace DataPackerGUI
         std::vector<char> memory;
         std::vector<std::string> added_textures;
         std::vector<std::string> added_materials;
-        std::vector<std::string> dependancies;
         // DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "textures", {}, 0);
         // DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "materials", {}, 0);
         // DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "meshes", {}, 0);
@@ -74,7 +73,6 @@ namespace DataPackerGUI
             std::vector<char> serialized = tree.second.Serialize();
             std::unique_ptr<char> serialized_tree(serialized.data());
             std::cout << "Empaquetage du squelette [" << tree.first << "] : ";
-            dependancies.push_back(package_directory + "/" + tree.first);
             DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::BONE_TREE, tree.first, serialized_tree, static_cast<uint32_t>(serialized.size()));
             serialized_tree.release();
 
@@ -85,8 +83,16 @@ namespace DataPackerGUI
 
         for(auto& mesh : this->meshes) {
 
+            // Add skeleton dependancy
+            std::vector<std::string> dependancies;
+            if(!mesh.skeleton.empty()) dependancies.push_back(package_directory + "/" + mesh.skeleton);
+
             // Si le matériau n'est pas déjà empaqueté, on s'en charge
             for(auto& material : mesh.materials) {
+
+                // Add material dependancy
+                dependancies.push_back(package_directory + "/" + material.first);
+
                 if(std::find(added_materials.begin(), added_materials.end(), material.first) == added_materials.end()
                 && this->engine_materials.count(material.first) > 0) {
 
@@ -95,7 +101,6 @@ namespace DataPackerGUI
                     std::unique_ptr<char> serialized_material = this->engine_materials[material.first].Serialize(serialized_material_size);
                     std::cout << "Empaquetage de matériau [" << material.first << "] : ";
                     std::vector<std::string> textures;
-                    dependancies.push_back(package_directory + "/" + material.first);
                     if(!this->engine_materials[material.first].texture.empty()) textures.push_back(package_directory + "/" + this->engine_materials[material.first].texture);
                     DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::MATERIAL_DATA, material.first, serialized_material, serialized_material_size, textures);
 

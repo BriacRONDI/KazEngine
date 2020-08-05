@@ -101,7 +101,7 @@ namespace Engine
         // Texture //
         /////////////
 
-        if(!this->texture_descriptor.PrepareBindlessTexture(2)) return false;
+        if(!this->texture_descriptor.PrepareBindlessTexture(1)) return false;
 
         //////////////
         // Skeleton //
@@ -185,14 +185,15 @@ namespace Engine
         if(!success) return false;
 
         if(!indirect_descriptor.Create({
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(VkDrawIndirectCommand)}
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(LODGroup::INDIRECT_COMMAND)}
         }, instance_count)) return false;
 
         auto indirect_layout = indirect_descriptor.GetLayout();
         auto entity_layout = StaticEntity::GetMatrixDescriptor().GetLayout();
+        auto lod_layout = LODGroup::GetDescriptor().GetLayout();
 
         compute_shader_stage = Vulkan::GetInstance().LoadShaderModule("./Shaders/cull_lod.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
-        success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout}, {}, compute_pipeline);
+        success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout, lod_layout}, {}, compute_pipeline);
         
         vkDestroyShaderModule(Vulkan::GetDevice(), compute_shader_stage.module, nullptr);
 
@@ -238,14 +239,14 @@ namespace Engine
         if(!success) return false;
 
         if(!indirect_descriptor.Create({
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(VkDrawIndirectCommand)}
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(LODGroup::INDIRECT_COMMAND)}
         }, instance_count)) return false;
 
         indirect_layout = indirect_descriptor.GetLayout();
         auto animation_layout = DynamicEntity::GetAnimationDescriptor().GetLayout();
 
         compute_shader_stage = Vulkan::GetInstance().LoadShaderModule("./Shaders/cull_lod_anim.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
-        success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout, animation_layout}, {}, compute_pipeline);
+        success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout, animation_layout, lod_layout}, {}, compute_pipeline);
         
         vkDestroyShaderModule(Vulkan::GetDevice(), compute_shader_stage.module, nullptr);
 
@@ -350,17 +351,17 @@ namespace Engine
     bool EntityRender::DRAWABLE_BIND::AddInstance(RENDER_GOURP& group, Entity& entity)
     {
         ENTITY_MESH_CHUNK emc;
-        emc.chunk = group.indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
+        emc.chunk = group.indirect_descriptor.ReserveRange(sizeof(LODGroup::INDIRECT_COMMAND));
 
         if(emc.chunk == nullptr) {
             if(!group.indirect_descriptor.ResizeChunk(group.indirect_descriptor.GetChunk()->range
-                                                                        + sizeof(VkDrawIndirectCommand) * 10)) {
+                                                                        + sizeof(LODGroup::INDIRECT_COMMAND) * 10)) {
                 #if defined(DISPLAY_LOGS)
                 std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
                 #endif
                 return false;
             }else{
-                emc.chunk = group.indirect_descriptor.ReserveRange(sizeof(VkDrawIndirectCommand));
+                emc.chunk = group.indirect_descriptor.ReserveRange(sizeof(LODGroup::INDIRECT_COMMAND));
                 if(emc.chunk == nullptr) {
                     #if defined(DISPLAY_LOGS)
                     std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
@@ -372,8 +373,10 @@ namespace Engine
 
         emc.entity = &entity;
         emc.instance_id = entity.GetInstanceId();
-        VkDrawIndirectCommand indirect = this->mesh.GetIndirectCommand(emc.instance_id);
-        group.indirect_descriptor.WriteData(&indirect, sizeof(VkDrawIndirectCommand), static_cast<uint32_t>(emc.chunk->offset));
+        LODGroup::INDIRECT_COMMAND indirect = {}; // = this->mesh.GetIndirectCommand(emc.instance_id);
+        indirect.firstInstance = emc.instance_id;
+        indirect.lodIndex = lod->GetLodIndex();
+        group.indirect_descriptor.WriteData(&indirect, sizeof(LODGroup::INDIRECT_COMMAND), static_cast<uint32_t>(emc.chunk->offset));
         this->entities.push_back(emc);
 
         return true;
@@ -398,7 +401,102 @@ namespace Engine
         }
     }
 
-    void EntityRender::AddMesh(Entity& entity, std::shared_ptr<Model::Mesh> mesh)
+    void EntityRender::AddLOD(Entity& entity, std::shared_ptr<LODGroup> lod)
+    {
+        for(uint8_t i=0; i<this->render_groups.size(); i++) {
+
+            if(lod->GetRenderMask() != this->render_groups[i].mask) continue;
+
+            ////////////////////////////
+            // Search for loaded LOD  //
+            ////////////////////////////
+
+            for(auto& drawable_bind : this->render_groups[i].drawables) {
+                if(drawable_bind.lod == lod) {
+
+                    drawable_bind.AddInstance(this->render_groups[i], entity);
+
+                    for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
+                    for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
+                    return;
+                }
+            }
+
+            // No loaded mesh found
+            DRAWABLE_BIND new_bind;
+            new_bind.lod = lod;
+
+            //////////////////
+            // Load Texture //
+            //////////////////
+
+            if(lod->GetRenderMask() & Model::Mesh::RENDER_TEXTURE) {
+                for(auto& material : lod->GetMeshMaterials()) {
+                    if(DataBank::HasMaterial(material.first)) {
+                        if(!DataBank::GetMaterial(material.first).texture.empty()) {
+                            if(!this->textures.count(DataBank::GetMaterial(material.first).texture)
+                                && !this->LoadTexture(DataBank::GetMaterial(material.first).texture))
+                                    return;
+                                    
+                            new_bind.texture_id = this->textures[DataBank::GetMaterial(material.first).texture];
+                        }
+                    }else{
+                        #if defined(DISPLAY_LOGS)
+                        std::cout << "Dynamics::AddEntity() => Material[" + material.first + "] : Not in data bank" << std::endl;
+                        #endif
+                        return;
+                    }
+                }
+            }
+
+            ///////////////
+            // Load LOD  //
+            ///////////////
+
+            if(!new_bind.lod->Build(this->textures)) {//mesh, this->textures)) {
+                #if defined(DISPLAY_LOGS)
+                std::cout << "Dynamics::AddEntity() => Drawable.Load(LOD) : Failed" << std::endl;
+                #endif
+                return;
+            }
+
+            ///////////////////
+            // Load Skeleton //
+            ///////////////////
+
+            if(lod->GetRenderMask() & Model::Mesh::RENDER_SKELETON) {
+
+                std::string const& skeleton = lod->GetMeshSkeleton();
+                if(!this->skeletons.count(skeleton) && !this->LoadSkeleton(skeleton)) return;
+
+                new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.end(), {
+                    this->skeletons[skeleton].skeleton_dynamic_offset,
+                    this->skeletons[skeleton].dynamic_offsets[lod->GetMesh()->name].first,
+                    this->skeletons[skeleton].dynamic_offsets[lod->GetMesh()->name].second,
+                    this->skeletons[skeleton].animations_data_dynamic_offset
+                });
+                new_bind.has_skeleton = true;
+            }else{
+                new_bind.has_skeleton = false;
+            }
+
+            ///////////////////////
+            // Setup loaded mesh //
+            ///////////////////////
+
+            new_bind.AddInstance(this->render_groups[i], entity);
+
+            // Add loaded mesh
+            this->render_groups[i].drawables.push_back(std::move(new_bind));
+
+            // Finish
+            for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
+            for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
+            return;
+        }
+    }
+
+    /*void EntityRender::AddMesh(Entity& entity, std::shared_ptr<Model::Mesh> mesh)
     {
         for(uint8_t i=0; i<this->render_groups.size(); i++) {
             for(auto mesh : entity.GetMeshes()) {
@@ -491,7 +589,7 @@ namespace Engine
                 return;
             }
         }
-    }
+    }*/
 
     VkSemaphore EntityRender::SubmitComputeShader(uint8_t frame_index)
     {
@@ -550,20 +648,22 @@ namespace Engine
                     Camera::GetInstance().GetDescriptorSet().Get(frame_index),
                     DynamicEntity::GetMatrixDescriptor().Get(frame_index),
                     this->render_groups[i].indirect_descriptor.Get(frame_index),
-                    DynamicEntity::GetAnimationDescriptor().Get(frame_index)
+                    DynamicEntity::GetAnimationDescriptor().Get(frame_index),
+                    LODGroup::GetDescriptor().Get(frame_index)
                 };
             }else{
                 bind_descriptor_sets = {
                     Camera::GetInstance().GetDescriptorSet().Get(frame_index),
                     StaticEntity::GetMatrixDescriptor().Get(frame_index),
-                    this->render_groups[i].indirect_descriptor.Get(frame_index)
+                    this->render_groups[i].indirect_descriptor.Get(frame_index),
+                    LODGroup::GetDescriptor().Get(frame_index)
                 };
             }
 
             vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->render_groups[i].compute_pipeline.layout, 0,
                                     static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(), 0, nullptr);
 
-            uint32_t count = static_cast<uint32_t>(this->render_groups[i].indirect_descriptor.GetChunk()->range / sizeof(VkDrawIndirectCommand));
+            uint32_t count = static_cast<uint32_t>(this->render_groups[i].indirect_descriptor.GetChunk()->range / sizeof(LODGroup::INDIRECT_COMMAND));
 		    vkCmdDispatch(command_buffer, count, 1, 1);
         }
 
@@ -644,10 +744,10 @@ namespace Engine
                                     static_cast<uint32_t>(bind.dynamic_offsets.size()), bind.dynamic_offsets.data());
                 }
 
-                bind.mesh.Render(command_buffer, DataBank::GetManagedBuffer().GetBuffer(frame_index).handle,
-                                    pipeline.layout, static_cast<uint32_t>(bind.entities.size()),
-                                    this->render_groups[i].instance_buffer_chunks,
-                                    this->render_groups[i].indirect_descriptor.GetChunk()->offset);
+                bind.lod->Render(command_buffer, DataBank::GetManagedBuffer().GetBuffer(frame_index).handle,
+                                 pipeline.layout, static_cast<uint32_t>(bind.entities.size()),
+                                 this->render_groups[i].instance_buffer_chunks,
+                                 this->render_groups[i].indirect_descriptor.GetChunk()->offset);
             }
         }
 

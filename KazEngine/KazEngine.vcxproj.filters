@@ -17,10 +17,10 @@
     <ClCompile Include="Sources\Platform\Common\Timer\Timer.cpp" />
     <ClCompile Include="Sources\UserInterface\UserInterface.cpp" />
     <ClCompile Include="Sources\ManagedBuffer\Chunk\Chunk.cpp" />
-    <ClCompile Include="Sources\LoadedMesh\LoadedMesh.cpp" />
     <ClCompile Include="Sources\Entity\StaticEntity\StaticEntity.cpp" />
     <ClCompile Include="Sources\Entity\DynamicEntity\DynamicEntity.cpp" />
     <ClCompile Include="Sources\Entity\Entity.cpp" />
+    <ClCompile Include="Sources\LOD\LOD.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Sources\Vulkan\ListOfFunctions.inl" />
@@ -50,10 +50,10 @@
     <ClInclude Include="Sources\UserInterface\UserInterface.h" />
     <ClInclude Include="Sources\UserInterface\IUserInteraction.h" />
     <ClInclude Include="Sources\ManagedBuffer\Chunk\Chunk.h" />
-    <ClInclude Include="Sources\LoadedMesh\LoadedMesh.h" />
     <ClInclude Include="Sources\Entity\Entity.h" />
     <ClInclude Include="Sources\Entity\StaticEntity\StaticEntity.h" />
     <ClInclude Include="Sources\Entity\DynamicEntity\DynamicEntity.h" />
     <ClInclude Include="Sources\Entity\IEntityListener.h" />
+    <ClInclude Include="Sources\LOD\LOD.h" />
   </ItemGroup>
 </Project>

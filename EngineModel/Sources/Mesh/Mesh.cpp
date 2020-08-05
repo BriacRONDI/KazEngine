@@ -7,8 +7,6 @@ namespace Model
         #if defined(DISPLAY_LOGS)
         std::cout << "Mesh [" << this->name << "] : deleted" << std::endl;
         #endif
-
-        if(this->hit_box != nullptr) delete this->hit_box;
     }
 
     /**
@@ -526,11 +524,5 @@ namespace Model
         offset++;
         if(name_length) this->texture = std::string(data + offset, data + offset + name_length);
         return offset + name_length;
-    }
-
-    void Mesh::SetHitBox(HIT_BOX hit_box)
-    {
-        if(this->hit_box == nullptr) this->hit_box = new HIT_BOX;
-        *this->hit_box = hit_box;
     }
 }

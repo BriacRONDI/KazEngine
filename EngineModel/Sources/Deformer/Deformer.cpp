@@ -19,6 +19,8 @@ namespace Model
         for(uint8_t i=0; i<this->bone_weights.size(); i++)
             total_weight += this->bone_weights[i];
 
+        if(total_weight == 0.0f) return;
+
         if(total_weight != 1.0f)
             for(uint8_t i=0; i<this->bone_weights.size(); i++)
                 this->bone_weights[i] = this->bone_weights[i] / total_weight;

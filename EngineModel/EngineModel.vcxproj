@@ -153,7 +153,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Sources\Deformer\Deformer.h" />
-    <ClInclude Include="Sources\Loader\Loader.h" />
     <ClInclude Include="Sources\Mesh\Mesh.h" />
     <ClInclude Include="Sources\Model.h" />
     <ClInclude Include="Sources\Skeleton\Skeleton.h" />

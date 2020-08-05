@@ -1,5 +1,7 @@
 #version 450
 
+#define max_lod_count 5
+
 layout (set=0, binding=0, std140) readonly uniform Camera
 {
 	mat4 projection;
@@ -18,9 +20,10 @@ struct INDIRECT_COMMAND
 	uint instanceCount;
 	uint firstVertex;
 	uint firstInstance;
+	uint lodIndex;
 };
 
-layout (set=2, binding=0, std140) writeonly buffer IndirectDraws
+layout (set=2, binding=0, std430) writeonly buffer IndirectDraws
 {
 	INDIRECT_COMMAND indirect_draws[];
 };
@@ -56,6 +59,24 @@ layout (set=3, binding=2) readonly uniform AnimationTimer
 	uint time;
 };
 
+struct LOD
+{
+	uint first_vertex;
+	uint vertex_count;
+	float distance;
+	float _pad0;
+};
+
+struct LOD_STACK
+{
+	LOD stack[max_lod_count];
+};
+
+layout (set=4, binding=0, std140) readonly buffer LodData
+{
+	LOD_STACK lod[];
+};
+
 bool InsideFrustum(vec4 pos, float radius)
 {
 	for(int i=0; i<6; i++)
@@ -76,13 +97,21 @@ void main()
 		ANIMATION animation = animations[idx];
 		if(animation.play > 0) {
 			if(animation.loop > 0) {
-				// uint duration = time - animation.start;
-				float progression = float(time - animation.start) / float(animation.duration);
+			
+				float progression = float(time - animation.start) / float(animation.duration) * animation.speed;
 				uint last_frame_id = animation.frame_count - 1;
 				frames[idx].frame_id = uint(mod(progression * last_frame_id, last_frame_id));
 			}else{
+			
+				// TODO : Play animation once
 				frames[idx].frame_id = 0;
 			}
+		}else{
+		
+			frames[idx].frame_id = animation.start;
 		}
+		
+		indirect_draws[idx].firstVertex = lod[indirect_draws[idx].lodIndex].stack[0].first_vertex;
+		indirect_draws[idx].indexCount = lod[indirect_draws[idx].lodIndex].stack[0].vertex_count;
 	}
 }

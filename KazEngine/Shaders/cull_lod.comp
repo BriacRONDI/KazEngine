@@ -1,5 +1,7 @@
 #version 450
 
+#define max_lod_count 5
+
 layout (set=0, binding=0, std140) readonly uniform Camera
 {
 	mat4 projection;
@@ -18,11 +20,25 @@ struct INDIRECT_COMMAND
 	uint instanceCount;
 	uint firstVertex;
 	uint firstInstance;
+	uint lodIndex;
 };
 
-layout (set=2, binding=0, std140) writeonly buffer IndirectDraws
+layout (set=2, binding=0, std430) writeonly buffer IndirectDraws
 {
 	INDIRECT_COMMAND indirect_draws[];
+};
+
+struct LOD
+{
+	uint first_vertex;
+	uint vertex_count;
+	float distance;
+	float _pad0;
+};
+
+layout (set=3, binding=0, std140) readonly buffer LodData
+{
+	LOD lod[][max_lod_count];
 };
 
 bool InsideFrustum(vec4 pos, float radius)
@@ -38,5 +54,9 @@ void main()
 	
 	vec4 entity_positon = model[idx][3];
 	if(!InsideFrustum(entity_positon, -2.0)) indirect_draws[idx].instanceCount = 0;
-	else indirect_draws[idx].instanceCount = 1;
+	else {
+		indirect_draws[idx].instanceCount = 1;
+		indirect_draws[idx].firstVertex = lod[indirect_draws[idx].lodIndex][0].first_vertex;
+		indirect_draws[idx].indexCount = lod[indirect_draws[idx].lodIndex][0].vertex_count;
+	}
 }

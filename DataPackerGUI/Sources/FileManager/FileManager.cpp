@@ -395,6 +395,7 @@ namespace DataPackerGUI
     {
         DataPacker::Packer::DATA_TYPE type = DataPacker::Packer::GetNodeType(this->data, path);
         this->list_view_main->Clear();
+        this->list_view_inspect->Hide();
 
         switch(type)
         {
@@ -411,7 +412,6 @@ namespace DataPackerGUI
         }
 
         EnableWindow(this->list_view_main->GetHwnd(), FALSE);
-        this->list_view_inspect->Hide();
     }
 
     void FileManager::OnLvItemSelect(ListView& list_view, int item_index)

@@ -61,7 +61,7 @@ namespace Engine
         // TEXTURE //
         /////////////
 
-        auto data_buffer = Tools::GetBinaryFileContents("data.kea");
+        auto data_buffer = Tools::GetBinaryFileContents("data2.kea");
         auto image = DataBank::GetImageFromPackage(data_buffer, "/grass_tile2");
         this->texture_descriptor.Create(image);
 

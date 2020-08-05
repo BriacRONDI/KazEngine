@@ -5,7 +5,6 @@
     <ClInclude Include="Sources\Mesh\Mesh.h" />
     <ClInclude Include="Sources\Skeleton\Skeleton.h" />
     <ClInclude Include="Sources\Deformer\Deformer.h" />
-    <ClInclude Include="Sources\Loader\Loader.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Sources\Mesh\Mesh.cpp" />
