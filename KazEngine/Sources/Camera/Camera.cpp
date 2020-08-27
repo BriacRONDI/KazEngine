@@ -33,7 +33,7 @@ namespace Engine
         
         if(!camera_descriptor.Create({
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
-            sizeof(Maths::Matrix4x4) * 2 + sizeof(std::array<Maths::Vector4,6>)}
+            sizeof(Maths::Matrix4x4) * 2 + sizeof(std::array<Maths::Vector4,6>) + sizeof(Maths::Vector4)}
         }, Vulkan::GetConcurrentFrameCount())) return;
 
         this->frustum.Setup(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
@@ -55,8 +55,13 @@ namespace Engine
         if(Mouse::GetInstance().IsClipped() && this->rts_mode && !this->frozen) this->RtsScroll();
 
         if(this->camera != this->last_ubo[frame_index]) {
-            this->camera_descriptor.WriteData(&this->camera, sizeof(Maths::Matrix4x4) * 2, 0);
-            this->camera_descriptor.WriteData(&this->frustum.GetPlanes(), sizeof(std::array<Maths::Vector4,6>), static_cast<uint32_t>(sizeof(Maths::Matrix4x4) * 2));
+            size_t offset = 0;
+            this->camera_descriptor.WriteData(&this->camera, sizeof(Maths::Matrix4x4) * 2, offset);
+            offset += sizeof(Maths::Matrix4x4) * 2;
+            this->camera_descriptor.WriteData(&this->frustum.GetPlanes(), sizeof(std::array<Maths::Vector4,6>), offset);
+            offset += sizeof(std::array<Maths::Vector4,6>);
+            Maths::Vector4 camera_position = {-this->camera.position[0], this->camera.position[1], -this->camera.position[2], 1.0f};
+            this->camera_descriptor.WriteData(&camera_position, sizeof(Maths::Vector4), offset);
             this->last_ubo[frame_index] = this->camera;
         }
     }

@@ -37,7 +37,7 @@ layout (set=2, binding=3) buffer Animations
 {
 	uint bone_count;
 	uint first_frame_id[];
-}animations;
+} animations;
 
 layout (location = 0) out vec2 outUV;
 
@@ -65,7 +65,7 @@ void main()
 		total_weight += inBoneWeights[i];
 		has_bone = true;
 	}
-		
+	
 	if(!has_bone) {
 	
 		gl_Position = camera.projection * modelView * vec4(inPos, 1.0);

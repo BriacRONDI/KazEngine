@@ -318,6 +318,9 @@ namespace Engine
                 for(auto& listener : this->Listeners)
                     listener->ToggleSelection(Mouse::GetInstance().GetPosition());
             }
+        }else if(button == MOUSE_BUTTON::MOUSE_BUTTON_RIGHT) {
+            for(auto& listener : this->Listeners)
+                listener->MoveToPosition(Mouse::GetInstance().GetPosition());
         }
     }
 }

@@ -9,8 +9,14 @@
 #include "../../Entity/IEntityListener.h"
 #include "../../LoadedMesh/LoadedMesh.h"
 
-#define ENTITY_ID_BINDING   0
-#define ENTITY_DATA_BINDING 1
+#define ENTITY_ID_BINDING               0
+#define ENTITY_DATA_BINDING             1
+
+#define SKELETON_BONES_BINDING          0
+#define SKELETON_OFFSET_IDS_BINDING     1
+#define SKELETON_OFFSETS_BINDING        2
+#define SKELETON_ANIMATIONS_BINDING     3
+
 
 namespace Engine
 {

@@ -108,10 +108,10 @@ namespace Engine
         //////////////
 
         bindings = {
-            DescriptorSet::CreateSimpleBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT),
-            DescriptorSet::CreateSimpleBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT),
-            DescriptorSet::CreateSimpleBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT),
-            DescriptorSet::CreateSimpleBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, VK_SHADER_STAGE_VERTEX_BIT)
+            DescriptorSet::CreateSimpleBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
+            DescriptorSet::CreateSimpleBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
+            DescriptorSet::CreateSimpleBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
+            DescriptorSet::CreateSimpleBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
         };
 
         if(!this->skeleton_descriptor.Prepare(bindings, instance_count)) return false;
@@ -290,7 +290,9 @@ namespace Engine
 
         // Write to GPU memory
         DataBank::GetManagedBuffer().WriteData(offsets_sbo.data(), offsets_sbo.size(), this->skeleton_offsets_chunk->offset);
+        // this->skeleton_descriptor.WriteData(offsets_sbo.data(), offsets_sbo.size(), this->skeleton_offsets_chunk->offset, SKELETON_OFFSETS_BINDING);
         DataBank::GetManagedBuffer().WriteData(offsets_ids.data(), offsets_ids.size(), this->skeleton_offsets_ids_chunk->offset);
+        // this->skeleton_descriptor.WriteData(offsets_sbo.data(), offsets_sbo.size(), this->skeleton_offsets_ids_chunk->offset, SKELETON_OFFSET_IDS_BINDING);
 
         ////////////////////
         // Animations SBO //
@@ -373,7 +375,7 @@ namespace Engine
 
         emc.entity = &entity;
         emc.instance_id = entity.GetInstanceId();
-        LODGroup::INDIRECT_COMMAND indirect = {}; // = this->mesh.GetIndirectCommand(emc.instance_id);
+        LODGroup::INDIRECT_COMMAND indirect = {};
         indirect.firstInstance = emc.instance_id;
         indirect.lodIndex = lod->GetLodIndex();
         group.indirect_descriptor.WriteData(&indirect, sizeof(LODGroup::INDIRECT_COMMAND), static_cast<uint32_t>(emc.chunk->offset));
@@ -469,12 +471,12 @@ namespace Engine
                 std::string const& skeleton = lod->GetMeshSkeleton();
                 if(!this->skeletons.count(skeleton) && !this->LoadSkeleton(skeleton)) return;
 
-                new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.end(), {
+                /*new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.end(), {
                     this->skeletons[skeleton].skeleton_dynamic_offset,
                     this->skeletons[skeleton].dynamic_offsets[lod->GetMesh()->name].first,
                     this->skeletons[skeleton].dynamic_offsets[lod->GetMesh()->name].second,
                     this->skeletons[skeleton].animations_data_dynamic_offset
-                });
+                });*/
                 new_bind.has_skeleton = true;
             }else{
                 new_bind.has_skeleton = false;
@@ -495,101 +497,6 @@ namespace Engine
             return;
         }
     }
-
-    /*void EntityRender::AddMesh(Entity& entity, std::shared_ptr<Model::Mesh> mesh)
-    {
-        for(uint8_t i=0; i<this->render_groups.size(); i++) {
-            for(auto mesh : entity.GetMeshes()) {
-
-                if(mesh->render_mask != this->render_groups[i].mask) continue;
-
-                ////////////////////////////
-                // Search for loaded mesh //
-                ////////////////////////////
-
-                for(auto& drawable_bind : this->render_groups[i].drawables) {
-                    if(drawable_bind.mesh.IsSameMesh(mesh)) {
-
-                        drawable_bind.AddInstance(this->render_groups[i], entity);
-
-                        for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
-                        for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
-                        return;
-                    }
-                }
-
-                // No loaded mesh found
-                DRAWABLE_BIND new_bind;
-
-                //////////////////
-                // Load Texture //
-                //////////////////
-
-                if(mesh->render_mask & Model::Mesh::RENDER_TEXTURE) {
-                    for(auto& material : mesh->materials) {
-                        if(DataBank::HasMaterial(material.first)) {
-                            if(!DataBank::GetMaterial(material.first).texture.empty()) {
-                                if(!this->textures.count(DataBank::GetMaterial(material.first).texture)
-                                    && !this->LoadTexture(DataBank::GetMaterial(material.first).texture))
-                                        return;
-                                    
-                                new_bind.texture_id = this->textures[DataBank::GetMaterial(material.first).texture];
-                            }
-                        }else{
-                            #if defined(DISPLAY_LOGS)
-                            std::cout << "Dynamics::AddEntity() => Material[" + material.first + "] : Not in data bank" << std::endl;
-                            #endif
-                            return;
-                        }
-                    }
-                }
-
-                ///////////////
-                // Load Mesh //
-                ///////////////
-
-                if(!new_bind.mesh.Load(mesh, this->textures)) {
-                    #if defined(DISPLAY_LOGS)
-                    std::cout << "Dynamics::AddEntity() => Drawable.Load(" + mesh->name + ") : Failed" << std::endl;
-                    #endif
-                    return;
-                }
-
-                ///////////////////
-                // Load Skeleton //
-                ///////////////////
-
-                if(mesh->render_mask & Model::Mesh::RENDER_SKELETON) {
-
-                    if(!this->skeletons.count(mesh->skeleton) && !this->LoadSkeleton(mesh->skeleton)) return;
-
-                    new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.end(), {
-                        this->skeletons[mesh->skeleton].skeleton_dynamic_offset,
-                        this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].first,
-                        this->skeletons[mesh->skeleton].dynamic_offsets[mesh->name].second,
-                        this->skeletons[mesh->skeleton].animations_data_dynamic_offset
-                    });
-                    new_bind.has_skeleton = true;
-                }else{
-                    new_bind.has_skeleton = false;
-                }
-
-                ///////////////////////
-                // Setup loaded mesh //
-                ///////////////////////
-
-                new_bind.AddInstance(this->render_groups[i], entity);
-
-                // Add loaded mesh
-                this->render_groups[i].drawables.push_back(std::move(new_bind));
-
-                // Finish
-                for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
-                for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
-                return;
-            }
-        }
-    }*/
 
     VkSemaphore EntityRender::SubmitComputeShader(uint8_t frame_index)
     {

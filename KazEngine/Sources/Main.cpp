@@ -88,17 +88,33 @@ int main(int argc, char** argv)
 
     auto simple_guy_png = Engine::DataBank::GetImageFromPackage(data_buffer, "/SimpleGuy/SimpleGuy.2.0.png");
     Engine::DataBank::AddTexture(simple_guy_png, "SimpleGuy.2.0.png");
-    auto simple_guy_mesh = Engine::DataBank::GetMeshFromPackage(data_buffer, "/SimpleGuy/Body_LOD3");
-    simple_guy_mesh->UpdateRenderMask({});
-    simple_guy_mesh->render_mask |= Model::Mesh::RENDER_TEXTURE;
-    // simple_guy_mesh->SetHitBox({{-0.25f, 0.0f, 0.25f},{0.25f, -1.3f, -0.25f}});
+
+    auto simple_guy_mesh_lod0 = Engine::DataBank::GetMeshFromPackage(data_buffer, "/SimpleGuy/Body_LOD0");
+    simple_guy_mesh_lod0->UpdateRenderMask({});
+    simple_guy_mesh_lod0->render_mask |= Model::Mesh::RENDER_TEXTURE;
+
+    auto simple_guy_mesh_lod1 = Engine::DataBank::GetMeshFromPackage(data_buffer, "/SimpleGuy/Body_LOD1");
+    simple_guy_mesh_lod1->UpdateRenderMask({});
+    simple_guy_mesh_lod1->render_mask |= Model::Mesh::RENDER_TEXTURE;
+
+    auto simple_guy_mesh_lod2 = Engine::DataBank::GetMeshFromPackage(data_buffer, "/SimpleGuy/Body_LOD2");
+    simple_guy_mesh_lod2->UpdateRenderMask({});
+    simple_guy_mesh_lod2->render_mask |= Model::Mesh::RENDER_TEXTURE;
+
+    auto simple_guy_mesh_lod3 = Engine::DataBank::GetMeshFromPackage(data_buffer, "/SimpleGuy/Body_LOD3");
+    simple_guy_mesh_lod3->UpdateRenderMask({});
+    simple_guy_mesh_lod3->render_mask |= Model::Mesh::RENDER_TEXTURE;
+
     auto simple_guy_skeleton = Engine::DataBank::GetSkeletonFromPackage(data_buffer, "/SimpleGuy/Armature");
     Engine::DataBank::AddSkeleton(simple_guy_skeleton, "Armature");
     auto simple_guy_material = Engine::DataBank::GetMaterialFromPackage(data_buffer, "/SimpleGuy/AO");
     Engine::DataBank::AddMaterial(simple_guy_material, "AO");
 
     std::shared_ptr<Engine::LODGroup> simple_guy_lod = std::shared_ptr<Engine::LODGroup>(new Engine::LODGroup);
-    simple_guy_lod->AddLOD(simple_guy_mesh, 0);
+    simple_guy_lod->AddLOD(simple_guy_mesh_lod0, 0);
+    simple_guy_lod->AddLOD(simple_guy_mesh_lod1, 1);
+    simple_guy_lod->AddLOD(simple_guy_mesh_lod2, 2);
+    simple_guy_lod->AddLOD(simple_guy_mesh_lod3, 3);
     simple_guy_lod->SetHitBox({{-0.25f, 0.0f, 0.25f},{0.25f, -1.3f, -0.25f}});
 
     Engine::DynamicEntity guy;
@@ -157,6 +173,7 @@ int main(int argc, char** argv)
         ///////////////
         // FRAMERATE //
         ///////////////
+        
         static int count = 0;
         frame_count++;
         if(refresh_timer.GetProgression() >= 1.0f) {
@@ -180,21 +197,21 @@ int main(int argc, char** argv)
         //////////////
 
         
-        if(/*count < 1000 && */dynamic_entity_add_start.GetProgression() >= 1.0f && Engine::Keyboard::GetInstance().IsPressed(VK_RETURN)) {
+        /*if(dynamic_entity_add_start.GetProgression() >= 1.0f && Engine::Keyboard::GetInstance().IsPressed(VK_RETURN)) {
             guy.SetAnimationFrame("Armature|Walk", count);
             count++;
             count = count % 31;
 
             dynamic_entity_add_start.Start(std::chrono::milliseconds(100));
-        }
+        }*/
 
         
-        if(/*count < 1000 && */dynamic_entity_add_start.GetProgression() >= 1.0f && Engine::Keyboard::GetInstance().IsPressed(VK_SPACE)) {
+        if(/*count < 1000 &&*/ dynamic_entity_add_start.GetProgression() >= 1.0f && Engine::Keyboard::GetInstance().IsPressed(VK_SPACE)) {
 
             uint32_t step = 1;
             for(uint32_t i=0; i<step; i++) {
                 auto new_entity = std::shared_ptr<Engine::DynamicEntity>(new Engine::DynamicEntity);
-                // new_entity->AddMesh(simple_guy_mesh);
+                new_entity->AddLOD(simple_guy_lod);
 
                 guys.resize(guys.size() + 1);
                 guys[guys.size()-1] = new_entity;

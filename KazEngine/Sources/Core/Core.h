@@ -41,6 +41,7 @@ namespace Engine
 
             virtual void SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
             virtual void ToggleSelection(Point<uint32_t> mouse_position);
+            virtual void MoveToPosition(Point<uint32_t> mouse_position);
 
         private :
 

@@ -22,6 +22,7 @@ namespace Engine
             void PlayAnimation(std::string animation, float speed, bool loop);
             void StopAnimation();
             void SetAnimationFrame(std::string animation, uint32_t frame_id);
+            void MoveToPosition(Maths::Vector3 destination);
 
             static DynamicEntity* ToggleSelection(Point<uint32_t> mouse_position);
             static std::vector<DynamicEntity*> SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
@@ -31,6 +32,7 @@ namespace Engine
             static inline DescriptorSet const& GetAnimationDescriptor() { return DynamicEntity::animation_descriptor; }
             static void UpdateAnimationTimer();
             static inline bool UpdateMatrixDescriptor(uint8_t instance_id) { return DynamicEntity::matrix_descriptor.Update(instance_id); }
+            static inline bool UpdateAnimationDescriptor(uint8_t instance_id) { return DynamicEntity::animation_descriptor.Update(instance_id); }
 
         private :
 

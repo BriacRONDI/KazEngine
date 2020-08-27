@@ -256,6 +256,13 @@ namespace Engine
         else this->map->UpdateSelection({entity});
     }
 
+    void Core::MoveToPosition(Point<uint32_t> mouse_position)
+    {
+        for(auto& entity : this->map->GetSelectedEntities()) {
+            // entity->
+        }
+    }
+
     void Core::SizeChanged(Area<uint32_t> size)
     {
         Vulkan::GetInstance().OnWindowSizeChanged();
@@ -326,6 +333,11 @@ namespace Engine
             this->map->Refresh(image_index);
             this->entity_render->Refresh(image_index);
             DynamicEntity::UpdateMatrixDescriptor(image_index);
+        }
+
+        if(DynamicEntity::GetAnimationDescriptor().NeedUpdate(image_index)) {
+            this->entity_render->Refresh(image_index);
+            DynamicEntity::UpdateAnimationDescriptor(image_index);
         }
 
         this->map->UpdateDescriptorSet(image_index);

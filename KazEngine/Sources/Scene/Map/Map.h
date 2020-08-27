@@ -9,7 +9,7 @@
 
 namespace Engine
 {
-    class Map // : public IEntityListener
+    class Map
     {
         public :
 
@@ -22,12 +22,8 @@ namespace Engine
             void Refresh(uint8_t frame_index);
             void UpdateSelection(std::vector<DynamicEntity*> entities);
             void UpdateDescriptorSet(uint8_t frame_index);
-            
-            /////////////////////
-            // IEntityListener //
-            /////////////////////
-
-            // inline virtual void StaticBufferUpdated() { this->entities_descriptor.AwaitUpdate(1); }
+            std::vector<DynamicEntity*> const& GetSelectedEntities() const { return this->selected_entities; }
+            Maths::Vector3 GetMouseRayPosition();
 
         private :
 
@@ -41,6 +37,8 @@ namespace Engine
             DescriptorSet texture_descriptor;
             DescriptorSet selection_descriptor;
             Vulkan::PIPELINE pipeline;
+
+            std::vector<DynamicEntity*> selected_entities;
 
             bool UpdateVertexBuffer(uint8_t frame_index);
             bool SetupDescriptorSets();

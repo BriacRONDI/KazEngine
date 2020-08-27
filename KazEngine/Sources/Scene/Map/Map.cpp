@@ -133,7 +133,8 @@ namespace Engine
 
     void Map::UpdateSelection(std::vector<DynamicEntity*> entities)
     {
-        uint32_t count = static_cast<uint32_t>(entities.size());
+        this->selected_entities = std::move(entities);
+        uint32_t count = static_cast<uint32_t>(this->selected_entities.size());
         
         if(this->selection_chunk->range < (count + 1) * sizeof(uint32_t)) {
             if(!this->selection_descriptor.ResizeChunk(this->selection_chunk, (count + 1) * sizeof(uint32_t), 0, Vulkan::SboAlignment())) {
@@ -147,10 +148,15 @@ namespace Engine
         this->selection_descriptor.WriteData(&count, sizeof(uint32_t), static_cast<uint32_t>(this->selection_chunk->offset));
 
         std::vector<uint32_t> selected_ids(count);
-        for(uint32_t i=0; i<count; i++) selected_ids[i] = entities[i]->GetInstanceId();
+        for(uint32_t i=0; i<count; i++) selected_ids[i] = this->selected_entities[i]->GetInstanceId();
 
         this->selection_descriptor.WriteData(selected_ids.data(), selected_ids.size() * sizeof(uint32_t),
                                              static_cast<uint32_t>(this->selection_chunk->offset + sizeof(uint32_t)));
+    }
+
+    Maths::Vector3 Map::GetMouseRayPosition()
+    {
+        return {};
     }
 
     void Map::Update(uint8_t frame_index)
