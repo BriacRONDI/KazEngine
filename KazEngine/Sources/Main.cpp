@@ -82,6 +82,25 @@ int main(int argc, char** argv)
     cube2.SetMatrix(Maths::Matrix4x4::TranslationMatrix({2.0f, -1.0f, 0.0f}));
     cube2.AddMesh(cube_mesh);*/
 
+    auto concrete_jpg = Engine::DataBank::GetImageFromPackage(data_buffer, "/mono_textured_cube/concrete.jpg");
+    Engine::DataBank::AddTexture(concrete_jpg, "concrete.jpg");
+
+    auto concrete = Engine::DataBank::GetMaterialFromPackage(data_buffer, "/mono_textured_cube/Ciment");
+    Engine::DataBank::AddMaterial(concrete, "Ciment");
+
+    auto mt_cube_mesh = Engine::DataBank::GetMeshFromPackage(data_buffer, "/mono_textured_cube/MT_Cube");
+    mt_cube_mesh->UpdateRenderMask({});
+    mt_cube_mesh->render_mask |= Model::Mesh::RENDER_TEXTURE;
+
+    std::shared_ptr<Engine::LODGroup> mt_cube_lod = std::shared_ptr<Engine::LODGroup>(new Engine::LODGroup);
+    mt_cube_lod->AddLOD(mt_cube_mesh, 0);
+
+    Engine::StaticEntity cube;
+    cube.AddLOD(mt_cube_lod);
+
+    Maths::Matrix4x4 matrix = Maths::Matrix4x4::TranslationMatrix({2.0f, -0.5f, 0.0f}) * Maths::Matrix4x4::ScalingMatrix({0.5f, 0.5f, 0.5f});
+    cube.SetMatrix(matrix);
+
     ////////////////
     // SIMPLE GUY //
     ////////////////
@@ -118,8 +137,6 @@ int main(int argc, char** argv)
     simple_guy_lod->SetHitBox({{-0.25f, 0.0f, 0.25f},{0.25f, -1.3f, -0.25f}});
 
     Engine::DynamicEntity guy;
-    // guy.AddMesh(simple_guy_mesh);
-    // engine.GetEntityRender().AddEntity(guy);
     guy.AddLOD(simple_guy_lod);
     guy.PlayAnimation("Armature|Walk", 1.0f, true);
     
@@ -138,9 +155,9 @@ int main(int argc, char** argv)
     dynamic_entity_add_start.Start(std::chrono::milliseconds(10));
     std::vector<std::shared_ptr<Engine::Entity>> guys;
 
-    /*for(int i=0; i<100; i++) {
+    /*for(int i=0; i<30; i++) {
         auto new_entity = std::shared_ptr<Engine::DynamicEntity>(new Engine::DynamicEntity);
-        new_entity->AddMesh(simple_guy_mesh);
+        new_entity->AddLOD(simple_guy_lod);
 
         guys.resize(guys.size() + 1);
         guys[guys.size()-1] = new_entity;
@@ -206,9 +223,13 @@ int main(int argc, char** argv)
         }*/
 
         
-        if(/*count < 1000 &&*/ dynamic_entity_add_start.GetProgression() >= 1.0f && Engine::Keyboard::GetInstance().IsPressed(VK_SPACE)) {
+        if(/*count < 1000 && */dynamic_entity_add_start.GetProgression() >= 1.0f && Engine::Keyboard::GetInstance().IsPressed(VK_SPACE)) {
 
-            uint32_t step = 1;
+            // guy.SetMatrix(IDENTITY_MATRIX);
+
+            guy.SetMatrix(IDENTITY_MATRIX);
+
+            uint32_t step = 1000;
             for(uint32_t i=0; i<step; i++) {
                 auto new_entity = std::shared_ptr<Engine::DynamicEntity>(new Engine::DynamicEntity);
                 new_entity->AddLOD(simple_guy_lod);

@@ -10,7 +10,7 @@ layout (set=0, binding=0, std140) readonly uniform Camera
 	vec4 position;
 } camera;
 
-layout (set=1, binding=0, std140)  buffer Entity
+layout (set=1, binding=0, std140) buffer Entity
 {
 	mat4 model[];
 };
@@ -55,17 +55,17 @@ layout (set=3, binding=1, std430) readonly buffer Animation
 	ANIMATION animations[];
 };
 
-layout (set=3, binding=2) readonly uniform AnimationTimer
-{
-	uint time;
-};
+// layout (set=3, binding=2) readonly uniform AnimationTimer
+// {
+	// uint time;
+// };
 
 struct LOD
 {
 	uint first_vertex;
 	uint vertex_count;
 	float distance;
-	float _pad0;
+	uint valid;
 };
 
 struct LOD_STACK
@@ -73,10 +73,48 @@ struct LOD_STACK
 	LOD stack[max_lod_count];
 };
 
-layout (set=4, binding=0, std140) readonly buffer LodData
+layout (set=4, binding=0) readonly buffer LodData
 {
 	LOD_STACK lod[];
 };
+
+struct MOVEMENT_DATA {
+	vec2 destination;
+	int moving;
+	float radius;
+	vec4 debug;
+};
+
+layout (set=5, binding=0) buffer MovementData
+{
+	MOVEMENT_DATA movement[];
+};
+
+layout (set=5, binding=1) uniform MovementGroupCount
+{
+	uint movement_group_count;
+};
+
+struct MOVEMENT_GROUP {
+	vec2 destination;
+	int scale;
+	float unit_radius;
+	uint unit_count;
+	uint fill_count;
+	uint inside_count;
+	uint padding;
+};
+
+layout (set=5, binding=2) buffer MovementGroups
+{
+	MOVEMENT_GROUP group[];
+};
+
+layout (set=6, binding=0) readonly uniform GlobalTime
+{
+	uint now;
+	float delta;
+}time;
 
 bool InsideFrustum(vec4 pos, float radius)
 {
@@ -99,7 +137,7 @@ void main()
 		if(animation.play > 0) {
 			if(animation.loop > 0) {
 			
-				float progression = float(time - animation.start) / float(animation.duration) * animation.speed;
+				float progression = float(time.now - animation.start) / float(animation.duration) * animation.speed;
 				uint last_frame_id = animation.frame_count - 1;
 				frames[idx].frame_id = uint(mod(progression * last_frame_id, last_frame_id));
 			}else{
@@ -112,13 +150,15 @@ void main()
 			frames[idx].frame_id = animation.start;
 		}
 		
-		uint lod_stack_id;
-		if(distance(camera.position.xyz, entity_positon.xyz) < 15.0) lod_stack_id = 0;
-		else if(distance(camera.position.xyz, entity_positon.xyz) < 40.0) lod_stack_id = 1;
-		else if(distance(camera.position.xyz, entity_positon.xyz) < 100.0) lod_stack_id = 2;
-		else lod_stack_id = 3;
+		LOD selected_lod = lod[indirect_draws[idx].lodIndex].stack[0];
+		float distance_to_camera = distance(camera.position.xyz, entity_positon.xyz);
+		for(int i=1; i<max_lod_count; i++) {
+			LOD current_lod = lod[indirect_draws[idx].lodIndex].stack[i];
+			if(current_lod.valid == 0) break;
+			if(distance_to_camera > current_lod.distance) selected_lod = current_lod;
+		}
 		
-		indirect_draws[idx].firstVertex = lod[indirect_draws[idx].lodIndex].stack[lod_stack_id].first_vertex;
-		indirect_draws[idx].indexCount = lod[indirect_draws[idx].lodIndex].stack[lod_stack_id].vertex_count;
+		indirect_draws[idx].firstVertex = selected_lod.first_vertex;
+		indirect_draws[idx].indexCount = selected_lod.vertex_count;
 	}
 }

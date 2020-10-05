@@ -7,6 +7,7 @@ layout (set=0, binding=0, std140) readonly uniform Camera
 	mat4 projection;
 	mat4 view;
 	vec4 frustum_planes[6];
+	vec4 position;
 } camera;
 
 layout (set=1, binding=0, std140) readonly buffer Entity
@@ -33,12 +34,17 @@ struct LOD
 	uint first_vertex;
 	uint vertex_count;
 	float distance;
-	float _pad0;
+	uint valid;
+};
+
+struct LOD_STACK
+{
+	LOD stack[max_lod_count];
 };
 
 layout (set=3, binding=0, std140) readonly buffer LodData
 {
-	LOD lod[][max_lod_count];
+	LOD_STACK lod[];
 };
 
 bool InsideFrustum(vec4 pos, float radius)
@@ -53,10 +59,19 @@ void main()
 	uint idx = gl_GlobalInvocationID.x;
 	
 	vec4 entity_positon = model[idx][3];
-	if(!InsideFrustum(entity_positon, -2.0)) indirect_draws[idx].instanceCount = 0;
+	if(!InsideFrustum(entity_positon, 2.0)) indirect_draws[idx].instanceCount = 0;
 	else {
 		indirect_draws[idx].instanceCount = 1;
-		indirect_draws[idx].firstVertex = lod[indirect_draws[idx].lodIndex][0].first_vertex;
-		indirect_draws[idx].indexCount = lod[indirect_draws[idx].lodIndex][0].vertex_count;
+		
+		LOD selected_lod = lod[indirect_draws[idx].lodIndex].stack[0];
+		float distance_to_camera = distance(camera.position.xyz, entity_positon.xyz);
+		for(int i=1; i<max_lod_count; i++) {
+			LOD current_lod = lod[indirect_draws[idx].lodIndex].stack[i];
+			if(current_lod.valid == 0) break;
+			if(distance_to_camera > current_lod.distance) selected_lod = current_lod;
+		}
+		
+		indirect_draws[idx].firstVertex = selected_lod.first_vertex;
+		indirect_draws[idx].indexCount = selected_lod.vertex_count;
 	}
 }

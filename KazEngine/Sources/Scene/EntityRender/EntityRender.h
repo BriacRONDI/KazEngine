@@ -8,6 +8,8 @@
 #include "../../Entity/StaticEntity/StaticEntity.h"
 #include "../../Entity/IEntityListener.h"
 #include "../../LoadedMesh/LoadedMesh.h"
+#include "../../Platform/Common/Timer/Timer.h"
+#include "../../UnitControl/UnitControl.h"
 
 #define ENTITY_ID_BINDING               0
 #define ENTITY_DATA_BINDING             1
@@ -30,7 +32,7 @@ namespace Engine
             VkCommandBuffer GetCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer);
             inline void Refresh() { for(int i=0; i<this->need_graphics_update.size(); i++) this->Refresh(i); }
             void Refresh(uint8_t frame_index);
-            VkSemaphore SubmitComputeShader(uint8_t frame_index);
+            VkSemaphore SubmitComputeShader(uint8_t frame_index, std::vector<VkSemaphore> wait_semaphores);
             void UpdateDescriptorSet(uint8_t frame_index);
 
             /////////////////////
@@ -38,6 +40,7 @@ namespace Engine
             /////////////////////
 
             virtual void AddLOD(Entity& entity, std::shared_ptr<LODGroup> lod);
+            virtual void NewEntity(Entity* entity) {};
 
         private :
 
@@ -53,9 +56,18 @@ namespace Engine
                 uint32_t instance_id;
             };
 
-            struct RENDER_GOURP;
+            struct DRAWABLE_BIND;
+            struct RENDER_GOURP {
+                Vulkan::PIPELINE graphics_pipeline;
+                Vulkan::PIPELINE compute_pipeline;
+                uint16_t mask;
+                std::vector<std::pair<bool, std::shared_ptr<Chunk>>> instance_buffer_chunks;
+                DescriptorSet indirect_descriptor;
+                std::vector<DRAWABLE_BIND> drawables;
+                uint32_t instance_count;
+            };
+
             struct DRAWABLE_BIND {
-                // LoadedMesh mesh;
                 std::shared_ptr<LODGroup> lod;
                 uint32_t texture_id;
                 std::shared_ptr<Chunk> chunk;
@@ -64,20 +76,6 @@ namespace Engine
                 std::vector<ENTITY_MESH_CHUNK> entities;
                 bool AddInstance(RENDER_GOURP& group, Entity& entity);
             };
-
-            struct RENDER_GOURP {
-                Vulkan::PIPELINE graphics_pipeline;
-                Vulkan::PIPELINE compute_pipeline;
-                uint16_t mask;
-                std::vector<std::shared_ptr<Chunk>> instance_buffer_chunks;
-                DescriptorSet indirect_descriptor;
-                std::vector<DRAWABLE_BIND> drawables;
-            };
-
-            std::shared_ptr<Chunk> skeleton_bones_chunk;
-            std::shared_ptr<Chunk> skeleton_offsets_chunk;
-            std::shared_ptr<Chunk> skeleton_offsets_ids_chunk;
-            std::shared_ptr<Chunk> skeleton_animations_chunk;
 
             DescriptorSet texture_descriptor;
             DescriptorSet skeleton_descriptor;
@@ -90,15 +88,14 @@ namespace Engine
             std::vector<VkCommandBuffer> compute_command_buffers;
             std::vector<VkSemaphore> compute_semaphores;
             std::vector<RENDER_GOURP> render_groups;
-            // std::vector<Entity*> entities;
             std::map<std::string, SKELETON_BUFFER_INFOS> skeletons;
             std::map<std::string, uint32_t> textures;
+            // Vulkan::PIPELINE move_pipeline;
 
             bool LoadTexture(std::string name);
             bool LoadSkeleton(std::string name);
             bool SetupDescriptorSets();
             bool SetupPipelines();
             bool BuildComputeCommandBuffer(uint8_t frame_index);
-            // bool AddEntity(Entity& entity);
     };
 }

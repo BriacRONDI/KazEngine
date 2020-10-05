@@ -321,9 +321,10 @@ namespace Model
             uint32_t offset_index = 0;
             uint8_t id_max = 0;
             for(auto const& bone : item.second) {
+
                 *reinterpret_cast<Maths::Matrix4x4*>(offsets.data() + matrix_offset + offset_index * sizeof(Maths::Matrix4x4)) = *bone.second;
 
-                if(bone.first > id_max || !offsets_ids.size()) {
+                if(bone.first > id_max || !id_max) {
                     id_max = bone.first;
                     uint32_t id_segment_size = (id_max + 1) * sizeof(uint32_t);
                     if(alignment > 0) id_segment_size = static_cast<uint32_t>((id_segment_size + alignment - 1) & ~(alignment - 1));

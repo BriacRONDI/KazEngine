@@ -24,7 +24,7 @@ namespace Engine
             bool Create(std::vector<VkDescriptorSetLayoutBinding> const& layout_bindings, std::vector<VkDescriptorBufferInfo> const& buffers_infos);
             bool Create(Tools::IMAGE_MAP const& image);
             bool Prepare(std::vector<VkDescriptorSetLayoutBinding> const& layout_bindings, uint32_t instance_count = 1);
-            bool Create(std::vector<BINDING_INFOS> infos, uint32_t instance_count = 1, std::vector<std::shared_ptr<Chunk>> external_chunk = {});
+            bool Create(std::vector<BINDING_INFOS> infos, bool instanced = true, std::vector<std::shared_ptr<Chunk>> external_chunk = {});
             uint32_t Allocate(std::vector<VkDescriptorBufferInfo> const& buffers_infos);
             bool PrepareBindlessTexture(uint32_t texture_count = 32);
             int32_t AllocateTexture(Tools::IMAGE_MAP const& image);
@@ -32,11 +32,20 @@ namespace Engine
             inline VkDescriptorSetLayout GetLayout() const { return this->layout; }
             inline std::shared_ptr<Chunk> GetChunk(uint8_t binding = 0) const { return this->bindings[binding].chunk; }
 
-            inline void WriteData(const void* data, VkDeviceSize data_size, size_t relative_offset, uint8_t binding, uint8_t instance_id)
-            { DataBank::GetManagedBuffer().WriteData(data, data_size, this->bindings[binding].chunk->offset + relative_offset, instance_id); }
+            void WriteData(const void* data, VkDeviceSize data_size, size_t relative_offset, uint8_t binding, uint8_t instance_id);
+            // { DataBank::GetInstancedBuffer().WriteData(data, data_size, this->bindings[binding].chunk->offset + relative_offset, instance_id); }
 
             inline void WriteData(const void* data, VkDeviceSize data_size, size_t relative_offset, uint8_t binding = 0)
             { for(uint8_t i=0; i<this->sets.size(); i++) { this->WriteData(data, data_size, relative_offset, binding, i); } }
+
+            void ReadData(uint8_t binding = 0, uint8_t instance_id = 0);
+            // { DataBank::GetInstancedBuffer().ReadData(this->bindings[binding].chunk, instance_id); }
+
+            void AcquireFromStaging(void* data, VkDeviceSize data_size, size_t relative_offset, uint8_t binding, uint8_t instance_id);
+            // { DataBank::GetInstancedBuffer().ReadStagingBuffer(data, data_size, this->bindings[binding].chunk->offset + relative_offset, instance_id); }
+
+            // inline void* DirectStagingAccess(size_t relative_offset, uint8_t binding, uint8_t instance_id)
+            void* DirectStagingAccess(uint8_t instance_id = 0, uint8_t binding = 0, size_t relative_offset = 0);
 
             inline std::shared_ptr<Chunk> ReserveRange(size_t size, uint8_t binding = 0) { return this->bindings[binding].chunk->ReserveRange(size); }
             std::shared_ptr<Chunk> ReserveRange(size_t size, size_t alignment, uint8_t binding = 0);

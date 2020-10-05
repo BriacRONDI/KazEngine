@@ -8,12 +8,14 @@
 #include "../DataBank/DataBank.h"
 #include "../Platform/Common/Timer/Timer.h"
 #include "../UserInterface/UserInterface.h"
+#include "../UnitControl/UnitControl.h"
 
 #if defined(DISPLAY_LOGS)
 #include <iostream>
+#include <thread>
 #endif
 
-#define MULTI_USAGE_BUFFER_MASK VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
+#define MULTI_USAGE_BUFFER_MASK VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
 
 
 namespace Engine
@@ -52,7 +54,10 @@ namespace Engine
             EntityRender* entity_render;
             UserInterface* user_interface;
             std::vector<VkSemaphore> swap_chain_semaphores;
+            std::vector<VkSemaphore> write_semaphores;
+            std::vector<VkSemaphore> read_semaphores;
             std::vector<Vulkan::COMMAND_BUFFER> transfer_buffers;
+            bool draw;
 
             bool AllocateRenderingResources();
             void DestroyRenderingResources();

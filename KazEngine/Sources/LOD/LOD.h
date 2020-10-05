@@ -16,7 +16,7 @@ namespace Engine
                 uint32_t first_vertex;
 			    uint32_t vertex_count;
 			    float distance;
-			    float _pad0;
+			    uint32_t valid;
             };
 
             struct INDIRECT_COMMAND {
@@ -49,13 +49,14 @@ namespace Engine
             inline std::shared_ptr<Model::Mesh> GetMesh(uint8_t level = 0) const { return this->meshes[level]; }
             inline void SetHitBox(HIT_BOX hit_box) { if(this->hit_box == nullptr) this->hit_box = new HIT_BOX; *this->hit_box = hit_box; }
             inline HIT_BOX* GetHitBox() const { return this->hit_box; }
-            inline uint32_t GetLodIndex() const { return static_cast<uint32_t>(this->lod_chunk->offset / sizeof(LOD)); }
-            void Render(VkCommandBuffer command_buffer, VkBuffer buffer, VkPipelineLayout layout, uint32_t instance_count,
-                        std::vector<std::shared_ptr<Chunk>> instance_buffer_chunks, size_t indirect_offset) const;
+            inline uint32_t GetLodIndex() const { return static_cast<uint32_t>(this->lod_chunk->offset / (sizeof(LOD) * MAX_LOD_COUNT)); }
+            void Render(VkCommandBuffer command_buffer, uint32_t instance_id, VkPipelineLayout layout, uint32_t instance_count,
+                        std::vector<std::pair<bool, std::shared_ptr<Chunk>>> instance_buffer_chunks, size_t indirect_offset) const;
 
             static bool Initialize();
             static void Clear();
             static inline DescriptorSet& GetDescriptor() { return LODGroup::lod_descriptor; }
+            static inline bool UpdateDescriptor(uint8_t instance_id) { return LODGroup::lod_descriptor.Update(instance_id); }
 
         private :
 

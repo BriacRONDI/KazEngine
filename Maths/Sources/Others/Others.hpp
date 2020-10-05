@@ -66,15 +66,7 @@ namespace Maths
      */
     inline bool aabb_inside_half_space(Plane plane, Vector3 const& box_min, Vector3 const& box_max)
     {
-        Vector3 center = (box_min + box_max) * 0.5f;
-        // auto extents = box_max - center;
-        float distance_from_plane = plane.normal.Dot(center - plane.origin);
-        return distance_from_plane >= 0;
-        /*float projection_radius = extents.x * std::abs(plane.normal.x) + extents.y * std::abs(plane.normal.y) + extents.z * std::abs(plane.normal.z);
-        #if defined(DISPLAY_LOGS)
-        std::cout << "distance_from_plane : " << distance_from_plane << ", projection_radius : " << projection_radius << std::endl;
-        #endif
-        return distance_from_plane >= projection_radius;*/
+        return plane.normal.Dot((box_min + box_max) * 0.5f - plane.origin) >= 0;
     }
 
     /**

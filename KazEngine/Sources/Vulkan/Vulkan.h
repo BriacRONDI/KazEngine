@@ -224,13 +224,16 @@ namespace Engine
             // Création d'un command buffer
             bool CreateCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY, bool create_fence = true);
             bool CreateCommandBuffer(VkCommandPool pool, COMMAND_BUFFER& command_buffer, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY, bool create_fence = true);
+            bool CreateCommandBuffer(VkCommandPool pool, VkCommandBuffer& command_buffer, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
             void ReleaseCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers);
             void ReleaseCommandBuffer(VkCommandPool pool, COMMAND_BUFFER& command_buffer);
 
             // Envoi de données vers un data buffer
             size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, VkDeviceSize data_size, VkDeviceSize destination_offset);
-            size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks, VkQueue queue = Vulkan::GetTransferQueue().handle);
+            // size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks, VkQueue queue = Vulkan::GetTransferQueue().handle);
+            size_t SynchronizeBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks,
+                                     VkQueue queue = Vulkan::GetTransferQueue().handle, VkSemaphore signal = nullptr, VkSemaphore wait = nullptr, bool write = true);
             size_t PrepareSend(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks);
             bool SendPrepared(COMMAND_BUFFER const& command_buffer, VkQueue queue);
 

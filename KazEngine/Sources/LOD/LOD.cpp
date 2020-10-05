@@ -8,7 +8,7 @@ namespace Engine
     {
         if(!LODGroup::lod_descriptor.Create({
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(LOD) * MAX_LOD_COUNT}
-        }, Vulkan::GetConcurrentFrameCount())) return false;
+        })) return false;
 
         return true;
     }
@@ -50,6 +50,7 @@ namespace Engine
 
         // Set LOD chunk
         uint32_t first_vertex = 0;
+        float lod_distances[] = {0.0f, 15.0f, 40.0f, 100.0f};
         for(uint8_t i=0; i<MAX_LOD_COUNT; i++) {
 
             if(i >= this->meshes.size()) {
@@ -60,9 +61,9 @@ namespace Engine
                 LOD lod;
                 lod.first_vertex = first_vertex;
                 lod.vertex_count = static_cast<uint32_t>(this->meshes[i]->index_buffer.size());
-                lod._pad0 = 0;
+                lod.valid = 1;
                 if(!lod.vertex_count) lod.vertex_count = static_cast<uint32_t>(this->meshes[i]->vertex_buffer.size());
-                lod.distance = i * 5.0f;
+                lod.distance = lod_distances[i];
                 first_vertex += lod.vertex_count;
 
                 this->lod_descriptor.WriteData(&lod, sizeof(LOD), this->lod_chunk->offset + i * sizeof(LOD));
@@ -81,7 +82,7 @@ namespace Engine
         }
 
         // Allocate vertex buffer
-        this->vertex_buffer_chunk = DataBank::GetManagedBuffer().ReserveChunk(total_vbo_size);
+        this->vertex_buffer_chunk = DataBank::GetInstancedBuffer().ReserveChunk(total_vbo_size);
         if(this->vertex_buffer_chunk == nullptr) {
             #if defined(DISPLAY_LOGS)
             std::cout << "LODGroup::Build() : Not enough memory" << std::endl;
@@ -93,7 +94,7 @@ namespace Engine
         size_t offset = 0;
         for(uint8_t i=0; i<vbos.size(); i++) {
 
-            DataBank::GetManagedBuffer().WriteData(vbos[i].first.get(), vbos[i].second, this->vertex_buffer_chunk->offset + offset);
+            DataBank::GetInstancedBuffer().WriteData(vbos[i].first.get(), vbos[i].second, this->vertex_buffer_chunk->offset + offset);
             offset += vbos[i].second;
         }
 
@@ -131,16 +132,20 @@ namespace Engine
         return true;
     }
 
-    void LODGroup::Render(VkCommandBuffer command_buffer, VkBuffer buffer, VkPipelineLayout layout, uint32_t instance_count,
-                          std::vector<std::shared_ptr<Chunk>> instance_buffer_chunks, size_t indirect_offset) const
+    void LODGroup::Render(VkCommandBuffer command_buffer, uint32_t instance_id, VkPipelineLayout layout, uint32_t instance_count,
+                          std::vector<std::pair<bool, std::shared_ptr<Chunk>>> instance_buffer_chunks, size_t indirect_offset) const
     {
         vkCmdPushConstants(command_buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PUSH_CONSTANT_MATERIAL), &this->materials[0]);
 
+        VkBuffer buffer = DataBank::GetInstancedBuffer().GetBuffer(instance_id).handle;
         vkCmdBindVertexBuffers(command_buffer, 0, 1, &buffer, &this->vertex_buffer_chunk->offset);
 
         std::vector<VkBuffer> buffers = std::vector<VkBuffer>(instance_buffer_chunks.size(), buffer);
         std::vector<VkDeviceSize> instance_offsets(instance_buffer_chunks.size());
-        for(uint8_t i=0; i<instance_buffer_chunks.size(); i++) instance_offsets[i] = instance_buffer_chunks[i]->offset;
+        for(uint8_t i=0; i<instance_buffer_chunks.size(); i++) {
+            instance_offsets[i] = instance_buffer_chunks[i].second->offset;
+            if(!instance_buffer_chunks[i].first) buffers[i] = DataBank::GetCommonBuffer().GetBuffer().handle;
+        }
         vkCmdBindVertexBuffers(command_buffer, 1, static_cast<uint32_t>(instance_offsets.size()), buffers.data(), instance_offsets.data());
 
         vkCmdDrawIndirect(command_buffer, buffer, indirect_offset, instance_count, sizeof(INDIRECT_COMMAND));

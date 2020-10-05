@@ -15,7 +15,7 @@ namespace Engine
             vkDeviceWaitIdle(Vulkan::GetDevice());
 
             // Chunks
-            DataBank::GetManagedBuffer().FreeChunk(this->ui_vbo_chunk);
+            DataBank::GetInstancedBuffer().FreeChunk(this->ui_vbo_chunk);
 
             // Pipeline
             this->pipeline.Clear();
@@ -51,7 +51,7 @@ namespace Engine
 
         if(!this->selection_descriptor.Create({
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(MOUSE_SELECTION_SQUARE)}
-        }, frame_count)) {
+        })) {
             this->Clear();
             return;
         }
@@ -66,7 +66,7 @@ namespace Engine
         shader_stages[1] = Vulkan::GetInstance().LoadShaderModule("./Shaders/interface.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
 
         size_t chunk_size = Vulkan::GetInstance().ComputeUniformBufferAlignment(SIZE_KILOBYTE(5));
-        this->ui_vbo_chunk = DataBank::GetManagedBuffer().ReserveChunk(chunk_size);
+        this->ui_vbo_chunk = DataBank::GetInstancedBuffer().ReserveChunk(chunk_size);
 
         std::vector<VkVertexInputBindingDescription> vertex_binding_description;
         auto vertex_attribute_description = Vulkan::CreateVertexInputDescription({{Vulkan::POSITION_2D, Vulkan::UV}}, vertex_binding_description);
@@ -186,8 +186,8 @@ namespace Engine
         vertex_data[3].position = {1.0f, 1.0f};
         vertex_data[3].uv = { 1.0f, 1.0f };
 
-        DataBank::GetManagedBuffer().WriteData(vertex_data.data(), static_cast<uint32_t>(vertex_data.size()) * sizeof(SHADER_INPUT),
-                                               this->ui_vbo_chunk->offset, frame_index);
+        DataBank::GetInstancedBuffer().WriteData(vertex_data.data(), static_cast<uint32_t>(vertex_data.size()) * sizeof(SHADER_INPUT),
+                                                 this->ui_vbo_chunk->offset, frame_index);
 
         return true;
     }
@@ -267,7 +267,7 @@ namespace Engine
             VkDescriptorSet set = this->selection_descriptor.Get(frame_index);
             vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &set, 0, nullptr);
             vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline.handle);
-            vkCmdBindVertexBuffers(command_buffer, 0, 1, &DataBank::GetManagedBuffer().GetBuffer(frame_index).handle, &this->ui_vbo_chunk->offset);
+            vkCmdBindVertexBuffers(command_buffer, 0, 1, &DataBank::GetInstancedBuffer().GetBuffer(frame_index).handle, &this->ui_vbo_chunk->offset);
             vkCmdDraw(command_buffer, 4, 1, 0, 0);
         }
 

@@ -29,7 +29,7 @@ namespace Engine
     {
         return StaticEntity::matrix_descriptor.Create({
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(Maths::Matrix4x4) * 10}
-        }, Vulkan::GetConcurrentFrameCount());
+        });
     }
 
     void StaticEntity::SetMatrix(Maths::Matrix4x4 matrix)

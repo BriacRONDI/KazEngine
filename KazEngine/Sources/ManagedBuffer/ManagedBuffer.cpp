@@ -13,7 +13,8 @@ namespace Engine
 
         this->staging_buffers.clear();
         this->buffers.clear();
-        this->flush_chunks.clear();
+        this->write_chunks.clear();
+        this->read_chunks.clear();
 
         this->instance_count = 0;
     }
@@ -28,7 +29,8 @@ namespace Engine
 
         this->staging_buffers.resize(instance_count);
         this->buffers.resize(instance_count);
-        this->flush_chunks.resize(instance_count);
+        this->write_chunks.resize(instance_count);
+        this->read_chunks.resize(instance_count);
 
         for(uint8_t i=0; i<instance_count; i++) {
             if(allocate_staging_buffer && !ManagedBuffer::AllocateStagingBuffer(this->staging_buffers[i], queue_families, size)) {
@@ -48,7 +50,7 @@ namespace Engine
     bool ManagedBuffer::AllocateStagingBuffer(Vulkan::STAGING_BUFFER& staging_buffer, std::vector<uint32_t> queue_families, VkDeviceSize size)
     {
         if(!Vulkan::GetInstance().CreateDataBuffer(staging_buffer, size,
-                                                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+                                                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
                                                    queue_families)) {
             #if defined(DISPLAY_LOGS)
             std::cout << "ManagedBuffer::AllocateStagingBuffer => CreateDataBuffer : Failed" << std::endl;
@@ -73,61 +75,116 @@ namespace Engine
     {
         if(!data_size) return;
 
-        std::vector<Chunk>& flush = this->flush_chunks[instance_id];
+        std::vector<Chunk>& chunks = this->write_chunks[instance_id];
         size_t end_offset = start_offset + data_size;
         
         uint32_t overlap_start = 0;
         uint32_t overlap_count = 0;
         uint32_t insert_pos = 0;
-        for(uint32_t i=0; i<flush.size(); i++) {
+        for(uint32_t i=0; i<chunks.size(); i++) {
             
-            size_t flush_chunk_end = flush[i].offset + flush[i].range;
+            size_t flush_chunk_end = chunks[i].offset + chunks[i].range;
 
-            if(end_offset < flush[i].offset) {
+            if(end_offset < chunks[i].offset) {
                 insert_pos = i;
                 break;
             }else if(flush_chunk_end >= start_offset) {
                 if(!overlap_count) overlap_start = i;
                 overlap_count++;
-                if(flush[i].offset < start_offset) start_offset = flush[i].offset;
+                if(chunks[i].offset < start_offset) start_offset = chunks[i].offset;
                 if(flush_chunk_end > end_offset) end_offset = flush_chunk_end;
             }else{
                 insert_pos++;
             }
         }
 
-        if(!overlap_count) flush.insert(flush.begin() + insert_pos, {start_offset, end_offset - start_offset});
+        if(!overlap_count) chunks.insert(chunks.begin() + insert_pos, {start_offset, end_offset - start_offset});
         else {
-            flush[overlap_start].offset = start_offset;
-            flush[overlap_start].range = end_offset - start_offset;
-            if(overlap_count == 2) flush.erase(flush.begin() + overlap_start + 1);
-            else if(overlap_count > 2) flush.erase(flush.begin() + overlap_start + 1, flush.begin() + overlap_start + overlap_count - 1);
+            chunks[overlap_start].offset = start_offset;
+            chunks[overlap_start].range = end_offset - start_offset;
+            if(overlap_count == 2) chunks.erase(chunks.begin() + overlap_start + 1);
+            else if(overlap_count > 2) chunks.erase(chunks.begin() + overlap_start + 1, chunks.begin() + overlap_start + overlap_count - 1);
         }
+    }
+
+    void ManagedBuffer::ReadData(std::shared_ptr<Chunk> chunk, uint8_t instance_id)
+    {
+        /*std::shared_ptr<Chunk> rchunk = std::shared_ptr<Chunk>(new Chunk(chunk->offset, chunk->range));
+        std::vector<Chunk>& chunks = this->write_chunks[instance_id];
+        size_t rchunk_end = chunk->offset + chunk->range;
+        for(uint32_t i=0; i<chunks.size(); i++) {
+            size_t wchunk_end = chunks[i].offset + chunks[i].range;
+            if(chunks[i].offset <= rchunk->offset && wchunk_end >= rchunk_end) return;
+            else if(chunks[i].offset >= rchunk_end) break;
+            else if(chunks[i].offset <= rchunk->offset && wchunk_end >= rchunk->offset) {
+                rchunk->offset = wchunk_end;
+                rchunk->range = rchunk_end - wchunk_end;
+            }else if(chunks[i].offset >= rchunk->offset && wchunk_end <= rchunk_end) {
+                rchunk->range = chunks[i].offset - rchunk->offset;
+                this->read_chunks[instance_id].push_back(rchunk);
+                rchunk = std::shared_ptr<Chunk>(new Chunk(wchunk_end, rchunk_end - wchunk_end));
+            }else if(chunks[i].offset <= rchunk->offset && wchunk_end >= rchunk_end) {
+                rchunk->range = chunks[i].offset - rchunk->offset;
+                break;
+            }
+        }
+
+        if(rchunk->range > 0) this->read_chunks[instance_id].push_back(rchunk);*/
+        this->read_chunks[instance_id].push_back({chunk->offset, chunk->range});
     }
 
     void ManagedBuffer::WriteData(const void* data, VkDeviceSize data_size, VkDeviceSize global_offset, uint8_t instance_id)
     {
+        size_t plane_start = 3328;
+        size_t plane_end = 3328 + 128;
+        size_t write_end = global_offset + data_size;
+        if(global_offset >= plane_start && global_offset <= plane_end
+            || write_end >= plane_start && write_end <= plane_end
+            || global_offset <= plane_start && global_offset >= plane_end)
+                int a = 0;
         std::memcpy(this->staging_buffers[instance_id].pointer + global_offset, data, data_size);
         this->UpdateFlushRange(global_offset, data_size, static_cast<uint8_t>(instance_id));
     }
 
-    bool ManagedBuffer::Flush(Vulkan::COMMAND_BUFFER const& command_buffer)
+    bool ManagedBuffer::FlushWrite(Vulkan::COMMAND_BUFFER const& command_buffer)
     {
         for(uint8_t i=0; i<this->instance_count; i++)
-            if(!this->Flush(command_buffer, i)) return false;
+            if(!this->FlushWrite(command_buffer, i)) return false;
 
         return true;
     }
 
-    bool ManagedBuffer::Flush(Vulkan::COMMAND_BUFFER const& command_buffer, uint8_t instance_id)
+    bool ManagedBuffer::FlushWrite(Vulkan::COMMAND_BUFFER const& command_buffer, uint8_t instance_id, VkSemaphore signal, VkSemaphore wait)
     {
-        if(!this->flush_chunks[instance_id].empty()) {
-            size_t bytes_sent = Vulkan::GetInstance().SendToBuffer(this->buffers[instance_id], command_buffer, this->staging_buffers[instance_id],
-                                                                   this->flush_chunks[instance_id], Vulkan::GetGraphicsQueue().handle);
-            if(!bytes_sent) {
-                return false;
-            }
-            this->flush_chunks[instance_id].clear();
+        if(!this->write_chunks[instance_id].empty()) {
+            size_t bytes_sent = Vulkan::GetInstance().SynchronizeBuffer(
+                this->buffers[instance_id], command_buffer, this->staging_buffers[instance_id],
+                this->write_chunks[instance_id], Vulkan::GetGraphicsQueue().handle,
+                signal, wait, true
+            );
+
+            if(!bytes_sent) return false;
+            this->write_chunks[instance_id].clear();
+        }else{
+            return false;
+        }
+        
+        return true;
+    }
+
+    bool ManagedBuffer::FlushRead(Vulkan::COMMAND_BUFFER const& command_buffer, uint8_t instance_id, VkSemaphore signal, VkSemaphore wait)
+    {
+        if(!this->read_chunks[instance_id].empty()) {
+            size_t bytes_sent = Vulkan::GetInstance().SynchronizeBuffer(
+                this->buffers[instance_id], command_buffer, this->staging_buffers[instance_id],
+                this->read_chunks[instance_id], Vulkan::GetGraphicsQueue().handle,
+                signal, wait, false
+            );
+
+            if(!bytes_sent) return false;
+            this->read_chunks[instance_id].clear();
+        }else{
+            return false;
         }
         
         return true;

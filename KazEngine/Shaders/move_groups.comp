@@ -1,0 +1,117 @@
+#version 450
+
+
+layout (set=0, binding=0, std140) buffer Entity
+{
+	mat4 model[];
+};
+
+struct MOVEMENT_DATA {
+	vec2 destination;
+	int moving;
+	float radius;
+	vec4 debug;
+};
+
+layout (set=1, binding=0) buffer MovementData
+{
+	MOVEMENT_DATA movement[];
+};
+
+layout (set=1, binding=1) uniform MovementGroupCount
+{
+	uint movement_group_count;
+};
+
+struct MOVEMENT_GROUP {
+	vec2 destination;
+	int scale;
+	float unit_radius;
+	uint unit_count;
+	uint fill_count;
+	uint inside_count;
+	uint padding;
+};
+
+layout (set=1, binding=2) buffer MovementGroups
+{
+	MOVEMENT_GROUP group[];
+};
+
+layout (set=2, binding=0) readonly uniform GlobalTime
+{
+	uint now;
+	float delta;
+}time;
+
+void main()
+{
+	uint entity_id = gl_GlobalInvocationID.x;
+	uint group_id = gl_GlobalInvocationID.y;
+	
+	float move_speed = 10.0;
+	int gid = movement[entity_id].moving;
+	if(gid < -1) gid = -gid - 2;
+	
+	if(group_id == gid) {
+	
+		if(group[gid].unit_count == 0) {
+			movement[entity_id].moving = -1;
+			
+		}else{
+		
+			if(movement[entity_id].moving >= 0) {
+			
+				if(model[entity_id][3].xz == movement[entity_id].destination) {
+					if(group[gid].unit_count == 1) {
+						movement[entity_id].moving = -1;
+						atomicExchange(group[gid].unit_count, 0);
+					}
+				}else{
+			
+					vec2 direction = movement[entity_id].destination - model[entity_id][3].xz;
+					vec2 unit_movement = normalize(direction) * move_speed * time.delta;
+					
+					if(length(unit_movement) >= length(direction)) {
+						if(group[gid].unit_count == 1) {
+							movement[entity_id].moving = -1;
+							atomicExchange(group[gid].unit_count, 0);
+						}
+						model[entity_id][3].xz = movement[entity_id].destination;
+					}else{
+						model[entity_id][3].xz += unit_movement;
+					}
+				}
+			}
+			
+			if(group[gid].unit_count > 1) {
+				float group_radius = (2 * group[gid].scale - 1) * group[gid].unit_radius;
+				vec2 segment = model[entity_id][3].xz - group[gid].destination;
+				float distance_to_center = length(segment);
+				if((distance_to_center - movement[entity_id].radius) <= group_radius) atomicAdd(group[gid].fill_count, 1);
+				
+				if(group[gid].fill_count >= group[gid].unit_count) {
+					movement[entity_id].moving = -1;
+					atomicExchange(group[gid].unit_count, 0);
+				}else{
+					movement[entity_id].debug.x = distance_to_center;
+					movement[entity_id].debug.y = distance_to_center - movement[entity_id].radius;
+					movement[entity_id].debug.z = group_radius;
+					
+					if((distance_to_center + movement[entity_id].radius) > group_radius) movement[entity_id].moving = gid;
+					else movement[entity_id].moving = -gid - 2;
+				}
+			}
+		}
+	}
+	
+	if(group[group_id].unit_count > 1) {
+		float group_radius = (2 * group[group_id].scale - 1) * group[group_id].unit_radius;
+		vec2 segment = model[entity_id][3].xz - group[group_id].destination;
+		float distance_to_center = length(segment) - movement[entity_id].radius;
+		if(distance_to_center <= group_radius) {
+			atomicAdd(group[group_id].inside_count, 1);
+			movement[entity_id].debug.x = 1.0;
+		}
+	}
+}

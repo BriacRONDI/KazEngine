@@ -8,19 +8,14 @@ namespace Tools
     class EventEmitter
     {
         public:
-            void AddListener(T* listener);
-            void RemoveListener(T* listener);
-            std::vector<T*> GetListeners();
+            inline void AddListener(T* listener) { this->Listeners.push_back(listener); }
+            inline void RemoveListener(T* listener);
+            inline void ClearListeners() { this->Listeners.clear(); }
+            inline std::vector<T*> GetListeners() { return this->Listeners; }
 
         protected:
             std::vector<T*> Listeners;
     };
-
-    template <class T>
-    void EventEmitter<T>::AddListener(T* listener)
-    {
-        this->Listeners.push_back(listener);
-    }
 
     template <class T>
     void EventEmitter<T>::RemoveListener(T* listener)
@@ -38,19 +33,12 @@ namespace Tools
     }
 
     template <class T>
-    std::vector<T*> EventEmitter<T>::GetListeners()
-    {
-        return this->Listeners;
-    }
-
-
-    template <class T>
     class StaticEventEmitter
     {
         public:
-            static inline void AddListener(T* listener);
+            static inline void AddListener(T* listener) { StaticEventEmitter<T>::Listeners.push_back(listener); }
             static inline void RemoveListener(T* listener);
-            std::vector<T*> GetListeners();
+            static inline std::vector<T*> GetListeners() { return StaticEventEmitter<T>::Listeners; }
 
         protected:
             static std::vector<T*> Listeners;
@@ -58,12 +46,6 @@ namespace Tools
 
     template <class T>
     std::vector<T*> StaticEventEmitter<T>::Listeners;
-
-    template <class T>
-    inline void StaticEventEmitter<T>::AddListener(T* listener)
-    {
-        StaticEventEmitter<T>::Listeners.push_back(listener);
-    }
 
     template <class T>
     void StaticEventEmitter<T>::RemoveListener(T* listener)
@@ -78,12 +60,6 @@ namespace Tools
                 return;
             }
         }
-    }
-
-    template <class T>
-    inline std::vector<T*> StaticEventEmitter<T>::GetListeners()
-    {
-        return StaticEventEmitter<T>::Listeners;
     }
 }
 

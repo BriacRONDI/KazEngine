@@ -163,6 +163,8 @@
     <ClCompile Include="Sources\Scene\EntityRender\EntityRender.cpp" />
     <ClCompile Include="Sources\Scene\Map\Map.cpp" />
     <ClCompile Include="Sources\Platform\Common\Timer\Timer.cpp" />
+    <ClCompile Include="Sources\ThreadedShader\ThreadedShader.cpp" />
+    <ClCompile Include="Sources\UnitControl\UnitControl.cpp" />
     <ClCompile Include="Sources\UserInterface\UserInterface.cpp" />
     <ClCompile Include="Sources\Vulkan\Vulkan.cpp" />
   </ItemGroup>
@@ -196,6 +198,9 @@
     <ClInclude Include="Sources\Scene\EntityRender\EntityRender.h" />
     <ClInclude Include="Sources\Scene\Map\Map.h" />
     <ClInclude Include="Sources\Platform\Common\Timer\Timer.h" />
+    <ClInclude Include="Sources\ThreadedShader\IComputeResult.h" />
+    <ClInclude Include="Sources\ThreadedShader\TheadedShader.h" />
+    <ClInclude Include="Sources\UnitControl\UnitControl.h" />
     <ClInclude Include="Sources\UserInterface\IUserInteraction.h" />
     <ClInclude Include="Sources\UserInterface\UserInterface.h" />
     <ClInclude Include="Sources\Vulkan\Vulkan.h" />

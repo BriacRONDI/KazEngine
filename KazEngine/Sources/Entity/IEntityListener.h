@@ -11,6 +11,7 @@ namespace Engine
     {
         public :
 
+            virtual void NewEntity(Entity* entity) = 0;
             virtual void AddLOD(Entity& entity, std::shared_ptr<LODGroup> lod) = 0;
     };
 }

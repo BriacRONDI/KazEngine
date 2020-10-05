@@ -1,0 +1,79 @@
+#version 450
+
+
+layout (set=0, binding=0, std140) buffer Entity
+{
+	mat4 model[];
+};
+
+struct MOVEMENT_DATA {
+	vec2 destination;
+	int moving;
+	float radius;
+	vec4 debug;
+};
+
+layout (set=1, binding=0) buffer MovementData
+{
+	MOVEMENT_DATA movement[];
+};
+
+layout (set=1, binding=1) uniform MovementGroupCount
+{
+	uint movement_group_count;
+};
+
+struct MOVEMENT_GROUP {
+	vec2 destination;
+	int scale;
+	float unit_radius;
+	uint unit_count;
+	uint fill_count;
+	uint inside_count;
+	uint padding;
+};
+
+layout (set=1, binding=2) buffer MovementGroups
+{
+	MOVEMENT_GROUP group[];
+};
+
+layout (set=2, binding=0) readonly uniform GlobalTime
+{
+	uint now;
+	float delta;
+}time;
+
+float rand(float n){return fract(sin(n) * 43758.5453123);}
+
+void main()
+{
+	uint i = gl_GlobalInvocationID.x;
+	uint j = gl_GlobalInvocationID.y;
+	
+	if(j > i) {
+		if(model[i][3].xz == model[j][3].xz) {
+			float angle = rand(time.delta * 3.14);
+			vec2 random_dir = vec2(cos(angle), sin(angle));
+			vec2 direction = normalize(random_dir);
+			
+			model[i][3].xz += direction * time.delta;
+			model[j][3].xz -= direction * time.delta;
+			
+		}else{
+			vec2 segment = model[i][3].xz - model[j][3].xz;
+			float seg_length = length(segment);
+			float radius_sum = movement[i].radius + movement[j].radius;
+
+			if(seg_length < radius_sum) {
+				
+				float collision = seg_length - radius_sum;
+				float max_mov = collision / -2.0;
+				float min_mov = 0.001f;
+				vec2 move = max(min_mov, max_mov) * normalize(segment);
+				model[i][3].xz += move;
+				model[j][3].xz -= move;
+			}
+		}
+	}
+}

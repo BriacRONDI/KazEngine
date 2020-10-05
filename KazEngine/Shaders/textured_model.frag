@@ -2,7 +2,7 @@
 
 #extension GL_EXT_nonuniform_qualifier : enable
 
-layout (set=0, binding=0) uniform sampler2D inTexture[1];
+layout (set=0, binding=0) uniform sampler2D inTexture[2];
 
 layout (location = 0) in vec2 inUV;
 

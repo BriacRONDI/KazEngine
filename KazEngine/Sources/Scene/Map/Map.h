@@ -5,6 +5,7 @@
 #include "../../Camera/Camera.h"
 #include "../../DataBank/DataBank.h"
 #include "../../Entity/DynamicEntity/DynamicEntity.h"
+#include "../../UnitControl/UnitControl.h"
 #include <Maths.h>
 
 namespace Engine
@@ -20,9 +21,9 @@ namespace Engine
             void Update(uint8_t frame_index);
             inline void Refresh() { for(int i=0; i<this->need_update.size(); i++) this->Refresh(i); }
             void Refresh(uint8_t frame_index);
-            void UpdateSelection(std::vector<DynamicEntity*> entities);
-            void UpdateDescriptorSet(uint8_t frame_index);
-            std::vector<DynamicEntity*> const& GetSelectedEntities() const { return this->selected_entities; }
+            // void UpdateSelection(std::vector<DynamicEntity*> entities);
+            // void UpdateDescriptorSet(uint8_t frame_index);
+            // std::vector<DynamicEntity*> const& GetSelectedEntities() const { return this->selected_entities; }
             Maths::Vector3 GetMouseRayPosition();
 
         private :
@@ -35,10 +36,10 @@ namespace Engine
             VkCommandPool command_pool;
             std::vector<VkCommandBuffer> command_buffers;
             DescriptorSet texture_descriptor;
-            DescriptorSet selection_descriptor;
+            // DescriptorSet selection_descriptor;
             Vulkan::PIPELINE pipeline;
 
-            std::vector<DynamicEntity*> selected_entities;
+            // std::vector<DynamicEntity*> selected_entities;
 
             bool UpdateVertexBuffer(uint8_t frame_index);
             bool SetupDescriptorSets();

@@ -12,7 +12,7 @@ namespace Engine
 
             // Chunks
             // DataBank::GetManagedBuffer().FreeChunk(this->entity_ids_chunk);
-            DataBank::GetManagedBuffer().FreeChunk(this->map_vbo_chunk);
+            DataBank::GetInstancedBuffer().FreeChunk(this->map_vbo_chunk);
 
             // Descriptor Sets
             // this->entities_descriptor.Clear();
@@ -46,7 +46,7 @@ namespace Engine
             #endif
         }
 
-        this->map_vbo_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_KILOBYTE(5));
+        this->map_vbo_chunk = DataBank::GetInstancedBuffer().ReserveChunk(SIZE_KILOBYTE(5));
 
         this->SetupDescriptorSets();
         this->CreatePipeline();
@@ -55,7 +55,7 @@ namespace Engine
     bool Map::SetupDescriptorSets()
     {
         std::vector<VkDescriptorSetLayoutBinding> bindings;
-        uint8_t instance_count = DataBank::GetManagedBuffer().GetInstanceCount();
+        uint8_t instance_count = DataBank::GetInstancedBuffer().GetInstanceCount();
 
         /////////////
         // TEXTURE //
@@ -64,16 +64,6 @@ namespace Engine
         auto data_buffer = Tools::GetBinaryFileContents("data2.kea");
         auto image = DataBank::GetImageFromPackage(data_buffer, "/grass_tile2");
         this->texture_descriptor.Create(image);
-
-        ///////////////
-        // Selection //
-        ///////////////
-
-        if(!this->selection_descriptor.Create({
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(uint32_t) * 101},
-        }, instance_count)) return false;
-
-        this->selection_chunk = this->selection_descriptor.ReserveRange(sizeof(uint32_t) * 101);
 
         return true;
     }
@@ -89,11 +79,12 @@ namespace Engine
 
         auto camera_layout = Camera::GetInstance().GetDescriptorSet().GetLayout();
         auto texture_layout = this->texture_descriptor.GetLayout();
-        auto selection_layout = this->selection_descriptor.GetLayout();
+        auto selection_layout = DynamicEntity::GetSelectionDescriptor().GetLayout();
         auto entity_layout = DynamicEntity::GetMatrixDescriptor().GetLayout();
+        auto groups_layout = UnitControl::Instance().GetMovementDescriptor().GetLayout();
 
         bool success = Vulkan::GetInstance().CreatePipeline(
-            true, {camera_layout, texture_layout, selection_layout, entity_layout},
+            true, {camera_layout, texture_layout, selection_layout, entity_layout, groups_layout},
             shader_stages, vertex_binding_description, vertex_attribute_description, {}, this->pipeline
         );
 
@@ -122,36 +113,13 @@ namespace Engine
         vertex_data[3].uv = { far_clip, far_clip };
 
         this->index_buffer_offet = static_cast<uint32_t>(vertex_data.size()) * sizeof(SHADER_INPUT);
-        DataBank::GetManagedBuffer().WriteData(vertex_data.data(), this->index_buffer_offet, this->map_vbo_chunk->offset, frame_index);
+        DataBank::GetInstancedBuffer().WriteData(vertex_data.data(), this->index_buffer_offet, this->map_vbo_chunk->offset, frame_index);
 
         std::vector<uint32_t> index_buffer = {0, 2, 1, 0, 3, 2};
-        DataBank::GetManagedBuffer().WriteData(index_buffer.data(), index_buffer.size() * sizeof(uint32_t),
-                                               this->map_vbo_chunk->offset + this->index_buffer_offet, frame_index);
+        DataBank::GetInstancedBuffer().WriteData(index_buffer.data(), index_buffer.size() * sizeof(uint32_t),
+                                                 this->map_vbo_chunk->offset + this->index_buffer_offet, frame_index);
 
         return true;
-    }
-
-    void Map::UpdateSelection(std::vector<DynamicEntity*> entities)
-    {
-        this->selected_entities = std::move(entities);
-        uint32_t count = static_cast<uint32_t>(this->selected_entities.size());
-        
-        if(this->selection_chunk->range < (count + 1) * sizeof(uint32_t)) {
-            if(!this->selection_descriptor.ResizeChunk(this->selection_chunk, (count + 1) * sizeof(uint32_t), 0, Vulkan::SboAlignment())) {
-                count = static_cast<uint32_t>(this->selection_chunk->range / sizeof(uint32_t)) - 1;
-                #if defined(DISPLAY_LOGS)
-                std::cout << "Map::UpdateSelection : Not engough memory" << std::endl;
-                #endif
-            }
-        }
-
-        this->selection_descriptor.WriteData(&count, sizeof(uint32_t), static_cast<uint32_t>(this->selection_chunk->offset));
-
-        std::vector<uint32_t> selected_ids(count);
-        for(uint32_t i=0; i<count; i++) selected_ids[i] = this->selected_entities[i]->GetInstanceId();
-
-        this->selection_descriptor.WriteData(selected_ids.data(), selected_ids.size() * sizeof(uint32_t),
-                                             static_cast<uint32_t>(this->selection_chunk->offset + sizeof(uint32_t)));
     }
 
     Maths::Vector3 Map::GetMouseRayPosition()
@@ -163,14 +131,6 @@ namespace Engine
     {
         if(!this->need_update[frame_index]) return;
         this->UpdateVertexBuffer(frame_index);
-    }
-
-    void Map::UpdateDescriptorSet(uint8_t frame_index)
-    {
-        if(this->selection_descriptor.NeedUpdate(frame_index)) {
-            this->Refresh(frame_index);
-            this->selection_descriptor.Update(frame_index);
-        }
     }
 
     void Map::Refresh(uint8_t frame_index)
@@ -225,8 +185,9 @@ namespace Engine
         std::vector<VkDescriptorSet> bind_descriptor_sets = {
             Camera::GetInstance().GetDescriptorSet().Get(frame_index),
             this->texture_descriptor.Get(),
-            this->selection_descriptor.Get(frame_index),
-            DynamicEntity::GetMatrixDescriptor().Get(frame_index)
+            DynamicEntity::GetSelectionDescriptor().Get(frame_index),
+            DynamicEntity::GetMatrixDescriptor().Get(),
+            UnitControl::Instance().GetMovementDescriptor().Get()
         };
 
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline.handle);
@@ -236,8 +197,8 @@ namespace Engine
                                 static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(),
                                 0, nullptr);
 
-        vkCmdBindVertexBuffers(command_buffer, 0, 1, &DataBank::GetManagedBuffer().GetBuffer(frame_index).handle, &this->map_vbo_chunk->offset);
-        vkCmdBindIndexBuffer(command_buffer, DataBank::GetManagedBuffer().GetBuffer(frame_index).handle,
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, &DataBank::GetInstancedBuffer().GetBuffer(frame_index).handle, &this->map_vbo_chunk->offset);
+        vkCmdBindIndexBuffer(command_buffer, DataBank::GetInstancedBuffer().GetBuffer(frame_index).handle,
                              this->map_vbo_chunk->offset + this->index_buffer_offet, VK_INDEX_TYPE_UINT32);
         vkCmdDrawIndexed(command_buffer, 6, 1, 0, 0, 0);
 

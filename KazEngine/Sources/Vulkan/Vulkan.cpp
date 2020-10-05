@@ -584,15 +584,33 @@ namespace Engine
                 #endif
             }
         }else{
+            uint32_t max_queue_count = 0;
+            int selected_index = -1;
+
             for(uint32_t i=0; i<physical_devices.size(); i++) {
-                queue_family_properties = this->QueryDeviceProperties(physical_devices[i]);
-                if(this->IsDeviceEligible(physical_devices[0], queue_family_properties)) {
-                    this->physical_device.handle = physical_devices[0];
-                    #if defined(DISPLAY_LOGS)
-                    std::cout << "CreateDevice : Selected physical device : " << i << std::endl;
-                    #endif
-                    break;
+                std::vector<VkQueueFamilyProperties> properties = this->QueryDeviceProperties(physical_devices[i]);
+                if(this->IsDeviceEligible(physical_devices[0], properties)) {
+
+                    uint32_t device_queue_count = 0;
+                    for(int j=0; j<properties.size(); j++) device_queue_count += properties[j].queueCount;
+                    if(device_queue_count > max_queue_count) {
+                        selected_index = i;
+                        max_queue_count = device_queue_count;
+                        queue_family_properties = properties;
+                    }
                 }
+            }
+
+            if(selected_index >= 0) {
+                this->physical_device.handle = physical_devices[selected_index];
+
+                // On récupère les propriétés de la carte graphique
+                vkGetPhysicalDeviceMemoryProperties(this->physical_device.handle, &this->physical_device.memory);
+                vkGetPhysicalDeviceProperties(this->physical_device.handle, &this->physical_device.properties);
+
+                #if defined(DISPLAY_LOGS)
+                std::cout << "CreateDevice : Selected physical device : " << selected_index << " : " << this->physical_device.properties.deviceName << std::endl;
+                #endif
             }
         }
 
@@ -673,6 +691,11 @@ namespace Engine
         if(queue_family_properties[this->graphics_queue.index].queueCount > 1) queue_priorities = {0.0f, 0.0f};
         else queue_priorities = {0.0f};
 
+        #if defined(DISPLAY_LOGS)
+        std::cout << "CreateDevice => queue_family_properties[" << this->graphics_queue.index << "].queueCount : " << queue_family_properties[this->graphics_queue.index].queueCount << std::endl;
+        std::cout << "CreateDevice => queue_priorities.size() : " << queue_priorities.size() << std::endl;
+        #endif
+
         queue_info.queueCount = static_cast<uint32_t>(queue_priorities.size());
         queue_info.pQueuePriorities = &queue_priorities[0];
         queue_infos.push_back(queue_info);
@@ -701,7 +724,8 @@ namespace Engine
 
         // Compute Queue
         if(this->compute_queue.index != this->graphics_queue.index) {
-            queue_info.queueCount = 1;
+            queue_priorities = {0.0f, 0.0f};
+            queue_info.queueCount = 2;
             queue_info.queueFamilyIndex = this->compute_queue.index;
             queue_infos.push_back(queue_info);
         }
@@ -718,6 +742,10 @@ namespace Engine
 
         // Activation de l'extension SwapChain
         std::vector<const char*> device_extension_name = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+
+        #if defined(DISPLAY_LOGS)
+        std::cout << "CreateDevice => queue_infos.size() : " << queue_infos.size() << ", queue_infos[0].queueCount : " << queue_infos[0].queueCount << std::endl;
+        #endif
 
         VkDeviceCreateInfo device_info = {};
         device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -740,10 +768,6 @@ namespace Engine
             #endif
             return false;
         }
-
-        // On récupère les propriétés mémoire de la carte graphique
-        vkGetPhysicalDeviceMemoryProperties(this->physical_device.handle, &this->physical_device.memory);
-        vkGetPhysicalDeviceProperties(this->physical_device.handle, &this->physical_device.properties);
 
         // Succès
         #if defined(DISPLAY_LOGS)
@@ -1535,6 +1559,19 @@ namespace Engine
         return command_buffer.fence != nullptr;
     }
 
+    bool Vulkan::CreateCommandBuffer(VkCommandPool pool, VkCommandBuffer& command_buffer, VkCommandBufferLevel level)
+    {
+        VkCommandBufferAllocateInfo cmd;
+        cmd.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmd.pNext = nullptr;
+        cmd.commandPool = pool;
+        cmd.level = level;
+        cmd.commandBufferCount = 1;
+
+        VkResult result = vkAllocateCommandBuffers(this->device, &cmd, &command_buffer);
+        return result == VK_SUCCESS;
+    }
+
     /**
      * Création d'une liste de command buffers avec leur fence
      */
@@ -2175,7 +2212,8 @@ namespace Engine
         return flush_size;
     }
 
-    size_t Vulkan::SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks, VkQueue queue)
+    size_t Vulkan::SynchronizeBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer,
+                                     std::vector<Chunk> chunks, VkQueue queue, VkSemaphore signal, VkSemaphore wait, bool write)
     {
         // On évite que plusieurs transferts aient lieu en même temps en utilisant une fence
         VkResult result = vkWaitForFences(this->device, 1, &command_buffer.fence, VK_FALSE, 1000000000);
@@ -2215,14 +2253,16 @@ namespace Engine
 
         vkBeginCommandBuffer(command_buffer.handle, &command_buffer_begin_info);
 
+        VkBuffer input_buffer = write ? staging_buffer.handle : buffer.handle;
+        VkBuffer output_buffer = write ? buffer.handle : staging_buffer.handle;
+
         size_t bytes_sent = 0;
         for(auto& chunk : chunks) {
-            VkBufferCopy buffer_copy_info = {};
+            VkBufferCopy buffer_copy_info;
             buffer_copy_info.srcOffset = chunk.offset;
             buffer_copy_info.dstOffset = chunk.offset;
             buffer_copy_info.size = chunk.range;
-
-            vkCmdCopyBuffer(command_buffer.handle, staging_buffer.handle, buffer.handle, 1, &buffer_copy_info);
+            vkCmdCopyBuffer(command_buffer.handle, input_buffer, output_buffer, 1, &buffer_copy_info);
             bytes_sent += chunk.range;
         }
 
@@ -2232,13 +2272,27 @@ namespace Engine
         VkSubmitInfo submit_info = {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit_info.pNext = nullptr;
-        submit_info.waitSemaphoreCount = 0;
-        submit_info.pWaitSemaphores = nullptr;
-        submit_info.pWaitDstStageMask = nullptr;
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &command_buffer.handle;
-        submit_info.signalSemaphoreCount = 0;
-        submit_info.pSignalSemaphores = nullptr;
+
+        if(signal != nullptr) {
+            submit_info.signalSemaphoreCount = 1;
+            submit_info.pSignalSemaphores = &signal;
+        }else{
+            submit_info.signalSemaphoreCount = 0;
+            submit_info.pSignalSemaphores = nullptr;
+        }
+
+        if(wait) {
+            submit_info.waitSemaphoreCount = 1;
+            submit_info.pWaitSemaphores = &wait;
+            VkPipelineStageFlags mask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            submit_info.pWaitDstStageMask = &mask;
+        }else{
+            submit_info.waitSemaphoreCount = 0;
+            submit_info.pWaitSemaphores = nullptr;
+            submit_info.pWaitDstStageMask = nullptr;
+        }
 
         result = vkQueueSubmit(queue, 1, &submit_info, command_buffer.fence);
         if(result != VK_SUCCESS) {
@@ -2527,19 +2581,6 @@ namespace Engine
         // Recréation de la Swap Chain
         this->CreateSwapChain();
 
-        // Le layout des images de la Swap Chain doit être en mode VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-        /*for(uint8_t i=0; i<this->swap_chain.images.size(); i++) {
-
-            IMAGE_BUFFER buffer;
-            buffer.handle = this->swap_chain.images[i].handle;
-            buffer.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-            this->TransitionImageLayout(
-                    buffer,
-                    VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_MEMORY_READ_BIT,
-                    VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
-        }*/
-
         return true;
     }
 
@@ -2606,7 +2647,7 @@ namespace Engine
         VkResult result = vkQueueSubmit(this->graphics_queue.handle, 1, &submit_info, resources.fence);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
-            std::cout << "DrawScene => vkQueueSubmit : Failed" << std::endl;
+            std::cout << "Vulkan::PresentImage => vkQueueSubmit : Failed" << std::endl;
             #endif
             return false;
         }

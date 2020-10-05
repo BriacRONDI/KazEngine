@@ -11,9 +11,12 @@ namespace Engine
             vkDeviceWaitIdle(Vulkan::GetDevice());
 
             // Descriptor Sets
+            this->skeleton_descriptor.Clear();
             this->texture_descriptor.Clear();
 
             // Pipelines
+            // this->move_pipeline.Clear();
+
             for(auto& render_group : this->render_groups) {
                 render_group.graphics_pipeline.Clear();
                 render_group.indirect_descriptor.Clear();
@@ -94,49 +97,22 @@ namespace Engine
 
     bool EntityRender::SetupDescriptorSets()
     {
-        std::vector<VkDescriptorSetLayoutBinding> bindings;
-        uint8_t instance_count = DataBank::GetManagedBuffer().GetInstanceCount();
-
         /////////////
         // Texture //
         /////////////
 
-        if(!this->texture_descriptor.PrepareBindlessTexture(1)) return false;
+        if(!this->texture_descriptor.PrepareBindlessTexture(2)) return false;
 
         //////////////
         // Skeleton //
         //////////////
 
-        bindings = {
-            DescriptorSet::CreateSimpleBinding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
-            DescriptorSet::CreateSimpleBinding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
-            DescriptorSet::CreateSimpleBinding(2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT),
-            DescriptorSet::CreateSimpleBinding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT)
-        };
-
-        if(!this->skeleton_descriptor.Prepare(bindings, instance_count)) return false;
-
-        this->skeleton_bones_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_MEGABYTE(5));
-        this->skeleton_offsets_ids_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_KILOBYTE(1));
-        this->skeleton_offsets_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_MEGABYTE(1));
-        this->skeleton_animations_chunk = DataBank::GetManagedBuffer().ReserveChunk(SIZE_KILOBYTE(1));
-
-        if(this->skeleton_bones_chunk == nullptr
-            || this->skeleton_offsets_chunk == nullptr
-            || this->skeleton_offsets_ids_chunk == nullptr
-            || this->skeleton_animations_chunk == nullptr)
-            return false;
-
-        for(uint8_t i=0; i<instance_count; i++) {
-            uint32_t id = this->skeleton_descriptor.Allocate({
-                DataBank::GetManagedBuffer().GetBufferInfos(this->skeleton_bones_chunk, i),
-                DataBank::GetManagedBuffer().GetBufferInfos(this->skeleton_offsets_ids_chunk, i),
-                DataBank::GetManagedBuffer().GetBufferInfos(this->skeleton_offsets_chunk, i),
-                DataBank::GetManagedBuffer().GetBufferInfos(this->skeleton_animations_chunk, i)
-            });
-
-            if(id == UINT32_MAX) return false;
-        }
+        if(!this->skeleton_descriptor.Create({
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, SIZE_MEGABYTE(5)},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, SIZE_KILOBYTE(1)},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, SIZE_MEGABYTE(1)},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, SIZE_KILOBYTE(1)}
+        })) return false;
 
         return true;
     }
@@ -150,7 +126,21 @@ namespace Engine
         Vulkan::PIPELINE graphics_pipeline;
         Vulkan::PIPELINE compute_pipeline;
         DescriptorSet indirect_descriptor;
-        uint8_t instance_count = DataBank::GetManagedBuffer().GetInstanceCount();
+        uint8_t instance_count = DataBank::GetInstancedBuffer().GetInstanceCount();
+
+        /////////////////////////////
+        // Movement compute shader //
+        /////////////////////////////
+
+        auto entity_layout = StaticEntity::GetMatrixDescriptor().GetLayout();
+        auto movement_layout = UnitControl::Instance().GetMovementDescriptor().GetLayout();
+
+        /*compute_shader_stage = Vulkan::GetInstance().LoadShaderModule("./Shaders/move.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
+        bool success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {entity_layout, movement_layout}, {}, this->move_pipeline);
+        
+        vkDestroyShaderModule(Vulkan::GetDevice(), compute_shader_stage.module, nullptr);
+
+        if(!success) return false;*/
 
         ///////////////////
         // Textured Mesh //
@@ -186,10 +176,9 @@ namespace Engine
 
         if(!indirect_descriptor.Create({
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(LODGroup::INDIRECT_COMMAND)}
-        }, instance_count)) return false;
+        })) return false;
 
         auto indirect_layout = indirect_descriptor.GetLayout();
-        auto entity_layout = StaticEntity::GetMatrixDescriptor().GetLayout();
         auto lod_layout = LODGroup::GetDescriptor().GetLayout();
 
         compute_shader_stage = Vulkan::GetInstance().LoadShaderModule("./Shaders/cull_lod.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
@@ -205,8 +194,9 @@ namespace Engine
         this->render_groups.push_back({
             graphics_pipeline, compute_pipeline,
             Model::Mesh::RENDER_POSITION | Model::Mesh::RENDER_UV | Model::Mesh::RENDER_TEXTURE,
-            {StaticEntity::GetMatrixDescriptor().GetChunk()},
-            std::move(indirect_descriptor)
+            {{true, StaticEntity::GetMatrixDescriptor().GetChunk()}},
+            std::move(indirect_descriptor),
+            {}, 0
         });
 
         indirect_descriptor.Clear();
@@ -240,14 +230,18 @@ namespace Engine
 
         if(!indirect_descriptor.Create({
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(LODGroup::INDIRECT_COMMAND)}
-        }, instance_count)) return false;
+        })) return false;
 
         indirect_layout = indirect_descriptor.GetLayout();
         auto animation_layout = DynamicEntity::GetAnimationDescriptor().GetLayout();
+        auto timer_layout = Timer::GetDescriptor().GetLayout();
 
         compute_shader_stage = Vulkan::GetInstance().LoadShaderModule("./Shaders/cull_lod_anim.comp.spv", VK_SHADER_STAGE_COMPUTE_BIT);
-        success = Vulkan::GetInstance().CreateComputePipeline(compute_shader_stage, {camera_layout, entity_layout, indirect_layout, animation_layout, lod_layout}, {}, compute_pipeline);
-        
+        success = Vulkan::GetInstance().CreateComputePipeline(
+            compute_shader_stage,
+            {camera_layout, entity_layout, indirect_layout, animation_layout, lod_layout, movement_layout, timer_layout},
+            {}, compute_pipeline
+        );
         vkDestroyShaderModule(Vulkan::GetDevice(), compute_shader_stage.module, nullptr);
 
         if(!success) {
@@ -258,8 +252,9 @@ namespace Engine
         this->render_groups.push_back({
             graphics_pipeline, compute_pipeline,
             Model::Mesh::RENDER_POSITION | Model::Mesh::RENDER_UV | Model::Mesh::RENDER_TEXTURE | Model::Mesh::RENDER_SKELETON,
-            { DynamicEntity::GetMatrixDescriptor().GetChunk(), DynamicEntity::GetAnimationDescriptor().GetChunk() },
-            std::move(indirect_descriptor)
+            {{false, DynamicEntity::GetMatrixDescriptor().GetChunk()}, {true, DynamicEntity::GetAnimationDescriptor().GetChunk()}},
+            std::move(indirect_descriptor),
+            {}, 0
         });
 
         indirect_descriptor.Clear();
@@ -284,19 +279,25 @@ namespace Engine
         std::vector<char> offsets_sbo;
         std::vector<char> offsets_ids;
 
+        #if defined(DISPLAY_LOGS)
+        std::cout << "EntityRender::LoadSkeleton() : BuildBoneOffsetsSBO" << std::endl;
+        #endif
+
         // Build buffers
         uint32_t sbo_alignment = static_cast<uint32_t>(Vulkan::GetDeviceLimits().minStorageBufferOffsetAlignment);
         DataBank::GetSkeleton(name).BuildBoneOffsetsSBO(offsets_sbo, offsets_ids, this->skeletons[name].dynamic_offsets, sbo_alignment);
 
         // Write to GPU memory
-        DataBank::GetManagedBuffer().WriteData(offsets_sbo.data(), offsets_sbo.size(), this->skeleton_offsets_chunk->offset);
-        // this->skeleton_descriptor.WriteData(offsets_sbo.data(), offsets_sbo.size(), this->skeleton_offsets_chunk->offset, SKELETON_OFFSETS_BINDING);
-        DataBank::GetManagedBuffer().WriteData(offsets_ids.data(), offsets_ids.size(), this->skeleton_offsets_ids_chunk->offset);
-        // this->skeleton_descriptor.WriteData(offsets_sbo.data(), offsets_sbo.size(), this->skeleton_offsets_ids_chunk->offset, SKELETON_OFFSET_IDS_BINDING);
+        this->skeleton_descriptor.WriteData(offsets_sbo.data(), offsets_sbo.size(), 0, SKELETON_OFFSETS_BINDING);
+        this->skeleton_descriptor.WriteData(offsets_ids.data(), offsets_ids.size(), 0, SKELETON_OFFSET_IDS_BINDING);
 
         ////////////////////
         // Animations SBO //
         ////////////////////
+
+        #if defined(DISPLAY_LOGS)
+        std::cout << "EntityRender::LoadSkeleton() : BuildAnimationSBO" << std::endl;
+        #endif
 
         auto const animations = DataBank::GetSkeleton(name).ListAnimations();
         uint32_t animation_offset = 0;
@@ -314,13 +315,13 @@ namespace Engine
             DataBank::GetSkeleton(name).BuildAnimationSBO(skeleton_sbo, animations[i].name, baked_animation.frame_count, bone_count, 30);
             
             // Write the bone count before frame offsets
-            if(!i) DataBank::GetManagedBuffer().WriteData(&bone_count, sizeof(uint32_t), this->skeleton_animations_chunk->offset);
+            if(!i) this->skeleton_descriptor.WriteData(&bone_count, sizeof(uint32_t), 0, SKELETON_ANIMATIONS_BINDING);
 
             // Write the frame offset
-            DataBank::GetManagedBuffer().WriteData(&frame_id, sizeof(uint32_t), this->skeleton_animations_chunk->offset + sizeof(uint32_t) * (i + 1));
+            this->skeleton_descriptor.WriteData(&frame_id, sizeof(uint32_t), sizeof(uint32_t) * (i + 1), SKELETON_ANIMATIONS_BINDING);
 
             // Write animation to GPU memory
-            DataBank::GetManagedBuffer().WriteData(skeleton_sbo.data(), skeleton_sbo.size(), this->skeleton_bones_chunk->offset + animation_offset);
+            this->skeleton_descriptor.WriteData(skeleton_sbo.data(), skeleton_sbo.size(), animation_offset, SKELETON_BONES_BINDING);
 
             frame_id += static_cast<uint32_t>(skeleton_sbo.size() / sizeof(Maths::Matrix4x4));
             animation_offset += Vulkan::GetInstance().ComputeStorageBufferAlignment(static_cast<uint32_t>(skeleton_sbo.size()));
@@ -357,16 +358,16 @@ namespace Engine
 
         if(emc.chunk == nullptr) {
             if(!group.indirect_descriptor.ResizeChunk(group.indirect_descriptor.GetChunk()->range
-                                                                        + sizeof(LODGroup::INDIRECT_COMMAND) * 10)) {
+                                                      + sizeof(LODGroup::INDIRECT_COMMAND) * 10)) {
                 #if defined(DISPLAY_LOGS)
-                std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                std::cout << "EntityRender::DRAWABLE_BIND::AddInstance : Not enough memory" << std::endl;
                 #endif
                 return false;
             }else{
                 emc.chunk = group.indirect_descriptor.ReserveRange(sizeof(LODGroup::INDIRECT_COMMAND));
                 if(emc.chunk == nullptr) {
                     #if defined(DISPLAY_LOGS)
-                    std::cout << "EntityRender::AddEntity : Not enough memory" << std::endl;
+                    std::cout << "EntityRender::DRAWABLE_BIND::AddInstance : Not enough memory" << std::endl;
                     #endif
                     return false;
                 }
@@ -380,6 +381,7 @@ namespace Engine
         indirect.lodIndex = lod->GetLodIndex();
         group.indirect_descriptor.WriteData(&indirect, sizeof(LODGroup::INDIRECT_COMMAND), static_cast<uint32_t>(emc.chunk->offset));
         this->entities.push_back(emc);
+        group.instance_count++;
 
         return true;
     }
@@ -432,6 +434,10 @@ namespace Engine
             // Load Texture //
             //////////////////
 
+            #if defined(DISPLAY_LOGS)
+            std::cout << "EntityRender::AddLOD() : Load Texture" << std::endl;
+            #endif
+
             if(lod->GetRenderMask() & Model::Mesh::RENDER_TEXTURE) {
                 for(auto& material : lod->GetMeshMaterials()) {
                     if(DataBank::HasMaterial(material.first)) {
@@ -444,7 +450,7 @@ namespace Engine
                         }
                     }else{
                         #if defined(DISPLAY_LOGS)
-                        std::cout << "Dynamics::AddEntity() => Material[" + material.first + "] : Not in data bank" << std::endl;
+                        std::cout << "EntityRender::AddLOD() => Material[" + material.first + "] : Not in data bank" << std::endl;
                         #endif
                         return;
                     }
@@ -455,9 +461,13 @@ namespace Engine
             // Load LOD  //
             ///////////////
 
-            if(!new_bind.lod->Build(this->textures)) {//mesh, this->textures)) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "EntityRender::AddLOD() : Load LOD" << std::endl;
+            #endif
+
+            if(!new_bind.lod->Build(this->textures)) {
                 #if defined(DISPLAY_LOGS)
-                std::cout << "Dynamics::AddEntity() => Drawable.Load(LOD) : Failed" << std::endl;
+                std::cout << "EntityRender::AddLOD() => Drawable.Load(LOD) : Failed" << std::endl;
                 #endif
                 return;
             }
@@ -466,17 +476,13 @@ namespace Engine
             // Load Skeleton //
             ///////////////////
 
-            if(lod->GetRenderMask() & Model::Mesh::RENDER_SKELETON) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "EntityRender::AddLOD() : Load Skeleton" << std::endl;
+            #endif
 
+            if(lod->GetRenderMask() & Model::Mesh::RENDER_SKELETON) {
                 std::string const& skeleton = lod->GetMeshSkeleton();
                 if(!this->skeletons.count(skeleton) && !this->LoadSkeleton(skeleton)) return;
-
-                /*new_bind.dynamic_offsets.insert(new_bind.dynamic_offsets.end(), {
-                    this->skeletons[skeleton].skeleton_dynamic_offset,
-                    this->skeletons[skeleton].dynamic_offsets[lod->GetMesh()->name].first,
-                    this->skeletons[skeleton].dynamic_offsets[lod->GetMesh()->name].second,
-                    this->skeletons[skeleton].animations_data_dynamic_offset
-                });*/
                 new_bind.has_skeleton = true;
             }else{
                 new_bind.has_skeleton = false;
@@ -491,14 +497,14 @@ namespace Engine
             // Add loaded mesh
             this->render_groups[i].drawables.push_back(std::move(new_bind));
 
-            // Finish
+            // Signal rebuild command buffers
             for(uint8_t i=0; i<this->need_graphics_update.size(); i++) this->need_graphics_update[i] = true;
             for(uint8_t i=0; i<this->need_compute_update.size(); i++) this->need_compute_update[i] = true;
             return;
         }
     }
 
-    VkSemaphore EntityRender::SubmitComputeShader(uint8_t frame_index)
+    VkSemaphore EntityRender::SubmitComputeShader(uint8_t frame_index, std::vector<VkSemaphore> wait_semaphores)
     {
         if(!this->BuildComputeCommandBuffer(frame_index)) return nullptr;
 
@@ -506,17 +512,20 @@ namespace Engine
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         submit_info.pNext = nullptr;
         submit_info.commandBufferCount = 1;
-        submit_info.waitSemaphoreCount = 0;
+        
         submit_info.pCommandBuffers = &this->compute_command_buffers[frame_index];
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = &this->compute_semaphores[frame_index];
-        submit_info.pWaitSemaphores = nullptr;
-        submit_info.pWaitDstStageMask = nullptr;
+
+        std::vector<VkPipelineStageFlags> wait_mask(wait_semaphores.size(), VK_PIPELINE_STAGE_TRANSFER_BIT);
+        submit_info.waitSemaphoreCount = static_cast<uint32_t>(wait_semaphores.size());
+        submit_info.pWaitSemaphores = wait_semaphores.data();
+        submit_info.pWaitDstStageMask = wait_mask.data();
 
         VkResult result = vkQueueSubmit(Vulkan::GetComputeQueue().handle, 1, &submit_info, nullptr);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
-            std::cout << "DrawScene => vkQueueSubmit : Failed" << std::endl;
+            std::cout << "EntityRender::SubmitComputeShader => vkQueueSubmit : Failed" << std::endl;
             #endif
             return nullptr;
         }
@@ -546,17 +555,33 @@ namespace Engine
         }
 
         for(uint8_t i=0; i<this->render_groups.size(); i++) {
-		    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->render_groups[i].compute_pipeline.handle);
 
             std::vector<VkDescriptorSet> bind_descriptor_sets;
+            // uint32_t count = static_cast<uint32_t>(this->render_groups[i].indirect_descriptor.GetChunk()->range / sizeof(LODGroup::INDIRECT_COMMAND));
+            // this->render_groups[i].drawables.
+
+            /*if(this->render_groups[i].mask & Model::Mesh::RENDER_SKELETON) {
+                bind_descriptor_sets = {
+                    DynamicEntity::GetMatrixDescriptor().Get(),
+                    UnitControl::Instance().GetMovementDescriptor().Get()
+                };
+                vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->move_pipeline.handle);
+                vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->move_pipeline.layout, 0,
+                                        static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(), 0, nullptr);
+                vkCmdDispatch(command_buffer, this->render_groups[i].instance_count, this->render_groups[i].instance_count, 1);
+            }*/
+
+		    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->render_groups[i].compute_pipeline.handle);
 
             if(this->render_groups[i].mask & Model::Mesh::RENDER_SKELETON) {
                 bind_descriptor_sets = {
                     Camera::GetInstance().GetDescriptorSet().Get(frame_index),
-                    DynamicEntity::GetMatrixDescriptor().Get(frame_index),
+                    DynamicEntity::GetMatrixDescriptor().Get(),
                     this->render_groups[i].indirect_descriptor.Get(frame_index),
                     DynamicEntity::GetAnimationDescriptor().Get(frame_index),
-                    LODGroup::GetDescriptor().Get(frame_index)
+                    LODGroup::GetDescriptor().Get(frame_index),
+                    UnitControl::Instance().GetMovementDescriptor().Get(),
+                    Timer::GetDescriptor().Get(frame_index)
                 };
             }else{
                 bind_descriptor_sets = {
@@ -570,8 +595,8 @@ namespace Engine
             vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->render_groups[i].compute_pipeline.layout, 0,
                                     static_cast<uint32_t>(bind_descriptor_sets.size()), bind_descriptor_sets.data(), 0, nullptr);
 
-            uint32_t count = static_cast<uint32_t>(this->render_groups[i].indirect_descriptor.GetChunk()->range / sizeof(LODGroup::INDIRECT_COMMAND));
-		    vkCmdDispatch(command_buffer, count, 1, 1);
+            
+		    vkCmdDispatch(command_buffer, this->render_groups[i].instance_count, 1, 1);
         }
 
 		vkEndCommandBuffer(command_buffer);
@@ -651,7 +676,7 @@ namespace Engine
                                     static_cast<uint32_t>(bind.dynamic_offsets.size()), bind.dynamic_offsets.data());
                 }
 
-                bind.lod->Render(command_buffer, DataBank::GetManagedBuffer().GetBuffer(frame_index).handle,
+                bind.lod->Render(command_buffer, frame_index,
                                  pipeline.layout, static_cast<uint32_t>(bind.entities.size()),
                                  this->render_groups[i].instance_buffer_chunks,
                                  this->render_groups[i].indirect_descriptor.GetChunk()->offset);

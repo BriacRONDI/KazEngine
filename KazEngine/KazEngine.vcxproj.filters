@@ -21,6 +21,8 @@
     <ClCompile Include="Sources\Entity\DynamicEntity\DynamicEntity.cpp" />
     <ClCompile Include="Sources\Entity\Entity.cpp" />
     <ClCompile Include="Sources\LOD\LOD.cpp" />
+    <ClCompile Include="Sources\ThreadedShader\ThreadedShader.cpp" />
+    <ClCompile Include="Sources\UnitControl\UnitControl.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Sources\Vulkan\ListOfFunctions.inl" />
@@ -55,5 +57,8 @@
     <ClInclude Include="Sources\Entity\DynamicEntity\DynamicEntity.h" />
     <ClInclude Include="Sources\Entity\IEntityListener.h" />
     <ClInclude Include="Sources\LOD\LOD.h" />
+    <ClInclude Include="Sources\ThreadedShader\TheadedShader.h" />
+    <ClInclude Include="Sources\ThreadedShader\IComputeResult.h" />
+    <ClInclude Include="Sources\UnitControl\UnitControl.h" />
   </ItemGroup>
 </Project>

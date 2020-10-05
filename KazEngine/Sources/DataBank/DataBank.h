@@ -28,7 +28,8 @@ namespace Engine
             static Model::Mesh::MATERIAL GetMaterialFromPackage(std::vector<char> const& data_buffer, std::string const& path);
             static Model::Bone GetSkeletonFromPackage(std::vector<char> const& data_buffer, std::string const& path);
             
-            static inline ManagedBuffer& GetManagedBuffer() { return DataBank::instance->managed_buffer; }
+            static inline ManagedBuffer& GetInstancedBuffer() { return DataBank::instance->instanced_buffer; }
+            static inline ManagedBuffer& GetCommonBuffer() { return DataBank::instance->common_buffer; }
 
             static inline void AddTexture(Tools::IMAGE_MAP image, std::string name) { DataBank::instance->textures[name] = image; };
             static inline std::map<std::string, Tools::IMAGE_MAP>& GetTextures() { return DataBank::instance->textures; }
@@ -58,7 +59,8 @@ namespace Engine
             std::map<std::string, Model::Mesh::MATERIAL> materials;
             std::map<std::string, Model::Bone> skeletons;
             std::map<std::string, BAKED_ANIMATION> animations;
-            ManagedBuffer managed_buffer;
+            ManagedBuffer instanced_buffer;
+            ManagedBuffer common_buffer;
 
             DataBank() = default;
             ~DataBank() = default;
