@@ -3,18 +3,15 @@
 namespace Engine
 {
     // Instance du singleton
-    Camera* Camera::instance = nullptr;
+    // Camera* Camera::instance = nullptr;
 
-    void Camera::DestroyInstance()
+    /*void Camera::DestroyInstance()
     {
         if(Camera::instance == nullptr) return;
         delete Camera::instance;
         Camera::instance = nullptr;
-    }
+    }*/
 
-    /**
-     * Constructeur
-     */
     Camera::Camera() : frustum(this->camera.position, this->rotation)
     {
         this->near_clip_distance    = 0.1f;
@@ -30,14 +27,9 @@ namespace Engine
         // this->camera.projection     = Matrix4x4::OrthographicProjectionMatrix(-5.0f, 5.0f, -5.0f, 5.0f, 0.0f, 30.0f);
         this->camera.position       = {0.0f, 0.0f, 0.0f};
         this->rts_mode              = true;
-        
-        if(!camera_descriptor.Create({
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT,
-            sizeof(Maths::Matrix4x4) * 2 + sizeof(std::array<Maths::Vector4,6>) + sizeof(Maths::Vector4)}
-        })) return;
 
         this->frustum.Setup(4.0f/3.0f, 60.0f, 0.1f, 2000.0f);
-        this->last_ubo.resize(Vulkan::GetConcurrentFrameCount());
+        this->last_ubo.resize(Vulkan::GetSwapChainImageCount());
 
         Mouse::GetInstance().AddListener(this);
     }
@@ -56,12 +48,12 @@ namespace Engine
 
         if(this->camera != this->last_ubo[frame_index]) {
             size_t offset = 0;
-            this->camera_descriptor.WriteData(&this->camera, sizeof(Maths::Matrix4x4) * 2, offset);
+            GlobalData::GetInstance()->camera_descriptor.WriteData(&this->camera, sizeof(Maths::Matrix4x4) * 2, offset);
             offset += sizeof(Maths::Matrix4x4) * 2;
-            this->camera_descriptor.WriteData(&this->frustum.GetPlanes(), sizeof(std::array<Maths::Vector4,6>), offset);
+            GlobalData::GetInstance()->camera_descriptor.WriteData(&this->frustum.GetPlanes(), sizeof(std::array<Maths::Vector4,6>), offset);
             offset += sizeof(std::array<Maths::Vector4,6>);
             Maths::Vector4 camera_position = {-this->camera.position[0], this->camera.position[1], -this->camera.position[2], 1.0f};
-            this->camera_descriptor.WriteData(&camera_position, sizeof(Maths::Vector4), offset);
+            GlobalData::GetInstance()->camera_descriptor.WriteData(&camera_position, sizeof(Maths::Vector4), offset);
             this->last_ubo[frame_index] = this->camera;
         }
     }

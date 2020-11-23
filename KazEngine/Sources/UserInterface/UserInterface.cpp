@@ -2,83 +2,58 @@
 
 namespace Engine
 {
+    UserInterface::UserInterface()
+    {
+        this->render_pass = nullptr;
+    }
+
     void UserInterface::Clear()
     {
-        this->need_update.clear();
-        this->update_selection_square.clear();
-        this->selection_square.display = false;
-
         Mouse::GetInstance().RemoveListener(this);
+        GlobalData::GetInstance()->mouse_square_descriptor.RemoveListener(this);
 
-        if(Vulkan::HasInstance()) {
+        vk::Destroy(this->pipeline);
+        vk::Destroy(this->render_pass);
+        vk::Destroy(this->command_pool);
 
-            vkDeviceWaitIdle(Vulkan::GetDevice());
-
-            // Chunks
-            DataBank::GetInstancedBuffer().FreeChunk(this->ui_vbo_chunk);
-
-            // Pipeline
-            this->pipeline.Clear();
-
-            // Secondary graphics command buffers
-            for(auto command_buffer : this->command_buffers)
-                if(command_buffer != nullptr) vkFreeCommandBuffers(Vulkan::GetDevice(), this->command_pool, 1, &command_buffer);
-
-            // Render Pass
-            if(this->render_pass != nullptr) vkDestroyRenderPass(Vulkan::GetDevice(), this->render_pass, nullptr);
-        }
+        this->refresh.clear();
+        this->command_buffers.clear();
     }
 
-    UserInterface::UserInterface(VkCommandPool command_pool) : command_pool(command_pool)
+    bool UserInterface::Initialize()
     {
-        this->Clear();
+        this->refresh.resize(Vulkan::GetSwapChainImageCount(), true);
+        this->command_buffers.resize(Vulkan::GetSwapChainImageCount());
+
+        if(!vk::CreateCommandPool(this->command_pool, Vulkan::GetGraphicsQueue().index)) {
+            this->Clear();
+            return false;
+        }
+
+        for(auto& command_buffer : this->command_buffers) {
+            if(!vk::CreateCommandBuffer(this->command_pool, command_buffer)) {
+                this->Clear();
+                return false;
+            }
+        }
+
+        if(!this->SetupRenderPass()) {
+            this->Clear();
+            return false;
+        }
+
+        if(!this->SetupPipeline()) {
+            this->Clear();
+            return false;
+        }
+
+        if(!this->SetupVertexBuffer()) {
+            this->Clear();
+            return false;
+        }
 
         Mouse::GetInstance().AddListener(this);
-
-        uint32_t frame_count = Vulkan::GetConcurrentFrameCount();
-        this->need_update.resize(frame_count, true);
-        this->update_selection_square.resize(frame_count, true);
-
-        // Allocate draw command buffers
-        this->command_buffers.resize(frame_count);
-        if(!Vulkan::GetInstance().AllocateCommandBuffer(command_pool, this->command_buffers, VK_COMMAND_BUFFER_LEVEL_PRIMARY)) {
-            #if defined(DISPLAY_LOGS)
-            std::cout << "UserInterface::UserInterface() => AllocateCommandBuffer : Failed" << std::endl;
-            #endif
-            this->Clear();
-            return;
-        }
-
-        if(!this->selection_descriptor.Create({
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(MOUSE_SELECTION_SQUARE)}
-        })) {
-            this->Clear();
-            return;
-        }
-
-        if(!this->SetupRenderPass() || !this->SetupPipeline()) this->Clear();
-    }
-
-    bool UserInterface::SetupPipeline()
-    {
-        std::vector<VkPipelineShaderStageCreateInfo> shader_stages(2);
-        shader_stages[0] = Vulkan::GetInstance().LoadShaderModule("./Shaders/interface.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
-        shader_stages[1] = Vulkan::GetInstance().LoadShaderModule("./Shaders/interface.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
-
-        size_t chunk_size = Vulkan::GetInstance().ComputeUniformBufferAlignment(SIZE_KILOBYTE(5));
-        this->ui_vbo_chunk = DataBank::GetInstancedBuffer().ReserveChunk(chunk_size);
-
-        std::vector<VkVertexInputBindingDescription> vertex_binding_description;
-        auto vertex_attribute_description = Vulkan::CreateVertexInputDescription({{Vulkan::POSITION_2D, Vulkan::UV}}, vertex_binding_description);
-
-        bool success = Vulkan::GetInstance().CreatePipeline(
-            true, {this->selection_descriptor.GetLayout()},
-            shader_stages, vertex_binding_description, vertex_attribute_description, {}, this->pipeline,
-            VK_POLYGON_MODE_FILL, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, true
-        );
-
-        for(auto& stage : shader_stages)
-            vkDestroyShaderModule(Vulkan::GetDevice(), stage.module, nullptr);
+        GlobalData::GetInstance()->mouse_square_descriptor.AddListener(this);
 
         return true;
     }
@@ -163,13 +138,34 @@ namespace Engine
             return false;
         }
 
-        #if defined(DISPLAY_LOGS)
-        std::cout << "UserInterface::SetupRenderPass() : Success" << std::endl;
-        #endif
         return true;
     }
 
-    bool UserInterface::UpdateVertexBuffer(uint8_t frame_index)
+    bool UserInterface::SetupPipeline()
+    {
+        std::vector<VkPipelineShaderStageCreateInfo> shader_stages(2);
+        shader_stages[0] = vk::LoadShaderModule("./Shaders/interface.vert.spv", VK_SHADER_STAGE_VERTEX_BIT);
+        shader_stages[1] = vk::LoadShaderModule("./Shaders/interface.frag.spv", VK_SHADER_STAGE_FRAGMENT_BIT);
+
+        size_t chunk_size = SIZE_KILOBYTE(5);
+        this->ui_vbo_chunk = GlobalData::GetInstance()->instanced_buffer.GetChunk()->ReserveRange(chunk_size);
+
+        std::vector<VkVertexInputBindingDescription> vertex_binding_description;
+        auto vertex_attribute_description = vk::CreateVertexInputDescription({{vk::POSITION_2D, vk::UV}}, vertex_binding_description);
+
+        bool success = vk::CreateGraphicsPipeline(
+            true, {GlobalData::GetInstance()->mouse_square_descriptor.GetLayout()},
+            shader_stages, vertex_binding_description, vertex_attribute_description, {}, this->pipeline,
+            VK_POLYGON_MODE_FILL, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, true
+        );
+
+        for(auto& stage : shader_stages)
+            vkDestroyShaderModule(Vulkan::GetDevice(), stage.module, nullptr);
+
+        return success;
+    }
+
+    bool UserInterface::SetupVertexBuffer()
     {
         struct SHADER_INPUT {
             Maths::Vector2 position;
@@ -186,33 +182,24 @@ namespace Engine
         vertex_data[3].position = {1.0f, 1.0f};
         vertex_data[3].uv = { 1.0f, 1.0f };
 
-        DataBank::GetInstancedBuffer().WriteData(vertex_data.data(), static_cast<uint32_t>(vertex_data.size()) * sizeof(SHADER_INPUT),
-                                                 this->ui_vbo_chunk->offset, frame_index);
+        GlobalData::GetInstance()->instanced_buffer.WriteData(
+            vertex_data.data(),
+            static_cast<uint32_t>(vertex_data.size()) * sizeof(SHADER_INPUT),
+            this->ui_vbo_chunk->offset
+        );
 
         return true;
-    }
-
-    void UserInterface::Update(uint8_t frame_index)
-    {
-        if(this->update_selection_square[frame_index]) {
-            this->selection_descriptor.WriteData(&this->selection_square, sizeof(MOUSE_SELECTION_SQUARE), 0, 0, frame_index);
-            this->update_selection_square[frame_index] = false;
-        }
-    }
-
-    void UserInterface::Refresh(uint8_t frame_index)
-    {
-        this->need_update[frame_index] = true;
-        vkResetCommandBuffer(this->command_buffers[frame_index], VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
     }
 
     VkCommandBuffer UserInterface::BuildCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer)
     {
         VkCommandBuffer command_buffer = this->command_buffers[frame_index];
+        if(!this->refresh[frame_index]) return command_buffer;
+        this->refresh[frame_index] = false;
 
-        if(!this->need_update[frame_index]) return command_buffer;
+        /*if(!this->need_update[frame_index]) return command_buffer;
         this->UpdateVertexBuffer(frame_index);
-        this->need_update[frame_index] = false;
+        this->need_update[frame_index] = false;*/
 
         VkCommandBufferBeginInfo command_buffer_begin_info = {};
         command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -243,7 +230,6 @@ namespace Engine
         render_pass_begin_info.clearValueCount = 2;
         render_pass_begin_info.pClearValues = clear_values;
 
-        // Début de la render pass primaire
         vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
         auto& surface = Vulkan::GetDrawSurface();
@@ -263,13 +249,11 @@ namespace Engine
         scissor.extent.height = surface.height;
         vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-        if(this->selection_square.display > 0 && Camera::GetInstance().IsRtsMode()) {
-            VkDescriptorSet set = this->selection_descriptor.Get(frame_index);
-            vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &set, 0, nullptr);
-            vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline.handle);
-            vkCmdBindVertexBuffers(command_buffer, 0, 1, &DataBank::GetInstancedBuffer().GetBuffer(frame_index).handle, &this->ui_vbo_chunk->offset);
-            vkCmdDraw(command_buffer, 4, 1, 0, 0);
-        }
+        VkDescriptorSet set = GlobalData::GetInstance()->mouse_square_descriptor.Get(frame_index);
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &set, 0, nullptr);
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, this->pipeline.handle);
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, &GlobalData::GetInstance()->instanced_buffer.GetBuffer(frame_index).handle, &this->ui_vbo_chunk->offset);
+        vkCmdDraw(command_buffer, 4, 1, 0, 0);
 
         vkCmdEndRenderPass(command_buffer);
 
@@ -281,7 +265,6 @@ namespace Engine
             return nullptr;
         }
 
-        // Succès
         return command_buffer;
     }
 
@@ -292,8 +275,7 @@ namespace Engine
             this->update_selection_square = {true, true, true};
             if(this->selection_square.display == 0) {
                 this->selection_square.display = 1;
-                Camera::GetInstance().Freeze();
-                this->need_update = {true, true, true};
+                Camera::GetInstance()->Freeze();
             }
         }
     }
@@ -307,11 +289,10 @@ namespace Engine
     void UserInterface::MouseButtonUp(MOUSE_BUTTON button)
     {
         if(button == MOUSE_BUTTON::MOUSE_BUTTON_LEFT) {
-            if(this->selection_square.display > 0 && Camera::GetInstance().IsRtsMode()) {
+            if(this->selection_square.display > 0 && Camera::GetInstance()->IsRtsMode()) {
                 this->selection_square.display = 0;
                 this->update_selection_square = {true, true, true};
-                this->need_update = {true, true, true};
-                Camera::GetInstance().UnFreeze();
+                Camera::GetInstance()->UnFreeze();
                 for(auto& listener : this->Listeners)
                     listener->SquareSelection(this->selection_square.start, this->selection_square.end);
             }else{

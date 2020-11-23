@@ -1,26 +1,20 @@
 #pragma once
 
-#include <vulkan/vulkan.h>
-#include <Maths.h>
-#include <Tools.h>
+#include <Singleton.hpp>
+
 #include "../Platform/Common/Window/Window.h"
-#include "../ManagedBuffer/Chunk/Chunk.h"
-
-#define ENGINE_VERSION VK_MAKE_VERSION(0, 0, 1)
-#define ENGINE_NAME "KazEngine"
-
-#define SIZE_KILOBYTE(kb) 1024 * kb
-#define SIZE_MEGABYTE(mb) 1024 * SIZE_KILOBYTE(mb)
-#define TRANSFER_BUFFER_SIZE  SIZE_MEGABYTE(5)
-#define SECONDS_TO_NANO(s) 1000 * 1000 * 1000 * s
+#include "VulkanTools.h"
 
 #if defined(DISPLAY_LOGS)
 #include <iostream>
 #endif
 
+#define ENGINE_VERSION VK_MAKE_VERSION(0, 0, 1)
+#define ENGINE_NAME "KazEngine"
+
 namespace Engine
 {
-    // Trick utilisé pour déclarer toutes les fonction Vulkan
+    // Trick used to declare all the vulkan functions
     // Source : https://software.intel.com/en-us/articles/api-without-secrets-introduction-to-vulkan-part-1
     #define VK_EXPORTED_FUNCTION( fun ) extern PFN_##fun fun;
     #define VK_GLOBAL_LEVEL_FUNCTION( fun) extern PFN_##fun fun;
@@ -28,76 +22,17 @@ namespace Engine
     #define VK_DEVICE_LEVEL_FUNCTION( fun ) extern PFN_##fun fun;
     #include "ListOfFunctions.inl"
 
-    class Vulkan : IWindowListener
+    class Vulkan : public Singleton<Vulkan>, public IWindowListener
     {
-        public:
+        friend Singleton<Vulkan>;
 
-            ////////////////////////////////////////
-            //       Code de retour renvoyé       //
-            // lors de l'initialisation de vulkan //
-            ////////////////////////////////////////
-            
-            enum INIT_RETURN_CODE : uint8_t {
-                SUCCESS                                     = 0,
-                VULKAN_ALREADY_INITIALIZED                  = 1,
-                LOAD_LIBRARY_FAILURE                        = 2,
-                VULKAN_INSTANCE_CREATION_FAILURE            = 3,
-                LOAD_EXPORTED_FUNCTIONS_FAILURE             = 4,
-                LOAD_GLOBAL_FUNCTIONS_FAILURE               = 5,
-                LOAD_INSTANCE_FUNCTIONS_FAILURE             = 6,
-                DEVICE_CREATION_FAILURE                     = 7,
-                PRESENTATION_SURFACE_CREATION_FAILURE       = 8,
-                LOAD_DEVICE_FUNCTIONS_FAILURE               = 9,
-                SWAP_CHAIN_CREATION_FAILURE                 = 10,
-                DESCRIPTOR_SETS_PREPARATION_FAILURE         = 11,
-                DEPTH_FORMAT_SELECTION_FAILURE              = 12,
-                RENDER_PASS_CREATION_FAILURE                = 13,
-                DEPTH_BUFFER_CREATION_FAILURE               = 14,
-                BACKGROUND_RESOURCES_INITIALIZATION_FAILURE = 15,
-                DEPTH_BUFFER_LAYOUT_UPDATE_FAILURE          = 16,
-                MAIN_THREAD_INITIALIZATION_FAILURE          = 17,
-                PIPELINES_CREATION_FAILURE                  = 18,
-                TRANSFER_ALLOCATION_FAILURE                 = 19
-            };
+        public :
 
-            ////////////////////
-            // HERPER STRUCTS //
-            ////////////////////
+            struct DEVICE_QUEUE {
+                uint32_t index;
+                VkQueue handle;
 
-            struct COMMAND_BUFFER {
-                VkCommandBuffer handle;
-                VkFence fence;
-
-                COMMAND_BUFFER() : handle(nullptr), fence(nullptr) {}
-            };
-
-            struct DATA_BUFFER {
-                VkBuffer handle;
-                VkDeviceMemory memory;
-                VkDeviceSize size;
-
-                DATA_BUFFER() : handle(nullptr), memory(nullptr), size(0) {}
-                inline void Clear() {
-                    if(this->handle != nullptr) vkDestroyBuffer(Vulkan::GetDevice(), this->handle, nullptr);
-                    if(this->memory != nullptr) vkFreeMemory(Vulkan::GetDevice(), this->memory, nullptr); // vkUnmapMemory is implicit
-                    *this = {};
-                }
-            };
-
-            struct STAGING_BUFFER : DATA_BUFFER {
-                char* pointer;
-
-                STAGING_BUFFER() : DATA_BUFFER(), pointer(nullptr) {}
-            };
-
-            struct IMAGE_BUFFER {
-                VkImage handle;
-                VkDeviceMemory memory;
-                VkImageView view;
-                VkFormat format;
-                VkImageAspectFlags aspect;
-
-                IMAGE_BUFFER() : handle(nullptr), memory(nullptr), view(nullptr), format(VK_FORMAT_UNDEFINED), aspect(0) {}
+                DEVICE_QUEUE() : index(0), handle(nullptr) {}
             };
 
             struct SWAP_CHAIN_IMAGE {
@@ -115,171 +50,43 @@ namespace Engine
                 SWAP_CHAIN() : handle(nullptr), format(VK_FORMAT_UNDEFINED) {}
             };
 
-            struct DEVICE_QUEUE {
-                uint32_t index;
-                VkQueue handle;
+            /// Initialize vulkan instance
+            bool Initialize(Engine::Window* draw_window, uint32_t application_version, std::string aplication_name);
 
-                DEVICE_QUEUE() : index(0), handle(nullptr) {}
-            };
+            /// Find the memory type mathing the requirements
+            bool MemoryTypeFromProperties(uint32_t type_bits, VkFlags requirements_mask, uint32_t &type_index);
 
-            struct RENDERING_RESOURCES {
-                VkFramebuffer framebuffer;
-                VkSemaphore semaphore;
-                VkFence fence;
-                std::vector<VkCommandBuffer> comand_buffers;
-                // Vulkan::COMMAND_BUFFER graphics_command_buffer;
+            /// Build the swap chain and the frame buffers
+            bool RebuildPresentResources();
 
-                RENDERING_RESOURCES() : framebuffer(nullptr), semaphore(nullptr) {}
-            };
+            /// Acquire swap chain image
+            bool AcquireNextImage(uint32_t& swapchain_image_index, VkSemaphore semaphore);
 
-            struct PIPELINE {
-                VkPipelineLayout layout;
-                VkPipeline handle;
+            /// Present Image
+            bool PresentImage(std::vector<VkSemaphore> semaphores, uint32_t swap_chain_image_index);
 
-                PIPELINE() : layout(nullptr), handle(nullptr) {}
-                inline void Clear() {
-                    if(this->handle != nullptr) vkDestroyPipeline(Vulkan::GetDevice(), this->handle, nullptr);
-                    if(this->layout != nullptr) vkDestroyPipelineLayout(Vulkan::GetDevice(), this->layout, nullptr);
-                    *this = {};
-                }
-            };
-
-            enum VERTEX_BINDING_ATTRIBUTE : uint8_t {
-                POSITION        = 0,
-                UV              = 1,
-                COLOR           = 2,
-                NORMAL          = 3,
-                BONE_WEIGHTS    = 4,
-                BONE_IDS        = 5,
-                POSITION_2D     = 6,
-                MATRIX          = 7,
-                UINT_ID         = 8
-            };
-
-            /*struct DATA_CHUNK {
-                VkDeviceSize offset;
-                VkDeviceSize range;
-            };*/
+            static VkRenderPass GetRenderPass() { return Singleton<Vulkan>::instance->render_pass; }
+            static Surface& GetDrawSurface() { return Singleton<Vulkan>::instance->draw_surface; }
+            static VkDevice GetDevice() { return Singleton<Vulkan>::instance->device; }
+            static uint32_t GetSwapChainImageCount() { return static_cast<uint32_t>(Singleton<Vulkan>::instance->swap_chain.images.size()); }
+            static DEVICE_QUEUE GetGraphicsQueue() { return Singleton<Vulkan>::instance->graphics_queue; }
+            static DEVICE_QUEUE GetTransferQueue() { return Singleton<Vulkan>::instance->transfer_queue; }
+            static DEVICE_QUEUE GetComputeQueue() { return Singleton<Vulkan>::instance->compute_queue; }
+            static VkFramebuffer GetFrameBuffer(uint8_t frame_index) { return Singleton<Vulkan>::instance->frame_buffers[frame_index]; }
+            static VkPhysicalDeviceLimits const& GetDeviceLimits() { return Singleton<Vulkan>::instance->physical_device.properties.limits; }
+            static VkDeviceSize UboAlignment() { return Singleton<Vulkan>::instance->physical_device.properties.limits.minUniformBufferOffsetAlignment; }
+            static VkDeviceSize SboAlignment() { return Singleton<Vulkan>::instance->physical_device.properties.limits.minStorageBufferOffsetAlignment; }
+            static SWAP_CHAIN GetSwapChain() { return Singleton<Vulkan>::instance->swap_chain; }
+            static VkFormat GetDepthFormat() { return Singleton<Vulkan>::instance->depth_format; }
 
             ///////////////////////////////
             // Interface IWindowListener //
             ///////////////////////////////
 
-            void StateChanged(IWindowListener::E_WINDOW_STATE window_state);
-            void SizeChanged(Area<uint32_t> size);
+            void StateChanged(IWindowListener::E_WINDOW_STATE window_state) {}
+            void SizeChanged(Area<uint32_t> size) {}
 
-            ///////////////////////////
-            // FONCTIONS PRINCIPALES //
-            ///////////////////////////
-
-            static std::vector<VkVertexInputAttributeDescription> CreateVertexInputDescription(
-                std::vector<std::vector<VERTEX_BINDING_ATTRIBUTE>> attributes,
-                std::vector<VkVertexInputBindingDescription> &descriptions);
-
-            static inline Vulkan& CreateInstance() { if(Vulkan::vulkan == nullptr) Vulkan::vulkan = new Vulkan; return *Vulkan::vulkan; }
-            static inline bool HasInstance() { return Vulkan::vulkan != nullptr; }                                          // Indique si l'instance vulkan existe
-            static inline Vulkan& GetInstance() { return *Vulkan::vulkan; }                                                 // Récupération de l'instance du singleton
-            static void DestroyInstance();                                                                                  // Libération des ressources allouées à Vulkan
-            bool GetVersion(std::string &version_string);                                                                   // Récupère la version de Vulkan
-            static inline VkDevice& GetDevice(){ return Vulkan::vulkan->device; }                                           // Récupère le device de l'instance vulkan
-            static inline Surface& GetDrawSurface() { return Vulkan::vulkan->draw_surface; }                                // Récupère la surface d'affichage
-            static inline VkRenderPass GetRenderPass() { return Vulkan::vulkan->render_pass; }                              // Récupère la render pass
-            static inline uint8_t GetConcurrentFrameCount() { return Vulkan::vulkan->concurrent_frame_count; }              // Récupère le nombre d'images de la swapchain
-            static inline SWAP_CHAIN& GetSwapChain() { return Vulkan::vulkan->swap_chain; }                                 // Récupère la swap chain
-            static inline DEVICE_QUEUE& GetGraphicsQueue() { return Vulkan::vulkan->graphics_queue; }                       // Récupère la graphics queue
-            static inline DEVICE_QUEUE& GetPresentQueue() { return Vulkan::vulkan->present_queue; }                         // Récupère la present queue
-            static inline DEVICE_QUEUE& GetTransferQueue() { return Vulkan::vulkan->transfer_queue; }                       // Récupère la transfer queue
-            static inline DEVICE_QUEUE& GetComputeQueue() { return Vulkan::vulkan->compute_queue; }                         // Récupère la compute queue
-            static inline VkFormat GetDepthFormat() { return Vulkan::vulkan->depth_format; }
-            uint32_t ComputeUniformBufferAlignment(uint32_t buffer_size);                                                   // Calcule l'alignement correspondant à un Uniform Buffer
-            uint32_t ComputeStorageBufferAlignment(uint32_t buffer_size);
-            VkDeviceSize ComputeRawDataAlignment(size_t data_size);                                                         // Calcule le segment de mémoire occupé par une donnée en tenant compte du nonCoherentAtomSize
-            bool AcquireNextImage(uint32_t& swapchain_image_index, VkSemaphore semaphore);
-            bool PresentImage(RENDERING_RESOURCES& rendering_resource, std::vector<VkSemaphore> semaphores, std::vector<VkPipelineStageFlags> stages, uint32_t swap_chain_image_index);
-
-            bool AllocateCommandBuffer(VkCommandPool& pool, std::vector<VkCommandBuffer>& buffers, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-            VkFence CreateFence();
-
-            bool OnWindowSizeChanged();
-
-            // Récupère les limites de la carte graphique
-            static inline VkPhysicalDeviceLimits const& GetDeviceLimits() { return Vulkan::vulkan->physical_device.properties.limits; }
-            static inline VkDeviceSize UboAlignment() { return Vulkan::vulkan->physical_device.properties.limits.minUniformBufferOffsetAlignment; }
-            static inline VkDeviceSize SboAlignment() { return Vulkan::vulkan->physical_device.properties.limits.minStorageBufferOffsetAlignment; }
-
-            // Création d'instance et chargement des fonctions principales
-            INIT_RETURN_CODE Initialize(Engine::Window* draw_window, uint32_t application_version, std::string const& aplication_name, bool separate_transfer_queue = true);
-
-            // Chargement d'un shader
-            VkPipelineShaderStageCreateInfo LoadShaderModule(std::string const& filename, VkShaderStageFlagBits type);
-
-            // Création d'un frame buffer
-            bool CreateFrameBuffer(VkFramebuffer& frame_buffer, VkImageView const view);
-
-            bool CreateCommandPool(VkCommandPool& pool, uint32_t queue_family_index, VkCommandPoolCreateFlags flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-
-            // Création d'un sémaphore
-            bool CreateSemaphore(VkSemaphore &semaphore);
-
-            // Création d'un command buffer
-            bool CreateCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY, bool create_fence = true);
-            bool CreateCommandBuffer(VkCommandPool pool, COMMAND_BUFFER& command_buffer, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY, bool create_fence = true);
-            bool CreateCommandBuffer(VkCommandPool pool, VkCommandBuffer& command_buffer, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-
-            void ReleaseCommandBuffer(VkCommandPool pool, std::vector<COMMAND_BUFFER>& command_buffers);
-            void ReleaseCommandBuffer(VkCommandPool pool, COMMAND_BUFFER& command_buffer);
-
-            // Envoi de données vers un data buffer
-            size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, VkDeviceSize data_size, VkDeviceSize destination_offset);
-            // size_t SendToBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks, VkQueue queue = Vulkan::GetTransferQueue().handle);
-            size_t SynchronizeBuffer(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks,
-                                     VkQueue queue = Vulkan::GetTransferQueue().handle, VkSemaphore signal = nullptr, VkSemaphore wait = nullptr, bool write = true);
-            size_t PrepareSend(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, STAGING_BUFFER staging_buffer, std::vector<Chunk> chunks);
-            bool SendPrepared(COMMAND_BUFFER const& command_buffer, VkQueue queue);
-
-            // Envoi d'une image vers un buffer d'image
-            // bool SendToBuffer(IMAGE_BUFFER& buffer, const void* data, VkDeviceSize data_size, uint32_t width, uint32_t height);
-            size_t SendToBuffer(IMAGE_BUFFER& buffer, Tools::IMAGE_MAP const& image);
-            bool MoveData(DATA_BUFFER& buffer, COMMAND_BUFFER const& command_buffer, VkDeviceSize data_size, VkDeviceSize source_offset, VkDeviceSize destination_offset);
-
-            // Création d'un buffer d'image
-            IMAGE_BUFFER CreateImageBuffer(VkImageUsageFlags usage, VkImageAspectFlags aspect, uint32_t width, uint32_t height, VkFormat format = VK_FORMAT_R8G8B8A8_UNORM);
-
-            bool TransitionImageLayout(IMAGE_BUFFER& buffer,
-                                       VkAccessFlags source_mask, VkAccessFlags dest_mask,
-                                       VkImageLayout old_layout, VkImageLayout new_layout,
-                                       VkPipelineStageFlags source_stage, VkPipelineStageFlags dest_stage);     // Change le layout d'un buffer d'image
-
-            // Création d'un buffer de données
-            bool CreateDataBuffer(DATA_BUFFER& buffer, VkDeviceSize size, VkBufferUsageFlags usage, VkFlags requirement, std::vector<uint32_t> const& queue_families = {});
-
-            // Destruction d'un buffer de données
-            void ReleaseDataBuffer(DATA_BUFFER& buffer);
-
-            // Création d'une pipeline
-            bool CreatePipeline(bool dynamic_viewport,
-                                std::vector<VkDescriptorSetLayout> const& descriptor_set_layouts,
-                                std::vector<VkPipelineShaderStageCreateInfo> const& shader_stages,
-                                std::vector<VkVertexInputBindingDescription> const& vertex_binding_description,
-                                std::vector<VkVertexInputAttributeDescription> const& vertex_attribute_descriptions,
-                                std::vector<VkPushConstantRange> const& push_constant_ranges,
-                                PIPELINE& pipeline,
-                                VkPolygonMode polygon_mode = VK_POLYGON_MODE_FILL,
-                                VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                                bool blend_state = false);
-
-            bool CreateComputePipeline(VkPipelineShaderStageCreateInfo stage,
-                                       std::vector<VkDescriptorSetLayout> const& descriptor_set_layouts,
-                                       std::vector<VkPushConstantRange> const& push_constant_ranges,
-                                       PIPELINE& pipeline);
-
-            inline Window* GetDrawWindow() { return this->draw_window; }
-
-        private:
-
-            ////////////////////
-            // HERPER STRUCTS //
-            ////////////////////
+        private :
 
             struct PHYSICAL_DEVICE {
                 VkPhysicalDevice handle;
@@ -287,112 +94,130 @@ namespace Engine
                 VkPhysicalDeviceProperties properties;
                 VkPhysicalDeviceFeatures features;
 
-                PHYSICAL_DEVICE() : handle(nullptr), memory({}), properties({}) {}
+                PHYSICAL_DEVICE() : handle(nullptr), memory({}), properties({}), features({}) {}
             };
 
-            /////////////
-            // MEMBERS //
-            /////////////
-
-            // Instance du singleton
-            static Vulkan* vulkan;
-
-            // Librairie Vulkan
+            /// Vulkan shared library handle
             LibraryHandle library;
 
-            // Instance vulkan
+            /// Vulkan api instance
             VkInstance instance;
 
-            // Fenêtre d'affichage
-            Window* draw_window;
-            Surface draw_surface;
-            VkSurfaceKHR presentation_surface;
+            /// Vulkan api device
+            VkDevice device;
 
-            // Périphérique physique choisi pour l'affichage
+            /// Vulkan api current physical device
             PHYSICAL_DEVICE physical_device;
 
-            // Queue families
+            /// vulkan draw window
+            Window* draw_window;
+
+            /// Platform dependant drawing surface details
+            Surface draw_surface;
+
+            /// vulkan api presentation surface
+            VkSurfaceKHR presentation_surface;
+
             DEVICE_QUEUE present_queue;
             DEVICE_QUEUE graphics_queue;
             DEVICE_QUEUE transfer_queue;
             DEVICE_QUEUE compute_queue;
 
-            // Logical device
-            VkDevice device;
-
-            // Swap Chain
-            bool creating_swap_chain;
-            SWAP_CHAIN swap_chain;
-            uint8_t concurrent_frame_count;
-            VkImageSubresourceRange image_subresource_range;
-
-            // Depth Buffer
-            IMAGE_BUFFER depth_buffer;
+            /// Depth buffer format
             VkFormat depth_format;
 
-            // Render Pass
+            /// Depth buffer
+            vk::IMAGE_BUFFER depth_buffer;
+
+            /// Swap Chain
+            SWAP_CHAIN swap_chain;
+
+            /// Render Pass
             VkRenderPass render_pass;
 
-            // Ressources utilisées pour les créations de buffers, copies de données et transitions de layouts
-            VkCommandPool graphics_command_pool;
-            COMMAND_BUFFER graphics_command_buffer;
-            VkCommandPool transfert_command_pool;
-            COMMAND_BUFFER transfer_command_buffer;
-            STAGING_BUFFER transfer_staging;
+            /// Frame Buffers
+            std::vector<VkFramebuffer> frame_buffers;
 
-            ////////////////////
-            // CORE FUNCTIONS //
-            ////////////////////
+            /// Private constructor for singleton
+            Vulkan();
 
-            Vulkan();       // Constructeur
-            ~Vulkan();      // Destructeur
+            /// Destroy all vulkan instance objects
+            ~Vulkan();
 
-            bool LoadPlatformLibrary();                                                                         // Chargement de la librairie vulkan
+            /// Link Vulkan shared library
+            bool LoadPlatformLibrary();
 
-            bool LoadExportedEntryPoints();                                                                     // Chargement de l'exporteur de fonctions vulkan
-            bool LoadGlobalLevelEntryPoints();                                                                  // Chargement des fonctions vulkan de portée globale
-            bool LoadInstanceLevelEntryPoints();                                                                // Chargement des fonctions vulkan portant sur l'instance
-            bool LoadDeviceLevelEntryPoints();                                                                  // Chargement des fonctions vulkan portant sur le logical device
+            /// Load vkGetInstanceProcAddr
+            bool LoadExportedEntryPoints();
 
-            bool CreateVulkanInstance(uint32_t application_version, std::string const& aplication_name);        // Création de l'instance vulkan
-            bool CreatePresentationSurface();                                                                   // Création de la surface de présentation
-            bool CreateDevice(bool separate_transfer_queue, char preferred_device_index = -1);                  // Création du logical device
-            void GetDeviceQueues();                                                                             // Récupère le handle des device queues
-            bool CreateSwapChain();                                                                             // Création de la swap chain
-            VkFormat FindDepthFormat();                                                                         // Recherche du format d'image pour le depth buffer
-            bool CreateRenderPass();                                                                            // Création de la render pass
-            bool AllocateTransferResources();
-            void ReleaseTransferResources();
-           
+            /// Load vulkan global level functions
+            bool LoadGlobalLevelEntryPoints();
 
-            //////////////////////
-            // HELPER FUNCTIONS //
-            //////////////////////
+            /// Load vulkan instance level functions
+            bool LoadInstanceLevelEntryPoints();
 
-            // Logical Device
-            std::vector<VkQueueFamilyProperties> QueryDeviceProperties(VkPhysicalDevice test_physical_device);
-            bool IsDeviceEligible(VkPhysicalDevice test_physical_device, std::vector<VkQueueFamilyProperties>& queue_family_properties);
+            /// Load vulkan device level functions
+            bool LoadDeviceLevelEntryPoints();
+
+            /// Create the vulkan api instance
+            bool CreateVulkanInstance(uint32_t application_version, std::string aplication_name);
+
+            /// Create the vulkan api device
+            bool CreateDevice(bool separate_transfer_queue, char preferred_device_index = -1);
+
+            /// Create the vulkan api drawinf surface
+            bool CreatePresentationSurface();
+
+            /// Select the present queue family
             uint32_t SelectPresentQueue(VkPhysicalDevice test_physical_device, std::vector<VkQueueFamilyProperties>& queue_family_properties);
+
+            /// Select the most suitable queue family for our needs
             uint32_t SelectPreferredQueue(VkPhysicalDevice test_physical_device, std::vector<VkQueueFamilyProperties>& queue_family_properties, VkQueueFlagBits queue_type, uint32_t common_queue);
+
+            /// Select a dedicated queue family for a given purpose
             uint32_t SelectDedicatedQueue(VkPhysicalDevice test_physical_device, std::vector<VkQueueFamilyProperties>& queue_family_properties, VkQueueFlagBits queue_type, std::vector<uint32_t> other_queues);
 
-            // Swap Chain
+            /// Get physical device properties from vulkan
+            std::vector<VkQueueFamilyProperties> QueryDeviceProperties(VkPhysicalDevice physical_device);
+
+            /// Check if a physical devcice has a graphics and a compute queue family
+            bool IsDeviceEligible(VkPhysicalDevice test_physical_device, std::vector<VkQueueFamilyProperties>& queue_family_properties);
+
+            /// Get queue handles
+            void GetDeviceQueues();
+
+            /// Find a suitable image format for depth buffer
+            VkFormat FindDepthFormat();
+
+            /// Find a suitable extent for the swap chain
             VkExtent2D GetSwapChainExtent(VkSurfaceCapabilitiesKHR surface_capabilities);
+
+            /// Find the most optimized count of images for the swapchain
             uint32_t GetSwapChainNumImages(VkSurfaceCapabilitiesKHR surface_capabilities);
+
+            /// Find the most suitable surface format for the swapchain
             VkFormat GetSurfaceFormat();
+
+            /// Find the best transform flag for the swap chaijn
             VkSurfaceTransformFlagBitsKHR GetSwapChainTransform(VkSurfaceCapabilitiesKHR surface_capabilities);
+
+            /// Find the most suitable composite alpha for the swap chain
             VkCompositeAlphaFlagBitsKHR GetSwapChainCompositeAlpha(VkSurfaceCapabilitiesKHR surface_capabilities);
+
+            /// Find the most suitable presentation mode, MAILBOX is preferred
             VkPresentModeKHR GetSwapChainPresentMode();
 
-            // Resources
-            bool MemoryTypeFromProperties(uint32_t type_bits, VkFlags requirements_mask, uint32_t &type_index);
+            /// Create vulkan swap chain
+            bool CreateSwapChain();
 
-            // Divers
-            void ReleaseDepthBuffer();
+            /// Create the render pass
+            bool CreateRenderPass();
 
-            ///////////////////////
-            // VALIDATION LAYERS //
-            ///////////////////////
+            /// Create the frame buffers
+            bool CreateFrameBuffers();
+
+            /// Destroy the depth buffer
+            void ClearDepthBuffer();
 
             #if defined(DISPLAY_LOGS)
             VkDebugUtilsMessengerEXT report_callback;

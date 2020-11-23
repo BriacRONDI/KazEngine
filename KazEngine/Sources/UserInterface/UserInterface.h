@@ -1,38 +1,21 @@
 #pragma once
 
+#include <Singleton.hpp>
+#include <EventEmitter.hpp>
 #include "../Vulkan/Vulkan.h"
-#include "../DescriptorSet/DescriptorSet.h"
-#include "../DataBank/DataBank.h"
-#include "../Platform/Common/Mouse/Mouse.h"
+#include "../GlobalData/GlobalData.h"
+#include "../InstancedDescriptorSet/IInstancedDescriptorListener.h"
 #include "../Camera/Camera.h"
 #include "IUserInteraction.h"
-#include <EventEmitter.hpp>
+#include "../DynamicEntityRenderer/DynamicEntityRenderer.h"
 
 namespace Engine
 {
-    class UserInterface : public IMouseListener, public Tools::EventEmitter<IUserInteraction>
+    class UserInterface : public Singleton<UserInterface>, public IMouseListener, public IInstancedDescriptorListener, public Tools::EventEmitter<IUserInteraction>
     {
+        friend Singleton<UserInterface>;
+
         public :
-
-            void Clear();
-            inline ~UserInterface() { this->Clear(); }
-            UserInterface(VkCommandPool command_pool);
-            VkCommandBuffer BuildCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer);
-            void Update(uint8_t frame_index);
-            inline void Refresh() { for(int i=0; i<this->need_update.size(); i++) this->Refresh(i); }
-            void Refresh(uint8_t frame_index); // { this->need_update[frame_index] = true; }
-
-            //////////////////////////////
-            // IMouseListener interface //
-            //////////////////////////////
-
-            virtual void MouseMove(unsigned int x, unsigned int y);
-            virtual void MouseButtonDown(MOUSE_BUTTON button);
-            virtual void MouseButtonUp(MOUSE_BUTTON button);
-            inline virtual void MouseWheelUp() {};
-            inline virtual void MouseWheelDown() {};
-
-        private :
 
             struct MOUSE_SELECTION_SQUARE {
                 Point<uint32_t> start;
@@ -40,19 +23,44 @@ namespace Engine
                 uint32_t display;
             };
 
-            VkCommandPool command_pool;
-            std::vector<VkCommandBuffer> command_buffers;
-            Vulkan::PIPELINE pipeline;
-            DescriptorSet texture_descriptor;
+            bool Initialize();
+            void Clear();
+            void Refresh() { std::fill(this->refresh.begin(), this->refresh.end(), true); }
+            bool DisplayInterface() { return this->selection_square.display > 0 && Camera::GetInstance()->IsRtsMode(); }
+            VkCommandBuffer BuildCommandBuffer(uint8_t frame_index, VkFramebuffer framebuffer);
+            void Update(uint8_t frame_index) { if(this->DisplayInterface()) GlobalData::GetInstance()->mouse_square_descriptor.WriteData(&this->selection_square, sizeof(MOUSE_SELECTION_SQUARE), 0, 0, frame_index); }
+
+            //////////////////////////////
+            // IMouseListener interface //
+            //////////////////////////////
+
+            void MouseMove(unsigned int x, unsigned int y);
+            void MouseButtonDown(MOUSE_BUTTON button);
+            void MouseButtonUp(MOUSE_BUTTON button);
+            void MouseWheelUp() {};
+            void MouseWheelDown() {};
+
+            ////////////////////////////////////////////
+            // IInstancedDescriptorListener interface //
+            ////////////////////////////////////////////
+
+            void InstancedDescriptorSetUpdated(InstancedDescriptorSet* descriptor, uint8_t binding) { this->Refresh(); }
+
+        private :
+
             VkRenderPass render_pass;
-            std::vector<bool> need_update;
             std::shared_ptr<Chunk> ui_vbo_chunk;
+            vk::PIPELINE pipeline;
+            VkCommandPool command_pool;
+            std::vector<bool> refresh;
+            std::vector<VkCommandBuffer> command_buffers;
             MOUSE_SELECTION_SQUARE selection_square;
-            DescriptorSet selection_descriptor;
             std::vector<bool> update_selection_square;
 
-            bool SetupPipeline();
+            UserInterface();
+            ~UserInterface() { this->Clear(); }
             bool SetupRenderPass();
-            bool UpdateVertexBuffer(uint8_t frame_index);
+            bool SetupPipeline();
+            bool SetupVertexBuffer();
     };
 }

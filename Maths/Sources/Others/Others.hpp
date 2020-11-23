@@ -2,10 +2,7 @@
 
 #include <cmath>
 #include "Plane.hpp"
-// #define VECTOR_N 3
-// #include "../Vector/Vector.hpp"
 
-// #define DISPLAY_LOGS
 #if defined(DISPLAY_LOGS)
 #include <iostream>
 #endif

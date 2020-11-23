@@ -18,9 +18,88 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Sources\Camera\Camera.cpp" />
+    <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
+    <ClCompile Include="Sources\Chunk\Chunk.cpp" />
+    <ClCompile Include="Sources\ComputeShader\ComputeShader.cpp" />
+    <ClCompile Include="Sources\Core\Core.cpp" />
+    <ClCompile Include="Sources\GlobalData\GlobalData.cpp" />
+    <ClCompile Include="Sources\MappedDescriptorSet\MappedDescriptorSet.cpp" />
+    <ClCompile Include="Sources\DynamicEntityRenderer\DynamicEntityRenderer.cpp" />
+    <ClCompile Include="Sources\DynamicEntity\DynamicEntity.cpp" />
+    <ClCompile Include="Sources\InstancedBuffer\InstancedBuffer.cpp" />
+    <ClCompile Include="Sources\InstancedDescriptorSet\InstancedDescriptorSet.cpp" />
+    <ClCompile Include="Sources\LOD\LOD.cpp" />
+    <ClCompile Include="Sources\Main.cpp" />
+    <ClCompile Include="Sources\MappedBuffer\MappedBuffer.cpp" />
+    <ClCompile Include="Sources\Map\Map.cpp" />
+    <ClCompile Include="Sources\MovementController\MovementController.cpp" />
+    <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp" />
+    <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp" />
+    <ClCompile Include="Sources\Platform\Common\Timer\Timer.cpp" />
+    <ClCompile Include="Sources\Platform\Win32\Window\Window.cpp" />
+    <ClCompile Include="Sources\TextureDescriptor\TextureDescriptor.cpp" />
+    <ClCompile Include="Sources\UserInterface\UserInterface.cpp" />
+    <ClCompile Include="Sources\Vulkan\Vulkan.cpp" />
+    <ClCompile Include="Sources\Vulkan\VulkanTools.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Sources\Camera\Camera.h" />
+    <ClInclude Include="Sources\Camera\Frustum\Frustum.h" />
+    <ClInclude Include="Sources\Chunk\Chunk.h" />
+    <ClInclude Include="Sources\ComputeShader\ComputeShader.h" />
+    <ClInclude Include="Sources\Core\Core.h" />
+    <ClInclude Include="Sources\GlobalData\GlobalData.h" />
+    <ClInclude Include="Sources\InstancedDescriptorSet\IInstancedDescriptorListener.h" />
+    <ClInclude Include="Sources\MappedDescriptorSet\IMappedDescriptorListener.h" />
+    <ClInclude Include="Sources\MappedDescriptorSet\MappedDescriptorSet.h" />
+    <ClInclude Include="Sources\DynamicEntityRenderer\DynamicEntityRenderer.h" />
+    <ClInclude Include="Sources\DynamicEntity\DynamicEntity.h" />
+    <ClInclude Include="Sources\Engine.h" />
+    <ClInclude Include="Sources\InstancedBuffer\InstancedBuffer.h" />
+    <ClInclude Include="Sources\InstancedDescriptorSet\InstancedDescriptorSet.h" />
+    <ClInclude Include="Sources\LOD\LOD.h" />
+    <ClInclude Include="Sources\MappedBuffer\MappedBuffer.h" />
+    <ClInclude Include="Sources\Map\Map.h" />
+    <ClInclude Include="Sources\MovementController\MovementController.h" />
+    <ClInclude Include="Sources\Platform\Common\Keyboard\IKeyboardListener.h" />
+    <ClInclude Include="Sources\Platform\Common\Keyboard\Keyboard.h" />
+    <ClInclude Include="Sources\Platform\Common\Mouse\IMouseListener.h" />
+    <ClInclude Include="Sources\Platform\Common\Mouse\Mouse.h" />
+    <ClInclude Include="Sources\Platform\Common\Timer\ITimerListener.h" />
+    <ClInclude Include="Sources\Platform\Common\Timer\Timer.h" />
+    <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h" />
+    <ClInclude Include="Sources\Platform\Common\Window\IWindowListener.h" />
+    <ClInclude Include="Sources\Platform\Common\Window\Window.h" />
+    <ClInclude Include="Sources\UserInterface\IUserInteraction.h" />
+    <ClInclude Include="Sources\UserInterface\UserInterface.h" />
+    <ClInclude Include="Sources\Vulkan\Vulkan.h" />
+    <ClInclude Include="Sources\Vulkan\VulkanTools.h" />
+    <ClInclude Include="Sources\TextureDescriptor\TextureDescriptor.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="compile_shaders.bat" />
+    <None Include="data.kea" />
+    <None Include="Shaders\cross.frag" />
+    <None Include="Shaders\cross.vert" />
+    <None Include="Shaders\cull_lod.comp" />
+    <None Include="Shaders\cull_lod_anim.comp" />
+    <None Include="Shaders\dynamic_model.vert" />
+    <None Include="Shaders\interface.frag" />
+    <None Include="Shaders\interface.vert" />
+    <None Include="Shaders\map.frag" />
+    <None Include="Shaders\map.vert" />
+    <None Include="Shaders\move_collision.comp" />
+    <None Include="Shaders\move_groups.comp" />
+    <None Include="Shaders\textured_model.frag" />
+    <None Include="Shaders\textured_model.vert" />
+    <None Include="Sources\Vulkan\ListOfFunctions.inl" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
-    <ProjectGuid>{EB9859A8-4158-47FA-85DF-6978FC08F861}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{63dc885d-bb85-44fd-a638-825e0b9d55b1}</ProjectGuid>
     <RootNamespace>KazEngine</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
@@ -72,11 +151,11 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LinkIncremental>true</LinkIncremental>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -85,27 +164,12 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ClCompile>
-      <WarningLevel>Level3</WarningLevel>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;DISPLAY_LOGS;VK_USE_PLATFORM_WIN32_KHR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\VulkanSDK\1.2.135.0\Include;$(SolutionDir)LogManager\Sources;$(SolutionDir)Maths\Sources;$(SolutionDir)Tools\Sources;$(SolutionDir)DataPacker\Sources;$(SolutionDir)EngineModel\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-    </ClCompile>
-    <Link>
-      <SubSystem>Windows</SubSystem>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>D:\VulkanSDK\1.2.135.0\Lib;$(SolutionDir)$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;Tools.lib;EngineModel.lib;LogManager.lib;DataPacker.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -114,7 +178,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
@@ -122,6 +186,21 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;DISPLAY_LOGS;VK_USE_PLATFORM_WIN32_KHR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(SolutionDir)Maths\Sources;$(SolutionDir)LogManager\Sources;$(SolutionDir)Tools\Sources;$(SolutionDir)DataPacker\Sources;$(SolutionDir)EngineModel\Sources;D:\VulkanSDK\1.2.148.1\Include</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>$(SolutionDir)$(Platform)\$(Configuration)\;D:\VulkanSDK\1.2.148.1\Lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>LogManager.lib;vulkan-1.lib;DataPacker.lib;EngineModel.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -132,79 +211,17 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;VK_USE_PLATFORM_WIN32_KHR;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\VulkanSDK\1.2.135.0\Include;$(SolutionDir)LogManager\Sources;$(SolutionDir)Maths\Sources;$(SolutionDir)Tools\Sources;$(SolutionDir)DataPacker\Sources;$(SolutionDir)EngineModel\Sources;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(SolutionDir)Maths\Sources;$(SolutionDir)LogManager\Sources;$(SolutionDir)Tools\Sources;$(SolutionDir)DataPacker\Sources;$(SolutionDir)EngineModel\Sources;D:\VulkanSDK\1.2.148.1\Include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>D:\VulkanSDK\1.2.135.0\Lib;$(SolutionDir)$(Platform)\$(Configuration)\;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>vulkan-1.lib;Tools.lib;EngineModel.lib;DataPacker.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)$(Platform)\$(Configuration)\;D:\VulkanSDK\1.2.148.1\Lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;LogManager.lib;vulkan-1.lib;DataPacker.lib;EngineModel.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="Sources\Camera\Camera.cpp" />
-    <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
-    <ClCompile Include="Sources\Core\Core.cpp" />
-    <ClCompile Include="Sources\DescriptorSet\DescriptorSet.cpp" />
-    <ClCompile Include="Sources\Entity\DynamicEntity\DynamicEntity.cpp" />
-    <ClCompile Include="Sources\Entity\Entity.cpp" />
-    <ClCompile Include="Sources\Entity\StaticEntity\StaticEntity.cpp" />
-    <ClCompile Include="Sources\LOD\LOD.cpp" />
-    <ClCompile Include="Sources\Main.cpp" />
-    <ClCompile Include="Sources\ManagedBuffer\Chunk\Chunk.cpp" />
-    <ClCompile Include="Sources\ManagedBuffer\ManagedBuffer.cpp" />
-    <ClCompile Include="Sources\DataBank\DataBank.cpp" />
-    <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp" />
-    <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp" />
-    <ClCompile Include="Sources\Platform\Win32\Window\Window.cpp" />
-    <ClCompile Include="Sources\Scene\EntityRender\EntityRender.cpp" />
-    <ClCompile Include="Sources\Scene\Map\Map.cpp" />
-    <ClCompile Include="Sources\Platform\Common\Timer\Timer.cpp" />
-    <ClCompile Include="Sources\ThreadedShader\ThreadedShader.cpp" />
-    <ClCompile Include="Sources\UnitControl\UnitControl.cpp" />
-    <ClCompile Include="Sources\UserInterface\UserInterface.cpp" />
-    <ClCompile Include="Sources\Vulkan\Vulkan.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="Shaders\map.frag" />
-    <None Include="Shaders\map.vert" />
-    <None Include="Sources\Vulkan\ListOfFunctions.inl" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Sources\Camera\Camera.h" />
-    <ClInclude Include="Sources\Camera\Frustum\Frustum.h" />
-    <ClInclude Include="Sources\COre\Core.h" />
-    <ClInclude Include="Sources\DescriptorSet\DescriptorSet.h" />
-    <ClInclude Include="Sources\Engine.h" />
-    <ClInclude Include="Sources\Entity\DynamicEntity\DynamicEntity.h" />
-    <ClInclude Include="Sources\Entity\Entity.h" />
-    <ClInclude Include="Sources\Entity\IEntityListener.h" />
-    <ClInclude Include="Sources\Entity\StaticEntity\StaticEntity.h" />
-    <ClInclude Include="Sources\LOD\LOD.h" />
-    <ClInclude Include="Sources\ManagedBuffer\Chunk\Chunk.h" />
-    <ClInclude Include="Sources\ManagedBuffer\ManagedBuffer.h" />
-    <ClInclude Include="Sources\DataBank\DataBank.h" />
-    <ClInclude Include="Sources\Platform\Common\Timer\ITimerListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\IWindowListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\Window.h" />
-    <ClInclude Include="Sources\Platform\Common\Keyboard\IKeyboardListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Keyboard\Keyboard.h" />
-    <ClInclude Include="Sources\Platform\Common\Mouse\IMouseListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Mouse\Mouse.h" />
-    <ClInclude Include="Sources\Scene\EntityRender\EntityRender.h" />
-    <ClInclude Include="Sources\Scene\Map\Map.h" />
-    <ClInclude Include="Sources\Platform\Common\Timer\Timer.h" />
-    <ClInclude Include="Sources\ThreadedShader\IComputeResult.h" />
-    <ClInclude Include="Sources\ThreadedShader\TheadedShader.h" />
-    <ClInclude Include="Sources\UnitControl\UnitControl.h" />
-    <ClInclude Include="Sources\UserInterface\IUserInteraction.h" />
-    <ClInclude Include="Sources\UserInterface\UserInterface.h" />
-    <ClInclude Include="Sources\Vulkan\Vulkan.h" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -10,10 +10,37 @@ layout (set=0, binding=0, std140) readonly uniform Camera
 	vec4 position;
 } camera;
 
-layout (set=1, binding=0, std140) buffer Entity
+layout (set=1, binding=0, std140) readonly buffer Entity
 {
 	mat4 model[];
 };
+
+struct FRAME
+{
+	uint animation_id;
+	uint frame_id;
+};
+
+layout (set=1, binding=1, std430) writeonly buffer Frame
+{
+	FRAME frames[];
+};
+
+struct ANIMATION
+{
+	uint frame_count;
+	uint loop;
+	uint play;
+	uint duration;
+	uint start;
+	float speed;
+};
+
+layout (set=1, binding=2, std430) readonly buffer Animation
+{
+	ANIMATION animations[];
+};
+
 
 struct INDIRECT_COMMAND 
 {
@@ -29,37 +56,6 @@ layout (set=2, binding=0, std430) writeonly buffer IndirectDraws
 	INDIRECT_COMMAND indirect_draws[];
 };
 
-struct FRAME
-{
-	uint animation_id;
-	uint frame_id;
-};
-
-layout (set=3, binding=0, std430) writeonly buffer Frame
-{
-	FRAME frames[];
-};
-
-struct ANIMATION
-{
-	uint frame_count;
-	uint loop;
-	uint play;
-	uint duration;
-	uint start;
-	float speed;
-};
-
-layout (set=3, binding=1, std430) readonly buffer Animation
-{
-	ANIMATION animations[];
-};
-
-// layout (set=3, binding=2) readonly uniform AnimationTimer
-// {
-	// uint time;
-// };
-
 struct LOD
 {
 	uint first_vertex;
@@ -73,44 +69,12 @@ struct LOD_STACK
 	LOD stack[max_lod_count];
 };
 
-layout (set=4, binding=0) readonly buffer LodData
+layout (set=3, binding=0, std140) readonly buffer LodData
 {
 	LOD_STACK lod[];
 };
 
-struct MOVEMENT_DATA {
-	vec2 destination;
-	int moving;
-	float radius;
-	vec4 debug;
-};
-
-layout (set=5, binding=0) buffer MovementData
-{
-	MOVEMENT_DATA movement[];
-};
-
-layout (set=5, binding=1) uniform MovementGroupCount
-{
-	uint movement_group_count;
-};
-
-struct MOVEMENT_GROUP {
-	vec2 destination;
-	int scale;
-	float unit_radius;
-	uint unit_count;
-	uint fill_count;
-	uint inside_count;
-	uint padding;
-};
-
-layout (set=5, binding=2) buffer MovementGroups
-{
-	MOVEMENT_GROUP group[];
-};
-
-layout (set=6, binding=0) readonly uniform GlobalTime
+layout (set=4, binding=0) readonly uniform GlobalTime
 {
 	uint now;
 	float delta;

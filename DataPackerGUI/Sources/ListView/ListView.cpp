@@ -106,14 +106,16 @@ namespace DataPackerGUI
     {
         this->Insert("Type",        "Mesh",         0);
         this->Insert("Name",        mesh->name,     1);
-        this->Insert("Vertices",    "#buffer",      2);
-        this->Insert("Indices",     "#buffer",      3);
-        this->Insert("UV",          "#buffer",      4);
-        this->Insert("Dependances", "#buffer",      5);
+        this->Insert("Texture",     mesh->texture,  2);
+        this->Insert("Vertices",    "#buffer",      3);
+        this->Insert("Indices",     "#buffer",      4);
+        this->Insert("UV",          "#buffer",      5);
+        this->Insert("Dependances", "#buffer",      6);
+        if(!mesh->skeleton.empty()) this->Insert("Skeleton", mesh->skeleton, 7);
 
-        for(uint8_t i=0; i<mesh->materials.size(); i++) {
+        /*for(uint8_t i=0; i<mesh->materials.size(); i++) {
             this->Insert("Material", "#" + mesh->materials[i].first, i + 5);
-        }
+        }*/
     }
 
     void ListView::Display(std::vector<Maths::Vector2> buffer)
@@ -194,7 +196,7 @@ namespace DataPackerGUI
             this->Insert(std::to_string(i), std::to_string(buffer[i]), i);
     }
 
-    void ListView::Display(Model::Mesh::MATERIAL material)
+    /*void ListView::Display(Model::Mesh::MATERIAL material)
     {
         this->Reset();
 
@@ -206,7 +208,7 @@ namespace DataPackerGUI
         this->Insert("Specular", std::to_string(material.specular.x) + ", " + std::to_string(material.specular.y) + ", " + std::to_string(material.specular.z) + ", " + std::to_string(material.specular.w), 2);
         this->Insert("Transparency", std::to_string(material.transparency), 3);
         if(!material.texture.empty()) this->Insert("Texture", material.texture, 4);
-    }
+    }*/
 
     void ListView::Display(std::pair<std::string, std::vector<uint32_t>> material)
     {

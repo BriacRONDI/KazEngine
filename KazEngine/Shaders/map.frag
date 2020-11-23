@@ -1,6 +1,6 @@
 #version 450
 
-layout (set=1, binding=0) uniform sampler2D inTexture;
+layout (set=1, binding=0) uniform sampler2D inTexture[2];
 
 layout (set=2, binding=0) readonly buffer IDs
 {
@@ -19,12 +19,12 @@ struct MOVEMENT_DATA {
 	float radius;
 };
 
-layout (set=4, binding=0) readonly buffer MovementData
+layout (set=3, binding=3) readonly buffer EntityMovement
 {
 	MOVEMENT_DATA movement[];
 };
 
-layout (set=4, binding=1) readonly uniform MovementGroupCount
+layout (set=4, binding=0) readonly uniform MovementGroupCount
 {
 	uint movement_group_count;
 };
@@ -39,7 +39,7 @@ struct MOVEMENT_GROUP {
 	uint padding;
 };
 
-layout (set=4, binding=2) readonly buffer MovementGroups
+layout (set=4, binding=1) readonly buffer MovementGroups
 {
 	MOVEMENT_GROUP group[];
 };
@@ -60,7 +60,7 @@ layout (location = 0) out vec4 outColor;
 
 void main()
 {
-	outColor = texture(inTexture, inUV);
+	outColor = texture(inTexture[1], inUV);
 
 	if(selection_count > 0) {
 		for(int i=0; i<selection_count; i++) {

@@ -1,67 +1,74 @@
 #pragma once
 
+#include <Singleton.hpp>
+#include <Model.h>
+
 #include "../Vulkan/Vulkan.h"
-#include "../Scene/Map/Map.h"
-#include "../ManagedBuffer/ManagedBuffer.h"
-#include "../Camera/Camera.h"
-#include "../Scene/EntityRender/EntityRender.h"
-#include "../DataBank/DataBank.h"
+#include "../DynamicEntityRenderer/DynamicEntityRenderer.h"
 #include "../Platform/Common/Timer/Timer.h"
+#include "../LOD/LOD.h"
+#include "../Camera/Camera.h"
+#include "../GlobalData/GlobalData.h"
+#include "../MappedDescriptorSet/IMappedDescriptorListener.h"
+#include "../ComputeShader/ComputeShader.h"
 #include "../UserInterface/UserInterface.h"
-#include "../UnitControl/UnitControl.h"
-
-#if defined(DISPLAY_LOGS)
-#include <iostream>
-#include <thread>
-#endif
-
-#define MULTI_USAGE_BUFFER_MASK VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
-
+#include "../Map/Map.h"
+#include "../MovementController/MovementController.h"
 
 namespace Engine
 {
-    class Core : public IWindowListener, public IUserInteraction
+    class Core : public Singleton<Core>, public IMappedDescriptorListener, public IUserInteraction
     {
+        friend Singleton<Core>;
+
         public :
 
-            inline ~Core() { this->Clear(); }
-            void Clear();
+            /// Initialize core instance
             bool Initialize();
+
+            /// Main Loop
             void Loop();
-            inline EntityRender& GetEntityRender() { return *this->entity_render; }
 
-            /////////////////////
-            // IWindowListener //
-            /////////////////////
+            inline bool LoadTexture(Tools::IMAGE_MAP image, std::string name) { return GlobalData::GetInstance()->texture_descriptor.AllocateTexture(image, name); }
+            bool LoadSkeleton(Model::Bone skeleton);
+            bool LoadModel(LODGroup& lod);
+            bool AddToScene(DynamicEntity& entity);
 
-            virtual inline void StateChanged(E_WINDOW_STATE window_state) {};
-            virtual void SizeChanged(Area<uint32_t> size);
+            /////////////////////////////////////////
+            // IMappedDescriptorListener interface //
+            /////////////////////////////////////////
 
-            //////////////////////
-            // IUserInteraction //
-            //////////////////////
+            void MappedDescriptorSetUpdated(MappedDescriptorSet* descriptor, uint8_t binding);
 
-            virtual void SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
-            virtual void ToggleSelection(Point<uint32_t> mouse_position);
-            virtual void MoveToPosition(Point<uint32_t> mouse_position);
+            ////////////////////////////////
+            // IUserInteraction interface //
+            ////////////////////////////////
+
+            void SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end);
+            void ToggleSelection(Point<uint32_t> mouse_position);
+            void MoveToPosition(Point<uint32_t> mouse_position){};
 
         private :
 
-            // uint8_t current_frame_index;
-            VkCommandPool graphics_command_pool;
-            std::vector<Vulkan::RENDERING_RESOURCES> resources;
-            Map* map;
-            EntityRender* entity_render;
-            UserInterface* user_interface;
-            std::vector<VkSemaphore> swap_chain_semaphores;
-            std::vector<VkSemaphore> write_semaphores;
-            std::vector<VkSemaphore> read_semaphores;
-            std::vector<Vulkan::COMMAND_BUFFER> transfer_buffers;
-            bool draw;
+            struct RENDERING_RESOURCES {
+                VkCommandBuffer command_buffer;
+                VkFence fence;
+                VkSemaphore draw_semaphore;
 
-            bool AllocateRenderingResources();
-            void DestroyRenderingResources();
-            bool BuildRenderPass(uint32_t swap_chain_image_index);
-            bool RebuildFrameBuffers();
+                RENDERING_RESOURCES() : command_buffer(nullptr), fence(nullptr), draw_semaphore(nullptr) {}
+            };
+
+            VkCommandPool command_pool;
+            std::vector<RENDERING_RESOURCES> resources;
+            std::vector<VkSemaphore> present_semaphores;
+            std::vector<VkSemaphore> compute_semaphores;
+            ComputeShader cull_lod_shader;
+            ComputeShader movement_shader;
+            ComputeShader collision_shader;
+
+            Core();
+            ~Core();
+
+            bool BuildRenderPass(uint32_t frame_index);
     };
 }

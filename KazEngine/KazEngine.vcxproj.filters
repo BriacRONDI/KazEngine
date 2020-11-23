@@ -1,64 +1,211 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="Sources\Main.cpp" />
-    <ClCompile Include="Sources\Vulkan\Vulkan.cpp" />
-    <ClCompile Include="Sources\Platform\Win32\Window\Window.cpp" />
-    <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp" />
-    <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp" />
-    <ClCompile Include="Sources\Core\Core.cpp" />
-    <ClCompile Include="Sources\Scene\Map\Map.cpp" />
-    <ClCompile Include="Sources\ManagedBuffer\ManagedBuffer.cpp" />
-    <ClCompile Include="Sources\Camera\Camera.cpp" />
-    <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp" />
-    <ClCompile Include="Sources\DescriptorSet\DescriptorSet.cpp" />
-    <ClCompile Include="Sources\Scene\EntityRender\EntityRender.cpp" />
-    <ClCompile Include="Sources\DataBank\DataBank.cpp" />
-    <ClCompile Include="Sources\Platform\Common\Timer\Timer.cpp" />
-    <ClCompile Include="Sources\UserInterface\UserInterface.cpp" />
-    <ClCompile Include="Sources\ManagedBuffer\Chunk\Chunk.cpp" />
-    <ClCompile Include="Sources\Entity\StaticEntity\StaticEntity.cpp" />
-    <ClCompile Include="Sources\Entity\DynamicEntity\DynamicEntity.cpp" />
-    <ClCompile Include="Sources\Entity\Entity.cpp" />
-    <ClCompile Include="Sources\LOD\LOD.cpp" />
-    <ClCompile Include="Sources\ThreadedShader\ThreadedShader.cpp" />
-    <ClCompile Include="Sources\UnitControl\UnitControl.cpp" />
+    <Filter Include="Fichiers sources">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Fichiers d%27en-tête">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Fichiers de ressources">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Sources\Vulkan\ListOfFunctions.inl" />
-    <None Include="Shaders\map.frag" />
+    <ClCompile Include="Sources\Chunk\Chunk.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\Core\Core.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\Platform\Common\Keyboard\Keyboard.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\Platform\Common\Mouse\Mouse.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\Platform\Common\Timer\Timer.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\Platform\Win32\Window\Window.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\Vulkan\Vulkan.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\Vulkan\VulkanTools.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\Main.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\MappedBuffer\MappedBuffer.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\InstancedDescriptorSet\InstancedDescriptorSet.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\InstancedBuffer\InstancedBuffer.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\LOD\LOD.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\TextureDescriptor\TextureDescriptor.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\DynamicEntityRenderer\DynamicEntityRenderer.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\Camera\Frustum\Frustum.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\Camera\Camera.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\DynamicEntity\DynamicEntity.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\MappedDescriptorSet\MappedDescriptorSet.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\GlobalData\GlobalData.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\ComputeShader\ComputeShader.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\UserInterface\UserInterface.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\Map\Map.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+    <ClCompile Include="Sources\MovementController\MovementController.cpp">
+      <Filter>Fichiers sources</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Sources\Chunk\Chunk.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Core\Core.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Platform\Common\Keyboard\IKeyboardListener.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Platform\Common\Keyboard\Keyboard.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Platform\Common\Mouse\IMouseListener.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Platform\Common\Mouse\Mouse.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Platform\Common\Timer\ITimerListener.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Platform\Common\Timer\Timer.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Platform\Common\Window\IWindowListener.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Platform\Common\Window\Window.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Vulkan\Vulkan.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Vulkan\VulkanTools.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Engine.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\MappedBuffer\MappedBuffer.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\DynamicEntity\DynamicEntity.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\InstancedDescriptorSet\InstancedDescriptorSet.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\InstancedBuffer\InstancedBuffer.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\LOD\LOD.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\TextureDescriptor\TextureDescriptor.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\DynamicEntityRenderer\DynamicEntityRenderer.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Camera\Frustum\Frustum.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Camera\Camera.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\MappedDescriptorSet\MappedDescriptorSet.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\GlobalData\GlobalData.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\ComputeShader\ComputeShader.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\MappedDescriptorSet\IMappedDescriptorListener.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\InstancedDescriptorSet\IInstancedDescriptorListener.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\UserInterface\UserInterface.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\UserInterface\IUserInteraction.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\Map\Map.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+    <ClInclude Include="Sources\MovementController\MovementController.h">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Sources\Vulkan\ListOfFunctions.inl">
+      <Filter>Fichiers d%27en-tête</Filter>
+    </None>
+    <None Include="compile_shaders.bat">
+      <Filter>Fichiers sources</Filter>
+    </None>
+    <None Include="data.kea" />
+    <None Include="Shaders\cross.frag" />
+    <None Include="Shaders\textured_model.vert" />
+    <None Include="Shaders\textured_model.frag" />
+    <None Include="Shaders\move_groups.comp" />
+    <None Include="Shaders\move_collision.comp" />
     <None Include="Shaders\map.vert" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Sources\Vulkan\Vulkan.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\EWindowState.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\IWindowListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Window\Window.h" />
-    <ClInclude Include="Sources\Platform\Common\Keyboard\IKeyboardListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Keyboard\Keyboard.h" />
-    <ClInclude Include="Sources\Platform\Common\Mouse\IMouseListener.h" />
-    <ClInclude Include="Sources\Platform\Common\Mouse\Mouse.h" />
-    <ClInclude Include="Sources\COre\Core.h" />
-    <ClInclude Include="Sources\Scene\Map\Map.h" />
-    <ClInclude Include="Sources\ManagedBuffer\ManagedBuffer.h" />
-    <ClInclude Include="Sources\Camera\Camera.h" />
-    <ClInclude Include="Sources\Camera\Frustum\Frustum.h" />
-    <ClInclude Include="Sources\DescriptorSet\DescriptorSet.h" />
-    <ClInclude Include="Sources\Engine.h" />
-    <ClInclude Include="Sources\Scene\EntityRender\EntityRender.h" />
-    <ClInclude Include="Sources\DataBank\DataBank.h" />
-    <ClInclude Include="Sources\Platform\Common\Timer\Timer.h" />
-    <ClInclude Include="Sources\Platform\Common\Timer\ITimerListener.h" />
-    <ClInclude Include="Sources\UserInterface\UserInterface.h" />
-    <ClInclude Include="Sources\UserInterface\IUserInteraction.h" />
-    <ClInclude Include="Sources\ManagedBuffer\Chunk\Chunk.h" />
-    <ClInclude Include="Sources\Entity\Entity.h" />
-    <ClInclude Include="Sources\Entity\StaticEntity\StaticEntity.h" />
-    <ClInclude Include="Sources\Entity\DynamicEntity\DynamicEntity.h" />
-    <ClInclude Include="Sources\Entity\IEntityListener.h" />
-    <ClInclude Include="Sources\LOD\LOD.h" />
-    <ClInclude Include="Sources\ThreadedShader\TheadedShader.h" />
-    <ClInclude Include="Sources\ThreadedShader\IComputeResult.h" />
-    <ClInclude Include="Sources\UnitControl\UnitControl.h" />
+    <None Include="Shaders\map.frag" />
+    <None Include="Shaders\interface.vert" />
+    <None Include="Shaders\interface.frag" />
+    <None Include="Shaders\dynamic_model.vert" />
+    <None Include="Shaders\cull_lod_anim.comp" />
+    <None Include="Shaders\cull_lod.comp" />
+    <None Include="Shaders\cross.vert" />
   </ItemGroup>
 </Project>

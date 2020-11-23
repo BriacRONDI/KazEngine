@@ -15,6 +15,33 @@ layout (set=1, binding=0, std140) readonly buffer Entity
 	mat4 model[];
 };
 
+struct FRAME
+{
+	uint animation_id;
+	uint frame_id;
+};
+
+layout (set=1, binding=1, std430) writeonly buffer Frame
+{
+	FRAME frames[];
+};
+
+struct ANIMATION
+{
+	uint frame_count;
+	uint loop;
+	uint play;
+	uint duration;
+	uint start;
+	float speed;
+};
+
+layout (set=1, binding=2, std430) readonly buffer Animation
+{
+	ANIMATION animations[];
+};
+
+
 struct INDIRECT_COMMAND 
 {
 	uint indexCount;

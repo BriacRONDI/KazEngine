@@ -452,22 +452,22 @@ namespace DataPackerGUI
             this->list_view_inspect->Display(node.dependancies);
             this->list_view_inspect->Show();
 
-        } else if(field_name == "Material") {
+        //} else if(field_name == "Material") {
 
-            std::string field_value = list_view.GetSubItemText(item_index, 1);
-            auto data_tree = DataPacker::Packer::UnpackMemory(this->data);
-            auto node = DataPacker::Packer::FindPackedItem(data_tree, path);
-            std::shared_ptr<Model::Mesh> mesh(new Model::Mesh);
-            mesh->Deserialize(node.Data(this->data.data()));
+        //    std::string field_value = list_view.GetSubItemText(item_index, 1);
+        //    auto data_tree = DataPacker::Packer::UnpackMemory(this->data);
+        //    auto node = DataPacker::Packer::FindPackedItem(data_tree, path);
+        //    std::shared_ptr<Model::Mesh> mesh(new Model::Mesh);
+        //    mesh->Deserialize(node.Data(this->data.data()));
 
-            std::string material_name = field_value.substr(1);
-            for(uint8_t i=0; i<mesh->materials.size(); i++) {
-                if(mesh->materials[i].first == material_name) {
-                    this->list_view_inspect->Display(mesh->materials[i]);
-                    this->list_view_inspect->Show();
-                    break;
-                }
-            }
+        //    std::string material_name = field_value.substr(1);
+        //    for(uint8_t i=0; i<mesh->materials.size(); i++) {
+        //        if(mesh->materials[i].first == material_name) {
+        //            this->list_view_inspect->Display(mesh->materials[i]);
+        //            this->list_view_inspect->Show();
+        //            break;
+        //        }
+        //    }
 
         } else {
             this->list_view_inspect->Hide();

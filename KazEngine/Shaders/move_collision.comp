@@ -10,35 +10,34 @@ struct MOVEMENT_DATA {
 	vec2 destination;
 	int moving;
 	float radius;
-	vec4 debug;
 };
 
-layout (set=1, binding=0) buffer MovementData
+layout (set=0, binding=3) buffer EntityMovement
 {
 	MOVEMENT_DATA movement[];
 };
 
-layout (set=1, binding=1) uniform MovementGroupCount
-{
-	uint movement_group_count;
-};
+// layout (set=1, binding=0) uniform GroupCount
+// {
+	// uint movement_group_count;
+// };
 
-struct MOVEMENT_GROUP {
-	vec2 destination;
-	int scale;
-	float unit_radius;
-	uint unit_count;
-	uint fill_count;
-	uint inside_count;
-	uint padding;
-};
+// struct MOVEMENT_GROUP {
+	// vec2 destination;
+	// int scale;
+	// float unit_radius;
+	// uint unit_count;
+	// uint fill_count;
+	// uint inside_count;
+	// uint padding;
+// };
 
-layout (set=1, binding=2) buffer MovementGroups
-{
-	MOVEMENT_GROUP group[];
-};
+// layout (set=1, binding=1) buffer GroupData
+// {
+	// MOVEMENT_GROUP group[];
+// };
 
-layout (set=2, binding=0) readonly uniform GlobalTime
+layout (set=1, binding=0) readonly uniform GlobalTime
 {
 	uint now;
 	float delta;

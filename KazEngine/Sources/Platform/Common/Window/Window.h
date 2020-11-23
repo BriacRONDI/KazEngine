@@ -47,18 +47,19 @@ namespace Engine
         #if defined(VK_USE_PLATFORM_WIN32_KHR)
         HINSTANCE           instance;
         HWND                handle;
+        Surface() : width(0), height(0), instance(nullptr), handle(nullptr) {}
 
         #elif defined(VK_USE_PLATFORM_XCB_KHR)
-        xcb_connection_t   *connection;
+        xcb_connection_t*   connection;
         xcb_window_t        handle;
+        Surface() : width(0), height(0), connection(nullptr), handle(nullptr) {}
 
         #elif defined(VK_USE_PLATFORM_XLIB_KHR)
-        Display            *display;
+        Display*            display;
         Window              handle;
+        Surface() : width(0), height(0), display(nullptr), handle(nullptr) {}
 
         #endif
-
-        Surface() : width(0), height(0) {}
     };
 
     class Window : public Tools::EventEmitter<IWindowListener>

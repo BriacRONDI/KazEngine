@@ -2,206 +2,211 @@
 
 namespace Engine
 {
-    void Core::Clear()
+    Core::Core()
     {
-        // UnitControl
-        UnitControl::Clear();
+        this->command_pool = nullptr;
+    }
 
-        // Entity
-        StaticEntity::Clear();
-        DynamicEntity::Clear();
+    Core::~Core()
+    {
+        vkDeviceWaitIdle(Vulkan::GetDevice());
 
-        // LOD
-        LODGroup::Clear();
+        // Compute Shader
+        this->collision_shader.Clear();
+        this->movement_shader.Clear();
+        this->cull_lod_shader.Clear();
 
-        // User Interface
-        if(this->user_interface != nullptr) {
-            this->user_interface->RemoveListener(this);
-            delete this->user_interface;
-        }
-
-        // Timer
-        Timer::Clear();
+        // Movement Controller
+        MovementController::GetInstance()->DestroyInstance();
 
         // Map
-        if(this->map != nullptr) delete this->map;
+        Map::GetInstance()->DestroyInstance();
 
-        // Entity Render
-        if(this->entity_render != nullptr) delete this->entity_render;
+        // User Interface
+        UserInterface::GetInstance()->DestroyInstance();
+
+        // Compute Shader Semaphores
+        for(auto semaphore : this->compute_semaphores) vk::Destroy(semaphore);
+
+        // Entity Renderer
+        DynamicEntityRenderer::GetInstance()->DestroyInstance();
 
         // Camera
-        Camera::DestroyInstance();
+        Camera::GetInstance()->DestroyInstance();
 
-        if(Vulkan::HasInstance()) {
-            vkDeviceWaitIdle(Vulkan::GetDevice());
+        // Global Data
+        GlobalData::GetInstance()->DestroyInstance();
 
-            // Stop listening to window events
-            Vulkan::GetInstance().GetDrawWindow()->RemoveListener(this);
-
-            // Transfer command buffers
-            for(auto& buffer : this->transfer_buffers)
-                if(buffer.fence != nullptr) vkDestroyFence(Vulkan::GetDevice(), buffer.fence, nullptr);
-
-            // Rendering resources
-            this->DestroyRenderingResources();
+        // Draw resources
+        for(auto resource : this->resources) {
+            vk::Destroy(resource.fence);
+            vk::Destroy(resource.draw_semaphore);
         }
 
-        // DataBank
-        DataBank::DestroyInstance();
+        // Present Semaphores
+        for(auto semaphore : this->present_semaphores) vk::Destroy(semaphore);
 
-        this->graphics_command_pool = nullptr;
-        this->user_interface        = nullptr;
-        this->map                   = nullptr;
-        this->entity_render         = nullptr;
-        this->draw                  = true;
+        // Command Pool
+        vk::Destroy(this->command_pool);
     }
 
     bool Core::Initialize()
     {
-        // Clean all objects
-        this->Clear();
-        
-        // Listen to window events
-        Vulkan::GetInstance().GetDrawWindow()->AddListener(this);
+        this->resources.resize(Vulkan::GetSwapChainImageCount());
+        this->present_semaphores.resize(Vulkan::GetSwapChainImageCount());
+        this->compute_semaphores.resize(Vulkan::GetSwapChainImageCount());
 
-        // Create a storage for engine objects
-        DataBank::CreateInstance();
+        if(!vk::CreateCommandPool(this->command_pool, Vulkan::GetGraphicsQueue().index)) return false;
 
-        // Allocate vulkan resources
-        if(!this->AllocateRenderingResources()) return false;
-
-        // Allocate transfer command buffers
-        uint8_t frame_count = Vulkan::GetConcurrentFrameCount();
-        this->transfer_buffers.resize(frame_count);
-        if(!Vulkan::GetInstance().CreateCommandBuffer(this->graphics_command_pool, this->transfer_buffers)) {
-            #if defined(DISPLAY_LOGS)
-            std::cout << "Core::Initialize() => CreateCommandBuffer [transfer] : Failed" << std::endl;
-            #endif
+        for(auto& resource : this->resources) {
+            if(!vk::CreateCommandBuffer(this->command_pool, resource.command_buffer)) return false;
+            if(!vk::CreateFence(resource.fence, false)) return false;
+            if(!vk::CreateSemaphore(resource.draw_semaphore)) return false;
         }
 
-        // Allocate data buffers
-        DataBank::GetInstancedBuffer().Allocate(
-            SIZE_MEGABYTE(100), MULTI_USAGE_BUFFER_MASK, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            frame_count, true, {Vulkan::GetGraphicsQueue().index}
-        );
+        for(auto& semaphore : this->present_semaphores) {
+            if(!vk::CreateSemaphore(semaphore)) return false;
+        }
 
-        DataBank::GetCommonBuffer().Allocate(
-            SIZE_MEGABYTE(32), MULTI_USAGE_BUFFER_MASK, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-            1, true, {Vulkan::GetGraphicsQueue().index}
-        );
+        for(auto& semaphore : this->compute_semaphores) {
+            if(!vk::CreateSemaphore(semaphore)) return false;
+        }
 
-        // Initialize Timer
-        Timer::Initialize();
+        GlobalData::CreateInstance();
+        GlobalData::GetInstance()->dynamic_entity_descriptor.AddListener(this);
+        GlobalData::GetInstance()->group_descriptor.AddListener(this);
 
-        // Initialize LOD
-        if(!LODGroup::Initialize()) return false;
-
-        // Initialize Entity
-        if(!StaticEntity::Initialize()) return false;
-        if(!DynamicEntity::Initialize()) return false;
-
-        // Initialize UnitControl
-        if(!UnitControl::Initialize()) return false;
-
-        // Initialize Camera
         Camera::CreateInstance();
+        DynamicEntityRenderer::CreateInstance();
+        MovementController::CreateInstance();
+        UserInterface::CreateInstance();
+        Map::CreateInstance();
 
-        // Create a renderer for entities
-        this->entity_render = new EntityRender(this->graphics_command_pool);
+        if(!UserInterface::GetInstance()->Initialize()) return false;
+        UserInterface::GetInstance()->AddListener(this);
 
-        // Create the map
-        this->map = new Map(this->graphics_command_pool);
-        // this->entity_render->GetEntityDescriptor().Update();
+        if(!MovementController::GetInstance()->Initialize()) return false;
+        if(!Map::GetInstance()->Initialize()) return false;
 
-        // Create the user interface
-        this->user_interface = new UserInterface(this->graphics_command_pool);
-        this->user_interface->AddListener(this);
-        for(uint8_t i=0; i<frame_count; i++)
-            this->resources[i].comand_buffers.push_back(this->user_interface->BuildCommandBuffer(i, this->resources[i].framebuffer));
+        if(!this->cull_lod_shader.Load("./Shaders/cull_lod_anim.comp.spv", {
+            GlobalData::GetInstance()->camera_descriptor.GetLayout(),
+            GlobalData::GetInstance()->dynamic_entity_descriptor.GetLayout(),
+            GlobalData::GetInstance()->indirect_descriptor.GetLayout(),
+            GlobalData::GetInstance()->lod_descriptor.GetLayout(),
+            GlobalData::GetInstance()->time_descriptor.GetLayout()
+        })) return false;
+
+        if(!this->movement_shader.Load("./Shaders/move_groups.comp.spv", {
+            GlobalData::GetInstance()->dynamic_entity_descriptor.GetLayout(),
+            GlobalData::GetInstance()->group_descriptor.GetLayout(),
+            GlobalData::GetInstance()->time_descriptor.GetLayout()
+        })) return false;
+
+        if(!this->collision_shader.Load("./Shaders/move_collision.comp.spv", {
+            GlobalData::GetInstance()->dynamic_entity_descriptor.GetLayout(),
+            GlobalData::GetInstance()->time_descriptor.GetLayout()
+        })) return false;
+
+        return true;
+    }
+
+    void Core::MappedDescriptorSetUpdated(MappedDescriptorSet* descriptor, uint8_t binding)
+    {
+        vkDeviceWaitIdle(Vulkan::GetDevice());
+        descriptor->Update(binding);
+
+        /*if(descriptor == &GlobalData::GetInstance()->dynamic_entity_descriptor && binding == ENTITY_MOVEMENT_BINDING) {
+            this->movement_shader.Refresh();
+            this->collision_shader.Refresh();
+        }*/
+    }
+
+    bool Core::AddToScene(DynamicEntity& entity)
+    {
+        return DynamicEntityRenderer::GetInstance()->AddToScene(entity);
+    }
+
+    bool Core::LoadSkeleton(Model::Bone skeleton)
+    {
+        /////////////////////////
+        //   Mesh offsets SBO  //
+        // Mesh offets ids SBO //
+        /////////////////////////
+
+        // Output buffers
+        std::vector<char> offsets_sbo;
+        std::vector<char> offsets_ids;
+
+        #if defined(DISPLAY_LOGS)
+        std::cout << "EntityRender::LoadSkeleton() : BuildBoneOffsetsSBO" << std::endl;
+        #endif
+
+        // Build buffers
+        std::map<std::string, std::pair<uint32_t, uint32_t>> dynamic_offsets;
+        uint32_t sbo_alignment = static_cast<uint32_t>(Vulkan::GetDeviceLimits().minStorageBufferOffsetAlignment);
+        skeleton.BuildBoneOffsetsSBO(offsets_sbo, offsets_ids, dynamic_offsets, sbo_alignment);
+
+        // Write to GPU memory
+        GlobalData::GetInstance()->skeleton_descriptor.WriteData(offsets_sbo.data(), offsets_sbo.size(), 0, SKELETON_OFFSETS_BINDING);
+        GlobalData::GetInstance()->skeleton_descriptor.WriteData(offsets_ids.data(), offsets_ids.size(), 0, SKELETON_OFFSET_IDS_BINDING);
+
+        ////////////////////
+        // Animations SBO //
+        ////////////////////
+
+        #if defined(DISPLAY_LOGS)
+        std::cout << "EntityRender::LoadSkeleton() : BuildAnimationSBO" << std::endl;
+        #endif
+
+        auto const animations = skeleton.ListAnimations();
+        uint32_t animation_offset = 0;
+        uint32_t frame_id = 0;
+
+        for(uint8_t i=0; i<animations.size(); i++) {
+
+            GlobalData::BAKED_ANIMATION baked_animation;
+            baked_animation.animation_id = i;
+            baked_animation.duration = skeleton.GetAnimationTotalDuration(animations[i].name);
+
+            // Build buffer
+            std::vector<char> skeleton_sbo;
+            uint32_t bone_count;
+            skeleton.BuildAnimationSBO(skeleton_sbo, animations[i].name, baked_animation.frame_count, bone_count, 30);
+            
+            // Write the bone count before frame offsets
+            if(!i) GlobalData::GetInstance()->skeleton_descriptor.WriteData(&bone_count, sizeof(uint32_t), 0, SKELETON_ANIMATIONS_BINDING);
+
+            // Write the frame offset
+            GlobalData::GetInstance()->skeleton_descriptor.WriteData(&frame_id, sizeof(uint32_t), sizeof(uint32_t) * (i + 1), SKELETON_ANIMATIONS_BINDING);
+
+            // Write animation to GPU memory
+            GlobalData::GetInstance()->skeleton_descriptor.WriteData(skeleton_sbo.data(), skeleton_sbo.size(), animation_offset, SKELETON_BONES_BINDING);
+
+            frame_id += static_cast<uint32_t>(skeleton_sbo.size() / sizeof(Maths::Matrix4x4));
+            animation_offset += static_cast<uint32_t>((static_cast<uint32_t>(skeleton_sbo.size()) + sbo_alignment - 1) & ~(sbo_alignment - 1));
+            GlobalData::GetInstance()->animations[animations[i].name] = baked_animation;
+        }
 
         // Success
         return true;
     }
 
-    bool Core::AllocateRenderingResources()
+    bool Core::LoadModel(LODGroup& lod)
     {
-        if(!Vulkan::GetInstance().CreateCommandPool(this->graphics_command_pool, Vulkan::GetInstance().GetGraphicsQueue().index)) return false;
+        std::string texture = lod.GetTexture();
+        if(texture.empty()) return false;
 
-        // On veut autant de ressources qu'il y a d'images dans la Swap Chain
-        uint8_t frame_count = Vulkan::GetConcurrentFrameCount();
-        this->resources.resize(frame_count);
-        
-        for(uint32_t i=0; i<this->resources.size(); i++) {
-            
-            // Frame Buffers
-            if(!Vulkan::GetInstance().CreateFrameBuffer(this->resources[i].framebuffer, Vulkan::GetSwapChain().images[i].view)) return false;
+        int32_t texture_id = GlobalData::GetInstance()->texture_descriptor.GetTextureID(texture);
+        if(texture_id < 0) return false;
 
-            // Semaphores
-            if(!Vulkan::GetInstance().CreateSemaphore(this->resources[i].semaphore)) return false;
-        }
-
-        // Graphics Command Buffers
-        std::vector<Vulkan::COMMAND_BUFFER> graphics_buffers(frame_count);
-        if(!Vulkan::GetInstance().CreateCommandBuffer(this->graphics_command_pool, graphics_buffers, VK_COMMAND_BUFFER_LEVEL_PRIMARY, false)) return false;
-        for(uint32_t i=0; i<this->resources.size(); i++) {
-            this->resources[i].comand_buffers.push_back(graphics_buffers[i].handle);
-            this->resources[i].fence = Vulkan::GetInstance().CreateFence();
-        }
-
-        // SwapChain semaphores
-        this->swap_chain_semaphores.resize(frame_count);
-        for(auto& semaphore : this->swap_chain_semaphores)
-            if(!Vulkan::GetInstance().CreateSemaphore(semaphore)) return false;
-
-        // Write semaphores
-        this->write_semaphores.resize(frame_count + 1);
-        for(auto& semaphore : this->write_semaphores)
-            if(!Vulkan::GetInstance().CreateSemaphore(semaphore)) return false;
-
-        // Read semaphores
-        this->read_semaphores.resize(frame_count + 1);
-        for(auto& semaphore : this->read_semaphores)
-            if(!Vulkan::GetInstance().CreateSemaphore(semaphore)) return false;
-
-        return true;
+        lod.SetTextureID(texture_id);
+        return lod.Build();
     }
 
-    void Core::DestroyRenderingResources()
+    bool Core::BuildRenderPass(uint32_t frame_index)
     {
-        // Write semaphores
-        for(auto& semaphore : this->write_semaphores) vkDestroySemaphore(Vulkan::GetDevice(), semaphore, nullptr);
-        this->write_semaphores.clear();
-
-        // Read semaphores
-        for(auto& semaphore : this->read_semaphores) vkDestroySemaphore(Vulkan::GetDevice(), semaphore, nullptr);
-        this->read_semaphores.clear();
-
-        // SwapChain semaphores
-        for(auto& semaphore : this->swap_chain_semaphores) vkDestroySemaphore(Vulkan::GetDevice(), semaphore, nullptr);
-        this->swap_chain_semaphores.clear();
-
-        for(auto& resource : this->resources)
-            if(resource.fence != nullptr) vkDestroyFence(Vulkan::GetDevice(), resource.fence, nullptr);
-            
-        if(this->graphics_command_pool != nullptr) vkDestroyCommandPool(Vulkan::GetDevice(), this->graphics_command_pool, nullptr);
-
-        for(uint32_t i=0; i<this->resources.size(); i++) {
-            
-            // Semaphore
-            if(this->resources[i].semaphore != nullptr) vkDestroySemaphore(Vulkan::GetDevice(), this->resources[i].semaphore, nullptr);
-
-            // Frame Buffer
-            if(this->resources[i].semaphore != nullptr) vkDestroyFramebuffer(Vulkan::GetDevice(), this->resources[i].framebuffer, nullptr);
-        }
-
-        this->resources.clear();
-    }
-
-    bool Core::BuildRenderPass(uint32_t swap_chain_image_index)
-    {
-        Vulkan::RENDERING_RESOURCES const& resources = this->resources[swap_chain_image_index];
-        VkCommandBuffer command_buffer = resources.comand_buffers[0];
-        VkFramebuffer frame_buffer = resources.framebuffer;
+        VkCommandBuffer command_buffer = this->resources[frame_index].command_buffer;
+        VkFramebuffer frame_buffer = Vulkan::GetFrameBuffer(frame_index);
 
         VkCommandBufferBeginInfo command_buffer_begin_info;
         command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -212,7 +217,7 @@ namespace Engine
         VkResult result = vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
-            std::cout << "BuildCommandBuffer[" << swap_chain_image_index << "] => vkBeginCommandBuffer : Failed" << std::endl;
+            std::cout << "Core::BuildRenderPass(" << frame_index << ") => vkBeginCommandBuffer : Failed" << std::endl;
             #endif
             return false;
         }
@@ -233,31 +238,23 @@ namespace Engine
         render_pass_begin_info.clearValueCount = static_cast<uint32_t>(clear_value.size());
         render_pass_begin_info.pClearValues = clear_value.data();
 
-        // Début de la render pass primaire
         vkCmdBeginRenderPass(command_buffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
 
         auto& surface = Vulkan::GetDrawSurface();
         if(surface.width > 0 && surface.height > 0) {
-            // Exécution des render passes secondaires
             VkCommandBuffer command_buffers[2] = {
-                this->entity_render->GetCommandBuffer(swap_chain_image_index, frame_buffer),
-                this->map->GetCommandBuffer(swap_chain_image_index, frame_buffer)
+                DynamicEntityRenderer::GetInstance()->BuildCommandBuffer(frame_index, frame_buffer),
+                Map::GetInstance()->BuildCommandBuffer(frame_index, frame_buffer)
             };
             vkCmdExecuteCommands(command_buffer, 2, command_buffers);
         }
 
-        /*VkCommandBuffer command_buffers[2] = {
-            this->entity_render->GetCommandBuffer(swap_chain_image_index, frame_buffer)
-        };
-        vkCmdExecuteCommands(command_buffer, 1, command_buffers);*/
-
-        // Fin de la render pass primaire
         vkCmdEndRenderPass(command_buffer);
 
         result = vkEndCommandBuffer(command_buffer);
         if(result != VK_SUCCESS) {
             #if defined(DISPLAY_LOGS)
-            std::cout << "BuildCommandBuffer[" << swap_chain_image_index << "] => vkEndCommandBuffer : Failed" << std::endl;
+            std::cout << "Core::BuildRenderPass(" << frame_index << ") => vkEndCommandBuffer : Failed" << std::endl;
             #endif
             return false;
         }
@@ -265,205 +262,271 @@ namespace Engine
         return true;
     }
 
-    bool Core::RebuildFrameBuffers()
+    void Core::SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end)
     {
-        if(Vulkan::HasInstance()) {
-            for(uint32_t i=0; i<this->resources.size(); i++) {
-                if(this->resources[i].framebuffer != nullptr) {
+        Area<float> const& near_plane_size = Camera::GetInstance()->GetFrustum().GetNearPlaneSize();
+        Maths::Vector3 camera_position = -Camera::GetInstance()->GetUniformBuffer().position;
+        Surface& draw_surface = Engine::Vulkan::GetDrawSurface();
+        Area<float> float_draw_surface = {static_cast<float>(draw_surface.width), static_cast<float>(draw_surface.height)};
 
-                    // Destruction du Frame Buffer
-                    vkDestroyFramebuffer(Vulkan::GetDevice(), this->resources[i].framebuffer, nullptr);
-                    this->resources[i].framebuffer = nullptr;
+        float x1 = static_cast<float>(box_start.X) - float_draw_surface.Width / 2.0f;
+        float x2 = static_cast<float>(box_end.X) - float_draw_surface.Width / 2.0f;
 
-                    // Création du Frame Buffer
-                    if(!Vulkan::GetInstance().CreateFrameBuffer(this->resources[i].framebuffer, Vulkan::GetSwapChain().images[i].view)) return false;
-                }
+        float y1 = static_cast<float>(box_start.Y) - float_draw_surface.Height / 2.0f;
+        float y2 = static_cast<float>(box_end.Y) - float_draw_surface.Height / 2.0f;
+
+        x1 /= float_draw_surface.Width / 2.0f;
+        x2 /= float_draw_surface.Width / 2.0f;
+        y1 /= float_draw_surface.Height / 2.0f;
+        y2 /= float_draw_surface.Height / 2.0f;
+
+        float left_x = std::min<float>(x1, x2);
+        float right_x = std::max<float>(x1, x2);
+        float top_y = std::min<float>(y1, y2);
+        float bottom_y = std::max<float>(y1, y2);
+
+        Maths::Vector3 base_near = camera_position + Camera::GetInstance()->GetFrontVector() * Camera::GetInstance()->GetNearClipDistance();
+        Maths::Vector3 base_with = Camera::GetInstance()->GetRightVector() * near_plane_size.Width;
+        Maths::Vector3 base_height = Camera::GetInstance()->GetUpVector() * near_plane_size.Height;
+
+        Maths::Vector3 top_left_position = base_near + base_with * left_x - base_height * top_y;
+        Maths::Vector3 bottom_right_position = base_near + base_with * right_x - base_height * bottom_y;
+
+        Maths::Vector3 top_left_ray = (top_left_position - camera_position).Normalize();
+        Maths::Vector3 bottom_right_ray = (bottom_right_position - camera_position).Normalize();
+
+        Maths::Plane left_plane = {top_left_position, top_left_ray.Cross(-Camera::GetInstance()->GetUpVector())};
+        Maths::Plane right_plane = {bottom_right_position, bottom_right_ray.Cross(Camera::GetInstance()->GetUpVector())};
+        Maths::Plane top_plane = {top_left_position, top_left_ray.Cross(-Camera::GetInstance()->GetRightVector())};
+        Maths::Plane bottom_plane = {bottom_right_position, bottom_right_ray.Cross(Camera::GetInstance()->GetRightVector())};
+
+        std::vector<DynamicEntity*> entities;
+        for(auto entity : DynamicEntityRenderer::GetInstance()->GetEntities()) {
+            if(entity->InSelectBox(left_plane, right_plane, top_plane, bottom_plane)) {
+                entity->selected = true;
+                entities.push_back(entity);
+            }else{
+                entity->selected = false;
             }
         }
 
-        // Succès
-        return true;
-    }
+        uint32_t count = static_cast<uint32_t>(entities.size());
+        
+        if(GlobalData::GetInstance()->selection_descriptor.GetChunk()->range < (count + 1) * sizeof(uint32_t)) {
+            auto chunk = GlobalData::GetInstance()->selection_descriptor.ReserveRange((count + 1) * sizeof(uint32_t));
+            if(chunk == nullptr) {
+                count = static_cast<uint32_t>(GlobalData::GetInstance()->selection_descriptor.GetChunk()->range / sizeof(uint32_t)) - 1;
+                #if defined(DISPLAY_LOGS)
+                std::cout << "Core::SquareSelection() : Not engough memory" << std::endl;
+                #endif
+            }
+        }
 
-    void Core::SquareSelection(Point<uint32_t> box_start, Point<uint32_t> box_end)
-    {
-        DynamicEntity::UpdateSelection(DynamicEntity::SquareSelection(box_start, box_end));
-        // this->map->UpdateSelection(DynamicEntity::SquareSelection(box_start, box_end));
+        GlobalData::GetInstance()->selection_descriptor.WriteData(&count, sizeof(uint32_t), 0);
+
+        std::vector<uint32_t> selected_ids(count);
+        for(uint32_t i=0; i<count; i++) selected_ids[i] = entities[i]->InstanceId();
+
+        GlobalData::GetInstance()->selection_descriptor.WriteData(selected_ids.data(), selected_ids.size() * sizeof(uint32_t), sizeof(uint32_t));
     }
 
     void Core::ToggleSelection(Point<uint32_t> mouse_position)
     {
-        DynamicEntity* entity = DynamicEntity::ToggleSelection(mouse_position);
-        if(entity == nullptr) DynamicEntity::UpdateSelection({});
-        else DynamicEntity::UpdateSelection({entity});
-        /*if(entity == nullptr) this->map->UpdateSelection({});
-        else this->map->UpdateSelection({entity});*/
-    }
-
-    void Core::MoveToPosition(Point<uint32_t> mouse_position)
-    {
-        auto& camera = Engine::Camera::GetInstance();
-        Area<float> const& near_plane_size = camera.GetFrustum().GetNearPlaneSize();
-        Maths::Vector3 camera_position = -camera.GetUniformBuffer().position;
+        Area<float> const& near_plane_size = Camera::GetInstance()->GetFrustum().GetNearPlaneSize();
+        Maths::Vector3 camera_position = -Camera::GetInstance()->GetUniformBuffer().position;
         Surface& draw_surface = Engine::Vulkan::GetDrawSurface();
         Area<float> float_draw_surface = {static_cast<float>(draw_surface.width), static_cast<float>(draw_surface.height)};
 
-        float x = static_cast<float>(mouse_position.X) - float_draw_surface.Width / 2.0f;
-        float y = static_cast<float>(mouse_position.Y) - float_draw_surface.Height / 2.0f;
+        Point<float> real_mouse = {
+            static_cast<float>(mouse_position.X) - float_draw_surface.Width / 2.0f,
+            static_cast<float>(mouse_position.Y) - float_draw_surface.Height / 2.0f
+        };
 
-        x /= float_draw_surface.Width / 2.0f;
-        y /= float_draw_surface.Height / 2.0f;
+        real_mouse.X /= float_draw_surface.Width / 2.0f;
+        real_mouse.Y /= float_draw_surface.Height / 2.0f;
 
-        Maths::Vector3 mouse_ray = camera.GetFrontVector() * camera.GetNearClipDistance()
-                                 + camera.GetRightVector() * near_plane_size.Width * x
-                                 - camera.GetUpVector() * near_plane_size.Height * y;
-
+        Maths::Vector3 mouse_world_position = camera_position + Camera::GetInstance()->GetFrontVector() * Camera::GetInstance()->GetNearClipDistance() + Camera::GetInstance()->GetRightVector()
+                                            * near_plane_size.Width * real_mouse.X - Camera::GetInstance()->GetUpVector() * near_plane_size.Height * real_mouse.Y;
+        Maths::Vector3 mouse_ray = mouse_world_position - camera_position;
         mouse_ray = mouse_ray.Normalize();
 
-        float ray_length;
-        if(!Maths::intersect_plane({0, 1, 0}, {}, camera_position, mouse_ray, ray_length)) return;
-        Maths::Vector3 destination = camera_position + mouse_ray * ray_length;
+        DynamicEntity* selected_entity = nullptr;
+        for(auto entity : DynamicEntityRenderer::GetInstance()->GetEntities()) {
+            if(selected_entity != nullptr) {
+                entity->selected = false;
+            }else if(entity->IntersectRay(camera_position, mouse_ray)) {
 
-        UnitControl::Instance().MoveUnits(destination);
+                struct SELECTION_ID {
+                    uint32_t count;
+                    uint32_t id;
+                };
 
-        // DynamicEntity::MoveToPosition(destination);
-        /*for(auto& entity : this->map->GetSelectedEntities()) {
-            entity->MoveToPosition(destination);
-        }*/
-    }
-
-    void Core::SizeChanged(Area<uint32_t> size)
-    {
-        auto& surface = Vulkan::GetDrawSurface();
-
-        if(!surface.width || !surface.height) {
-            this->draw = false;
-            return;
-        }else{
-            this->draw = true;
+                selected_entity = entity;
+                entity->selected = true;
+                SELECTION_ID selection = {1, entity->InstanceId()};
+                GlobalData::GetInstance()->selection_descriptor.WriteData(&selection, sizeof(SELECTION_ID), 0);
+            }else {
+                entity->selected = false;
+            }
         }
 
-        Vulkan::GetInstance().OnWindowSizeChanged();
-
-        float aspect_ratio = static_cast<float>(surface.width) / static_cast<float>(surface.height);
-        Camera::GetInstance().GetUniformBuffer().projection = Maths::Matrix4x4::PerspectiveProjectionMatrix(aspect_ratio, 60.0f, 0.1f, 2000.0f);
-
-        // Reconstruction du Frame Buffer et des Command Buffers
-        this->RebuildFrameBuffers();
-
-        // Force rebuild external command buffers
-        this->map->Refresh();
-        this->user_interface->Refresh();
-        this->entity_render->Refresh();
+        if(selected_entity == nullptr) {
+            uint32_t count = 0;
+            GlobalData::GetInstance()->selection_descriptor.WriteData(&count, sizeof(uint32_t), 0);
+        }
     }
 
     void Core::Loop()
     {
-        if(!this->draw) return;
+        static uint8_t semaphore_index = 0;
+        uint32_t frame_index;
 
-        static uint32_t current_semaphore_index = (current_semaphore_index + 1) % this->swap_chain_semaphores.size();
-        VkSemaphore present_semaphore = this->swap_chain_semaphores[current_semaphore_index];
+        std::chrono::steady_clock::time_point monitor_start = std::chrono::steady_clock::now();
 
-        // Acquire image
-        uint32_t image_index;
-        if(!Vulkan::GetInstance().AcquireNextImage(image_index, present_semaphore)) return;
+        if(!Vulkan::GetInstance()->AcquireNextImage(frame_index, this->present_semaphores[semaphore_index])) {
+            DynamicEntityRenderer::GetInstance()->Refresh();
+            Map::GetInstance()->Refresh();
+            return ;
+        }
 
-        VkResult result = vkWaitForFences(Vulkan::GetDevice(), 1, &this->resources[image_index].fence, VK_FALSE, 1000000000);
-        if(result != VK_SUCCESS) {
+        if(!vk::WaitForFence(this->resources[frame_index].fence)) {
             #if defined(DISPLAY_LOGS)
-            std::cout << "Core::BuildRenderPass => vkWaitForFences : Timeout" << std::endl;
+            std::cout << "Core::Loop() => vk::WaitForFence : Timeout" << std::endl;
             #endif
             return;
         }
-        vkResetFences(Vulkan::GetDevice(), 1, &this->resources[image_index].fence);
 
-        // Update global timer
-        Timer::Update(image_index);
+        std::chrono::steady_clock::time_point monitor_wait_draw = std::chrono::steady_clock::now();
 
-        // UnitControl
-        UnitControl::Instance().Update();
+        Timer::Update(frame_index);
+        bool skeleton_updated = GlobalData::GetInstance()->skeleton_descriptor.Update(frame_index);
+        bool indirect_updated = GlobalData::GetInstance()->indirect_descriptor.Update(frame_index);
+        bool lod_updated = GlobalData::GetInstance()->lod_descriptor.Update(frame_index);
+        bool selection_updated = GlobalData::GetInstance()->selection_descriptor.Update(frame_index);
 
-        bool map_refreshed = false;
-        bool entity_renderer_refreshed = false;
+        if(skeleton_updated || indirect_updated || lod_updated) this->cull_lod_shader.Refresh(frame_index);
 
-        Camera::GetInstance().Update(image_index);
-        this->map->Update(image_index);
-        this->user_interface->Update(image_index);
+        std::chrono::steady_clock::time_point monitor_descriptor_updates = std::chrono::steady_clock::now();
 
-        if(DynamicEntity::GetMatrixDescriptor().NeedUpdate(0)) {
-            vkQueueWaitIdle(Vulkan::GetGraphicsQueue().handle);
-            for(uint8_t i=0; i<Vulkan::GetConcurrentFrameCount(); i++) {
-                this->map->Refresh(i);
-                this->entity_render->Refresh(i);
-                UnitControl::Instance().Refresh();
-                DynamicEntity::UpdateMatrixDescriptor(i);
-                // DynamicEntity::UpdateMovementDescriptor(i);
+        Camera::GetInstance()->Update(frame_index);
+        UserInterface::GetInstance()->Update(frame_index);
+        GlobalData::GetInstance()->instanced_buffer.Flush(frame_index);
+        GlobalData::GetInstance()->mapped_buffer.Flush();
+
+        std::chrono::steady_clock::time_point monitor_flush_data = std::chrono::steady_clock::now();
+
+        MovementController::GetInstance()->Update();
+
+        uint32_t lod_count = DynamicEntityRenderer::GetInstance()->GetLodCount();
+        uint32_t group_count = MovementController::GetInstance()->GroupCount();
+        uint32_t entity_count = static_cast<uint32_t>(DynamicEntityRenderer::GetInstance()->GetEntities().size());
+        VkSemaphore wait_semaphore;
+        if(lod_count > 0 || group_count > 0 || entity_count > 0) {
+            
+            std::vector<VkCommandBuffer> shader_command_buffers;
+            wait_semaphore = this->compute_semaphores[frame_index];
+            
+            if(lod_count > 0) {
+                std::array<uint32_t,3> cull_lod_shader_count = {lod_count, 1, 1};
+                if(cull_lod_shader_count != this->cull_lod_shader.GetCount(frame_index)) this->cull_lod_shader.Refresh(frame_index);
+
+                std::vector<VkDescriptorSet> cull_lod_descriptor_sets = {
+                    GlobalData::GetInstance()->camera_descriptor.Get(frame_index),
+                    GlobalData::GetInstance()->dynamic_entity_descriptor.Get(),
+                    GlobalData::GetInstance()->indirect_descriptor.Get(frame_index),
+                    GlobalData::GetInstance()->lod_descriptor.Get(frame_index),
+                    GlobalData::GetInstance()->time_descriptor.Get(frame_index)
+                };
+            
+                shader_command_buffers.push_back(
+                    this->cull_lod_shader.BuildCommandBuffer(frame_index, cull_lod_descriptor_sets, cull_lod_shader_count)
+                );
             }
-            entity_renderer_refreshed = true;
-            map_refreshed = true;
+
+            if(group_count > 0 && entity_count > 0) {
+                std::array<uint32_t,3> movement_shader_count = {entity_count, group_count, 1};
+                if(movement_shader_count != this->movement_shader.GetCount(frame_index)) this->movement_shader.Refresh(frame_index);
+
+                std::vector<VkDescriptorSet> movement_descriptor_sets = {
+                    GlobalData::GetInstance()->dynamic_entity_descriptor.Get(),
+                    GlobalData::GetInstance()->group_descriptor.Get(),
+                    GlobalData::GetInstance()->time_descriptor.Get(frame_index)
+                };
+
+                shader_command_buffers.push_back(
+                    this->movement_shader.BuildCommandBuffer(frame_index, movement_descriptor_sets, movement_shader_count)
+                );
+            }
+
+            if(entity_count > 0) {
+                std::array<uint32_t,3> collision_shader_count = {entity_count, entity_count, 1};
+                if(collision_shader_count != this->collision_shader.GetCount(frame_index)) this->collision_shader.Refresh(frame_index);
+
+                std::vector<VkDescriptorSet> collision_descriptor_sets = {
+                    GlobalData::GetInstance()->dynamic_entity_descriptor.Get(),
+                    GlobalData::GetInstance()->time_descriptor.Get(frame_index)
+                };
+
+                shader_command_buffers.push_back(
+                    this->collision_shader.BuildCommandBuffer(frame_index, collision_descriptor_sets, collision_shader_count)
+                );
+            }
+
+            vk::SubmitQueue(
+                shader_command_buffers,
+                {this->present_semaphores[semaphore_index]},
+                {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
+                {this->compute_semaphores[frame_index]},
+                Vulkan::GetComputeQueue().handle,
+                nullptr
+            );
+        }else{
+            wait_semaphore = this->present_semaphores[semaphore_index];
         }
 
-        if(StaticEntity::GetMatrixDescriptor().NeedUpdate(image_index)) {
-            if(!entity_renderer_refreshed) { this->entity_render->Refresh(image_index); entity_renderer_refreshed = true; }
-            StaticEntity::UpdateMatrixDescriptor(image_index);
+        std::chrono::steady_clock::time_point monitor_submit_compute = std::chrono::steady_clock::now();
+
+        this->BuildRenderPass(frame_index);
+        std::vector<VkCommandBuffer> submit_command_buffers = {this->resources[frame_index].command_buffer};
+
+        if(UserInterface::GetInstance()->DisplayInterface()) {
+            VkCommandBuffer ui_command_buffer = UserInterface::GetInstance()->BuildCommandBuffer(frame_index, Vulkan::GetFrameBuffer(frame_index));
+            submit_command_buffers.push_back(ui_command_buffer);
         }
 
-        if(DynamicEntity::GetSelectionDescriptor().NeedUpdate(image_index)) {
-            if(!map_refreshed) { this->map->Refresh(image_index); map_refreshed = true; }
-            if(!entity_renderer_refreshed) { this->entity_render->Refresh(image_index); entity_renderer_refreshed = true; }
-            DynamicEntity::UpdateSelectionDescriptor(image_index);
+        vk::SubmitQueue(
+            submit_command_buffers,
+            {wait_semaphore},
+            {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
+            {this->resources[frame_index].draw_semaphore},
+            Vulkan::GetGraphicsQueue().handle,
+            this->resources[frame_index].fence
+        );
+
+        std::chrono::steady_clock::time_point monitor_submit_draw = std::chrono::steady_clock::now();
+
+        if(!Vulkan::GetInstance()->PresentImage({this->resources[frame_index].draw_semaphore}, frame_index)) {
+            DynamicEntityRenderer::GetInstance()->Refresh();
+            Map::GetInstance()->Refresh();
         }
 
-        if(DynamicEntity::GetAnimationDescriptor().NeedUpdate(image_index)) {
-            if(!entity_renderer_refreshed) { this->entity_render->Refresh(image_index); entity_renderer_refreshed = true; }
-            DynamicEntity::UpdateAnimationDescriptor(image_index);
-        }
+        semaphore_index = (semaphore_index + 1) % Vulkan::GetSwapChainImageCount();
 
-        if(LODGroup::GetDescriptor().NeedUpdate(image_index)) {
-            if(!entity_renderer_refreshed) { this->entity_render->Refresh(image_index); entity_renderer_refreshed = true; }
-            LODGroup::UpdateDescriptor(image_index);
-        }
+        std::chrono::steady_clock::time_point monitor_finish = std::chrono::steady_clock::now();
 
-        this->entity_render->UpdateDescriptorSet(image_index);
+        auto perf_wait_draw = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_wait_draw - monitor_start).count();
+        auto perf_descriptor_updates = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_descriptor_updates - monitor_wait_draw).count();
+        auto perf_flush_data = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_flush_data - monitor_descriptor_updates).count();
+        auto perf_submit_compute = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_submit_compute - monitor_flush_data).count();
+        auto perf_submit_draw = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_submit_draw - monitor_submit_compute).count();
+        auto perf_finish = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_finish - monitor_submit_draw).count();
+        auto perf_total = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_finish - monitor_start).count();
 
-        DynamicEntity::ReadMatrix();
-        // DynamicEntity::ReadMovement();
-        // DynamicEntity::Update(image_index);
-
-        bool instanced_write = DataBank::GetInstancedBuffer().FlushWrite(this->transfer_buffers[image_index], image_index, this->write_semaphores[image_index + 1]);
-        bool common_write = DataBank::GetCommonBuffer().FlushWrite(this->transfer_buffers[image_index], 0, this->write_semaphores[0]);
-
-        // DataBank::GetInstancedBuffer().FlushRead(this->transfer_buffers[image_index], image_index, this->read_semaphores[image_index + 1], this->write_semaphores[image_index + 1]);
-        VkSemaphore wait_semaphore = common_write ? this->write_semaphores[0] : nullptr;
-        bool common_read = DataBank::GetCommonBuffer().FlushRead(this->transfer_buffers[image_index], 0, this->read_semaphores[0], wait_semaphore);
-
-        // Build image
-        this->BuildRenderPass(image_index);
-        this->user_interface->BuildCommandBuffer(image_index, this->resources[image_index].framebuffer);
-
-        std::vector<VkSemaphore> wait_semaphores;
-        if(instanced_write) wait_semaphores.push_back(this->write_semaphores[image_index + 1]);
-        if(common_read) wait_semaphores.push_back(this->read_semaphores[0]);
-        VkSemaphore compute_semaphore = this->entity_render->SubmitComputeShader(image_index, wait_semaphores);
-
-        wait_semaphores = {present_semaphore, compute_semaphore};
-        std::vector<VkPipelineStageFlags> semaphore_stages = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT};
-
-        // Present image
-        if(!Vulkan::GetInstance().PresentImage(this->resources[image_index], wait_semaphores, semaphore_stages, image_index)) {
-
-            // On recréé la matrice de projection en cas de changement de ratio
-            auto& surface = Vulkan::GetDrawSurface();
-            float aspect_ratio = static_cast<float>(surface.width) / static_cast<float>(surface.height);
-            Camera::GetInstance().GetUniformBuffer().projection = Maths::Matrix4x4::PerspectiveProjectionMatrix(aspect_ratio, 60.0f, 0.1f, 2000.0f);
-
-            // Reconstruction du Frame Buffer et des Command Buffers
-            this->RebuildFrameBuffers();
-
-            // Force rebuild command buffers
-            this->map->Refresh();
-            this->user_interface->Refresh();
-            this->entity_render->Refresh();
-        }
+        float ratio_wait_draw = (perf_wait_draw * 100.0f) / perf_total;
+        float ratio_descriptor_updates = (perf_descriptor_updates * 100.0f) / perf_total;
+        float ratio_flush_data = (perf_flush_data * 100.0f) / perf_total;
+        float ratio_submit_compute = (perf_submit_compute * 100.0f) / perf_total;
+        float ratio_submit_draw = (perf_submit_draw * 100.0f) / perf_total;
+        float ratio_finish = (perf_finish * 100.0f) / perf_total;
     }
 }

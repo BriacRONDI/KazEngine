@@ -25,9 +25,6 @@ namespace Engine
             void UpdatePlanes(Maths::Matrix4x4 matrix);
             inline std::array<Maths::Vector4, 6>& GetPlanes() { return this->planes; }
 
-            // Le point se trouve dans le frustum
-            // bool IsInside(Maths::Vector3 const& point) const;
-
         private :
 
             Area<float> near_plane_size;

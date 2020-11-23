@@ -1,6 +1,6 @@
 #include "Tools.h"
 
-#if !defined(STBI_INCLUDE_STB_IMAGE_H)
+#if !defined(STB_IMAGE_IMPLEMENTATION)
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #endif
@@ -46,7 +46,7 @@ namespace Tools
         // In case of failure, return an empty buffer
         if(file.fail()) {
             #if defined(DISPLAY_LOGS)
-            std::cout << "GetBinaryFileContents(\"" << filename << "\") failed" << std::endl;
+            std::wcout << "GetBinaryFileContents(\"" << filename << "\") failed" << std::endl;
             #endif
             return {};
         }

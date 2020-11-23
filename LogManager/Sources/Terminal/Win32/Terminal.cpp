@@ -5,10 +5,6 @@ namespace Log
     // Singleton
     Terminal* Terminal::instance = nullptr;
 
-    Terminal::Terminal()
-    {
-    }
-
     Terminal::~Terminal()
     {
         // reset the standard streams

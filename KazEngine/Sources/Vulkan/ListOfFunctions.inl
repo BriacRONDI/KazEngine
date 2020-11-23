@@ -68,25 +68,25 @@ VK_INSTANCE_LEVEL_FUNCTION( vkEnumerateDeviceExtensionProperties )
 VK_INSTANCE_LEVEL_FUNCTION( vkGetPhysicalDeviceMemoryProperties )
 VK_INSTANCE_LEVEL_FUNCTION( vkGetPhysicalDeviceFormatProperties )
 VK_INSTANCE_LEVEL_FUNCTION( vkEnumerateInstanceVersion )
+VK_INSTANCE_LEVEL_FUNCTION( vkGetPhysicalDeviceSurfaceSupportKHR )
+VK_INSTANCE_LEVEL_FUNCTION( vkGetPhysicalDeviceSurfaceCapabilitiesKHR )
+VK_INSTANCE_LEVEL_FUNCTION( vkGetPhysicalDeviceSurfaceFormatsKHR )
+VK_INSTANCE_LEVEL_FUNCTION( vkGetPhysicalDeviceSurfacePresentModesKHR )
+VK_INSTANCE_LEVEL_FUNCTION( vkDestroySurfaceKHR )
+
 #if defined(DISPLAY_LOGS)
 VK_INSTANCE_LEVEL_FUNCTION( vkCreateDebugUtilsMessengerEXT )
 VK_INSTANCE_LEVEL_FUNCTION( vkDestroyDebugUtilsMessengerEXT )
 VK_INSTANCE_LEVEL_FUNCTION( vkCreateDebugReportCallbackEXT )
 VK_INSTANCE_LEVEL_FUNCTION( vkDestroyDebugReportCallbackEXT )
 #endif
-#if defined(USE_SWAPCHAIN_EXTENSIONS)
-VK_INSTANCE_LEVEL_FUNCTION( vkGetPhysicalDeviceSurfaceSupportKHR )
-VK_INSTANCE_LEVEL_FUNCTION( vkGetPhysicalDeviceSurfaceCapabilitiesKHR )
-VK_INSTANCE_LEVEL_FUNCTION( vkGetPhysicalDeviceSurfaceFormatsKHR )
-VK_INSTANCE_LEVEL_FUNCTION( vkGetPhysicalDeviceSurfacePresentModesKHR )
-VK_INSTANCE_LEVEL_FUNCTION( vkDestroySurfaceKHR )
+
 #if defined(VK_USE_PLATFORM_WIN32_KHR)
 VK_INSTANCE_LEVEL_FUNCTION( vkCreateWin32SurfaceKHR )
 #elif defined(VK_USE_PLATFORM_XCB_KHR)
 VK_INSTANCE_LEVEL_FUNCTION( vkCreateXcbSurfaceKHR )
 #elif defined(VK_USE_PLATFORM_XLIB_KHR)
 VK_INSTANCE_LEVEL_FUNCTION( vkCreateXlibSurfaceKHR )
-#endif
 #endif
 
 #undef VK_INSTANCE_LEVEL_FUNCTION
@@ -119,13 +119,11 @@ VK_DEVICE_LEVEL_FUNCTION( vkDestroyCommandPool )
 VK_DEVICE_LEVEL_FUNCTION( vkDestroySemaphore )
 VK_DEVICE_LEVEL_FUNCTION( vkCmdExecuteCommands )
 // VK_DEVICE_LEVEL_FUNCTION( vkResetDescriptorPool )
-#if defined(USE_SWAPCHAIN_EXTENSIONS)
 VK_DEVICE_LEVEL_FUNCTION( vkCreateSwapchainKHR )
 VK_DEVICE_LEVEL_FUNCTION( vkGetSwapchainImagesKHR )
 VK_DEVICE_LEVEL_FUNCTION( vkAcquireNextImageKHR )
 VK_DEVICE_LEVEL_FUNCTION( vkQueuePresentKHR )
 VK_DEVICE_LEVEL_FUNCTION( vkDestroySwapchainKHR )
-#endif
 
 VK_DEVICE_LEVEL_FUNCTION( vkCreateImageView )
 VK_DEVICE_LEVEL_FUNCTION( vkCreateRenderPass )

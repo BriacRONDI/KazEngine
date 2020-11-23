@@ -225,7 +225,7 @@ namespace DataPackerGUI
             std::vector<FBX_MATERIAL> materials;
             std::vector<FBX_MESH_GEOMETRY> mesh_geometries;
             std::vector<Model::Mesh> meshes;
-            std::map<std::string, Model::Mesh::MATERIAL> engine_materials;
+            // std::map<std::string, Model::Mesh::MATERIAL> engine_materials;
             std::vector<FBX_SKELETON> skeletons;
             std::vector<FBX_CURVE_NODE> curve_nodes;
             std::vector<FBX_ANIMATION_LAYER> animation_layers;

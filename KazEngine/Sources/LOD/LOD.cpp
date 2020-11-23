@@ -2,15 +2,23 @@
 
 namespace Engine
 {
-    DescriptorSet LODGroup::lod_descriptor;
+    /*InstancedDescriptorSet* LODGroup::lod_descriptor = nullptr;
 
     bool LODGroup::Initialize()
     {
-        if(!LODGroup::lod_descriptor.Create({
+        if(LODGroup::lod_descriptor == nullptr) LODGroup::lod_descriptor = new InstancedDescriptorSet;
+
+        if(!LODGroup::lod_descriptor->Create(instanced_buffer, {
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, sizeof(LOD) * MAX_LOD_COUNT}
         })) return false;
 
         return true;
+    }*/
+
+    LODGroup::LODGroup()
+    {
+        this->texture_id = -1;
+        this->hit_box = nullptr;
     }
 
     LODGroup::~LODGroup()
@@ -21,31 +29,30 @@ namespace Engine
         }
     }
 
-    void LODGroup::Clear()
+    /*void LODGroup::Clear()
     {
-        LODGroup::lod_descriptor.Clear();
-    }
+        if(LODGroup::lod_descriptor != nullptr) {
+            delete LODGroup::lod_descriptor;
+            LODGroup::lod_descriptor = nullptr;
+        }
+    }*/
 
     void LODGroup::AddLOD(std::shared_ptr<Model::Mesh> mesh, uint8_t level)
     {
-        if(this->meshes.size() >= MAX_LOD_COUNT) return;
-        if(this->meshes.size() <= level) this->meshes.resize(level + 1);
-        this->meshes[level] = mesh;
+        if(this->lods.size() >= MAX_LOD_COUNT) return;
+        if(this->lods.size() <= level) this->lods.resize(level + 1);
+        this->lods[level] = mesh;
     }
 
-    bool LODGroup::Build(std::map<std::string, uint32_t>& textures)
+    bool LODGroup::Build()
     {
         // Reserve LOD chunk
-        this->lod_chunk = this->lod_descriptor.ReserveRange(sizeof(LOD) * MAX_LOD_COUNT);
+        this->lod_chunk = GlobalData::GetInstance()->lod_descriptor.ReserveRange(sizeof(LOD) * MAX_LOD_COUNT);
         if(this->lod_chunk == nullptr) {
-            if(!this->lod_descriptor.ResizeChunk(this->lod_descriptor.GetChunk()->range + sizeof(LOD) * MAX_LOD_COUNT, 0, Vulkan::SboAlignment())) {
-                #if defined(DISPLAY_LOGS)
-                std::cout << "LODGroup::Build() : Not enough memory" << std::endl;
-                #endif
-                return false;
-            }else{
-                this->lod_chunk = this->lod_descriptor.ReserveRange(sizeof(LOD) * MAX_LOD_COUNT);
-            }
+            #if defined(DISPLAY_LOGS)
+            std::cout << "LODGroup::Build() : Not enough memory" << std::endl;
+            #endif
+            return false;
         }
 
         // Set LOD chunk
@@ -53,101 +60,75 @@ namespace Engine
         float lod_distances[] = {0.0f, 15.0f, 40.0f, 100.0f};
         for(uint8_t i=0; i<MAX_LOD_COUNT; i++) {
 
-            if(i >= this->meshes.size()) {
+            if(i >= this->lods.size()) {
                 LOD lod = {};
-                this->lod_descriptor.WriteData(&lod, sizeof(LOD), this->lod_chunk->offset + i * sizeof(LOD));
+                GlobalData::GetInstance()->lod_descriptor.WriteData(&lod, sizeof(LOD), this->lod_chunk->offset + i * sizeof(LOD));
 
             }else{
                 LOD lod;
                 lod.first_vertex = first_vertex;
-                lod.vertex_count = static_cast<uint32_t>(this->meshes[i]->index_buffer.size());
+                lod.vertex_count = static_cast<uint32_t>(this->lods[i]->index_buffer.size());
                 lod.valid = 1;
-                if(!lod.vertex_count) lod.vertex_count = static_cast<uint32_t>(this->meshes[i]->vertex_buffer.size());
+                if(!lod.vertex_count) lod.vertex_count = static_cast<uint32_t>(this->lods[i]->vertex_buffer.size());
                 lod.distance = lod_distances[i];
                 first_vertex += lod.vertex_count;
 
-                this->lod_descriptor.WriteData(&lod, sizeof(LOD), this->lod_chunk->offset + i * sizeof(LOD));
+                GlobalData::GetInstance()->lod_descriptor.WriteData(&lod, sizeof(LOD), this->lod_chunk->offset + i * sizeof(LOD));
             }
         }
 
         // Compute vertex buffer size
         VkDeviceSize total_vbo_size = 0;
         std::vector<std::pair<std::unique_ptr<char>, size_t>> vbos;
-        for(uint8_t i=0; i<this->meshes.size(); i++) {
+        for(uint8_t i=0; i<this->lods.size(); i++) {
             
             VkDeviceSize vbo_size, index_buffer_offset;
-            std::unique_ptr<char> mesh_vbo = this->meshes[i]->BuildVBO(vbo_size, index_buffer_offset);
+            std::unique_ptr<char> mesh_vbo = this->lods[i]->BuildVBO(vbo_size, index_buffer_offset);
             total_vbo_size += vbo_size;
             vbos.push_back({std::move(mesh_vbo), vbo_size});
         }
 
         // Allocate vertex buffer
-        this->vertex_buffer_chunk = DataBank::GetInstancedBuffer().ReserveChunk(total_vbo_size);
-        if(this->vertex_buffer_chunk == nullptr) {
+        bool relocated;
+        if(!GlobalData::GetInstance()->instanced_buffer.GetChunk()->ResizeChild(
+                    GlobalData::GetInstance()->vertex_buffer,
+                    GlobalData::GetInstance()->vertex_buffer->range + total_vbo_size,
+                    relocated)) {
             #if defined(DISPLAY_LOGS)
             std::cout << "LODGroup::Build() : Not enough memory" << std::endl;
             #endif
             return false;
         }
+        this->vertex_buffer_chunk = GlobalData::GetInstance()->vertex_buffer->ReserveRange(total_vbo_size);
 
         // Write vertex buffer
-        size_t offset = 0;
+        size_t lod_offset = 0;
         for(uint8_t i=0; i<vbos.size(); i++) {
 
-            DataBank::GetInstancedBuffer().WriteData(vbos[i].first.get(), vbos[i].second, this->vertex_buffer_chunk->offset + offset);
-            offset += vbos[i].second;
-        }
-
-        for(auto& mesh_material : this->GetMeshMaterials()) {
-
-            if(!DataBank::HasMaterial(mesh_material.first)) {
-                #if defined(DISPLAY_LOGS)
-                std::cout << "Drawable::Load() Material[" << mesh_material.first << "] : Not in data bank" << std::endl;
-                #endif
-                return false;
-            }
-
-            PUSH_CONSTANT_MATERIAL new_material;
-            new_material.ambient = DataBank::GetMaterial(mesh_material.first).ambient;
-            new_material.diffuse = DataBank::GetMaterial(mesh_material.first).diffuse;
-            new_material.specular = DataBank::GetMaterial(mesh_material.first).specular;
-            new_material.transparency = DataBank::GetMaterial(mesh_material.first).transparency;
-
-            if(!DataBank::GetMaterial(mesh_material.first).texture.empty()) {
-                if(!textures.count(DataBank::GetMaterial(mesh_material.first).texture)) {
-                    #if defined(DISPLAY_LOGS)
-                    std::cout << "Drawable::Load() Texture[" << DataBank::GetMaterial(mesh_material.first).texture << "] : Not loaded" << std::endl;
-                    #endif
-                    return false;
-                }else{
-                    new_material.texture_id = textures[DataBank::GetMaterial(mesh_material.first).texture];
-                }
-            }else{
-                new_material.texture_id = -1;
-            }
-
-            this->materials.push_back(new_material);
+            GlobalData::GetInstance()->instanced_buffer.WriteData(
+                vbos[i].first.get(), vbos[i].second,
+                GlobalData::GetInstance()->vertex_buffer->offset + this->vertex_buffer_chunk->offset + lod_offset
+            );
+            lod_offset += vbos[i].second;
         }
 
         return true;
     }
 
-    void LODGroup::Render(VkCommandBuffer command_buffer, uint32_t instance_id, VkPipelineLayout layout, uint32_t instance_count,
-                          std::vector<std::pair<bool, std::shared_ptr<Chunk>>> instance_buffer_chunks, size_t indirect_offset) const
-    {
-        vkCmdPushConstants(command_buffer, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PUSH_CONSTANT_MATERIAL), &this->materials[0]);
+    //void LODGroup::Render(VkCommandBuffer command_buffer, uint32_t instance_id, VkPipelineLayout layout, uint32_t instance_count,
+    //                      std::vector<std::pair<bool, std::shared_ptr<Chunk>>> instance_buffer_chunks, size_t indirect_offset, VkBuffer buffer) const
+    //{
+    //    // VkBuffer buffer = DataBank::GetInstance()->instanced_buffer.GetBuffer(instance_id).handle;
+    //    vkCmdBindVertexBuffers(command_buffer, 0, 1, &buffer, &this->vertex_buffer_chunk->offset);
 
-        VkBuffer buffer = DataBank::GetInstancedBuffer().GetBuffer(instance_id).handle;
-        vkCmdBindVertexBuffers(command_buffer, 0, 1, &buffer, &this->vertex_buffer_chunk->offset);
+    //    std::vector<VkBuffer> buffers = std::vector<VkBuffer>(instance_buffer_chunks.size(), buffer);
+    //    std::vector<VkDeviceSize> instance_offsets(instance_buffer_chunks.size());
+    //    for(uint8_t i=0; i<instance_buffer_chunks.size(); i++) {
+    //        instance_offsets[i] = instance_buffer_chunks[i].second->offset;
+    //        // if(!instance_buffer_chunks[i].first) buffers[i] = DataBank::GetInstance()->mapped_buffer.GetBuffer().handle;
+    //    }
+    //    vkCmdBindVertexBuffers(command_buffer, 1, static_cast<uint32_t>(instance_offsets.size()), buffers.data(), instance_offsets.data());
 
-        std::vector<VkBuffer> buffers = std::vector<VkBuffer>(instance_buffer_chunks.size(), buffer);
-        std::vector<VkDeviceSize> instance_offsets(instance_buffer_chunks.size());
-        for(uint8_t i=0; i<instance_buffer_chunks.size(); i++) {
-            instance_offsets[i] = instance_buffer_chunks[i].second->offset;
-            if(!instance_buffer_chunks[i].first) buffers[i] = DataBank::GetCommonBuffer().GetBuffer().handle;
-        }
-        vkCmdBindVertexBuffers(command_buffer, 1, static_cast<uint32_t>(instance_offsets.size()), buffers.data(), instance_offsets.data());
-
-        vkCmdDrawIndirect(command_buffer, buffer, indirect_offset, instance_count, sizeof(INDIRECT_COMMAND));
-    }
+    //    vkCmdDrawIndirect(command_buffer, buffer, indirect_offset, instance_count, sizeof(INDIRECT_COMMAND));
+    //}
 }

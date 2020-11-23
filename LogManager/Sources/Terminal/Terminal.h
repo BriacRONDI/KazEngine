@@ -54,7 +54,7 @@ namespace Log
             /// Singleton instance
             static Terminal* instance;
 
-            Terminal();
+            Terminal() = default;
             ~Terminal();
     };
 }

@@ -60,7 +60,7 @@ namespace DataPackerGUI
             void Display(std::vector<Maths::Vector3> buffer);
 
             /// Display a material
-            void Display(Model::Mesh::MATERIAL material);
+            // void Display(Model::Mesh::MATERIAL material);
 
             /// Display an uint buffer
             void Display(std::vector<uint32_t> buffer);

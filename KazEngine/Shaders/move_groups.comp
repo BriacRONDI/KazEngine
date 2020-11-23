@@ -10,15 +10,14 @@ struct MOVEMENT_DATA {
 	vec2 destination;
 	int moving;
 	float radius;
-	vec4 debug;
 };
 
-layout (set=1, binding=0) buffer MovementData
+layout (set=0, binding=3) buffer EntityMovement
 {
 	MOVEMENT_DATA movement[];
 };
 
-layout (set=1, binding=1) uniform MovementGroupCount
+layout (set=1, binding=0) uniform GroupCount
 {
 	uint movement_group_count;
 };
@@ -33,7 +32,7 @@ struct MOVEMENT_GROUP {
 	uint padding;
 };
 
-layout (set=1, binding=2) buffer MovementGroups
+layout (set=1, binding=1) buffer GroupData
 {
 	MOVEMENT_GROUP group[];
 };
@@ -94,10 +93,6 @@ void main()
 					movement[entity_id].moving = -1;
 					atomicExchange(group[gid].unit_count, 0);
 				}else{
-					movement[entity_id].debug.x = distance_to_center;
-					movement[entity_id].debug.y = distance_to_center - movement[entity_id].radius;
-					movement[entity_id].debug.z = group_radius;
-					
 					if((distance_to_center + movement[entity_id].radius) > group_radius) movement[entity_id].moving = gid;
 					else movement[entity_id].moving = -gid - 2;
 				}
@@ -109,9 +104,6 @@ void main()
 		float group_radius = (2 * group[group_id].scale - 1) * group[group_id].unit_radius;
 		vec2 segment = model[entity_id][3].xz - group[group_id].destination;
 		float distance_to_center = length(segment) - movement[entity_id].radius;
-		if(distance_to_center <= group_radius) {
-			atomicAdd(group[group_id].inside_count, 1);
-			movement[entity_id].debug.x = 1.0;
-		}
+		if(distance_to_center <= group_radius) atomicAdd(group[group_id].inside_count, 1);
 	}
 }

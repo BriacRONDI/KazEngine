@@ -83,70 +83,97 @@ namespace DataPackerGUI
 
         for(auto& mesh : this->meshes) {
 
-            // Add skeleton dependancy
+            // Skeleton dependancy
             std::vector<std::string> dependancies;
             if(!mesh.skeleton.empty()) dependancies.push_back(package_directory + "/" + mesh.skeleton);
 
-            // Si le matériau n'est pas déjà empaqueté, on s'en charge
-            for(auto& material : mesh.materials) {
+            // Texture dependancy
+            std::string texture_name = Tools::GetFileName(mesh.texture);
+            if(std::find(added_textures.begin(), added_textures.end(), texture_name) == added_textures.end()) {
+                std::cout << "Empaquetage de texture [" << texture_name << "] : ";
+                std::vector<char> file_content = Tools::GetBinaryFileContents(texture_directory + '/' + mesh.texture);
+                if(file_content.empty()) {
+                    Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::RED);
+                    std::cout << "Fichier introuvable" << std::endl;
+                    Log::Terminal::SetTextColor();
 
-                // Add material dependancy
-                dependancies.push_back(package_directory + "/" + material.first);
-
-                if(std::find(added_materials.begin(), added_materials.end(), material.first) == added_materials.end()
-                && this->engine_materials.count(material.first) > 0) {
-
-                    // Empaquetage du matériau
-                    uint32_t serialized_material_size;
-                    std::unique_ptr<char> serialized_material = this->engine_materials[material.first].Serialize(serialized_material_size);
-                    std::cout << "Empaquetage de matériau [" << material.first << "] : ";
-                    std::vector<std::string> textures;
-                    if(!this->engine_materials[material.first].texture.empty()) textures.push_back(package_directory + "/" + this->engine_materials[material.first].texture);
-                    DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::MATERIAL_DATA, material.first, serialized_material, serialized_material_size, textures);
-
+                }else{
+                    // Empaquetage de la texture
+                    dependancies.push_back(package_directory + "/" + texture_name);
+                    std::unique_ptr<char> file_content_ptr(file_content.data());
+                    DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::IMAGE_FILE, texture_name,
+                                                        file_content_ptr, static_cast<uint32_t>(file_content.size()));
+                    file_content_ptr.release();
+                        
                     Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
                     std::cout << "OK" << std::endl;
                     Log::Terminal::SetTextColor();
 
-                    // On valide la présence du matériau dans le package
-                    added_materials.push_back(material.first);
-
-                    // Si le matériau est associé à une texture, on la stocke également
-                    if(!this->engine_materials[material.first].texture.empty()
-                    && std::find(added_textures.begin(), added_textures.end(), this->engine_materials[material.first].texture) == added_textures.end()) {
-                        std::string filename = this->engine_materials[material.first].texture;
-
-                        // Recherche et lecture du fichier
-                        std::cout << "Empaquetage de texture [" << filename << "] : ";
-                        std::vector<char> file_content;
-                        for(auto& texture : this->textures) {
-                            if(Tools::GetFileName(texture.RelativeFilename) == filename) {
-                                file_content = Tools::GetBinaryFileContents(texture_directory + '/' + texture.RelativeFilename);
-                                break;
-                            }
-                        }
-                        if(file_content.empty()) {
-                            Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::RED);
-                            std::cout << "Fichier introuvable" << std::endl;
-                            Log::Terminal::SetTextColor();
-
-                        }else{
-                            // Empaquetage de la texture
-                            std::unique_ptr<char> file_content_ptr(file_content.data());
-                            DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::IMAGE_FILE, filename,
-                                                             file_content_ptr, static_cast<uint32_t>(file_content.size()));
-                            file_content_ptr.release();
-                        
-                            Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
-                            std::cout << "OK" << std::endl;
-                            Log::Terminal::SetTextColor();
-
-                            // On valide la présence de la texture dans le package
-                            added_textures.push_back(filename);
-                        }
-                    }
+                    // On valide la présence de la texture dans le package
+                    added_textures.push_back(texture_name);
                 }
             }
+
+            // Si le matériau n'est pas déjà empaqueté, on s'en charge
+            //for(auto& material : mesh.materials) {
+
+            //    // Add material dependancy
+            //    dependancies.push_back(package_directory + "/" + material.first);
+
+            //    if(std::find(added_materials.begin(), added_materials.end(), material.first) == added_materials.end()
+            //    && this->engine_materials.count(material.first) > 0) {
+
+            //        // Empaquetage du matériau
+            //        uint32_t serialized_material_size;
+            //        std::unique_ptr<char> serialized_material = this->engine_materials[material.first].Serialize(serialized_material_size);
+            //        std::cout << "Empaquetage de matériau [" << material.first << "] : ";
+            //        std::vector<std::string> textures;
+            //        if(!this->engine_materials[material.first].texture.empty()) textures.push_back(package_directory + "/" + this->engine_materials[material.first].texture);
+            //        DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::MATERIAL_DATA, material.first, serialized_material, serialized_material_size, textures);
+
+            //        Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
+            //        std::cout << "OK" << std::endl;
+            //        Log::Terminal::SetTextColor();
+
+            //        // On valide la présence du matériau dans le package
+            //        added_materials.push_back(material.first);
+
+            //        // Si le matériau est associé à une texture, on la stocke également
+            //        if(!this->engine_materials[material.first].texture.empty()
+            //        && std::find(added_textures.begin(), added_textures.end(), this->engine_materials[material.first].texture) == added_textures.end()) {
+            //            std::string filename = this->engine_materials[material.first].texture;
+
+            //            // Recherche et lecture du fichier
+            //            std::cout << "Empaquetage de texture [" << filename << "] : ";
+            //            std::vector<char> file_content;
+            //            for(auto& texture : this->textures) {
+            //                if(Tools::GetFileName(texture.RelativeFilename) == filename) {
+            //                    file_content = Tools::GetBinaryFileContents(texture_directory + '/' + texture.RelativeFilename);
+            //                    break;
+            //                }
+            //            }
+            //            if(file_content.empty()) {
+            //                Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::RED);
+            //                std::cout << "Fichier introuvable" << std::endl;
+            //                Log::Terminal::SetTextColor();
+
+            //            }else{
+            //                // Empaquetage de la texture
+            //                std::unique_ptr<char> file_content_ptr(file_content.data());
+            //                DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::IMAGE_FILE, filename,
+            //                                                 file_content_ptr, static_cast<uint32_t>(file_content.size()));
+            //                file_content_ptr.release();
+            //            
+            //                Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
+            //                std::cout << "OK" << std::endl;
+            //                Log::Terminal::SetTextColor();
+
+            //                // On valide la présence de la texture dans le package
+            //                added_textures.push_back(filename);
+            //            }
+            //        }
+            //    }
+            //}
 
             // Empaquetage du mesh
             uint32_t serialized_mesh_size;
@@ -690,9 +717,10 @@ namespace DataPackerGUI
             if(!mesh_geometry.material.indices.empty()
             && mesh_geometry.material.mapping_information_type == "AllSame"
             && mesh_geometry.material.indices.size() == 1
-            && mesh_materials.size() > mesh_geometry.material.indices[0]) {
-                auto& material = mesh_materials[mesh_geometry.material.indices[0]];
-                serialized_mesh.materials.push_back(std::pair<std::string, std::vector<uint32_t>>(material->name, {}));
+            && mesh_materials.size() > mesh_geometry.material.indices[0]
+            && mesh_materials[mesh_geometry.material.indices[0]]->textures.count("DiffuseColor")
+            && !mesh_materials[mesh_geometry.material.indices[0]]->textures["DiffuseColor"]->RelativeFilename.empty()) {
+                serialized_mesh.texture = mesh_materials[mesh_geometry.material.indices[0]]->textures["DiffuseColor"]->RelativeFilename;
             }
 
             // Ajout du squelette
@@ -789,7 +817,7 @@ namespace DataPackerGUI
                     face_uv.clear();
 
                     // Lecture des matériaux associés à des faces
-                    if(!mesh_geometry.material.indices.empty() && mesh_geometry.material.mapping_information_type == "ByPolygon") {
+                    /*if(!mesh_geometry.material.indices.empty() && mesh_geometry.material.mapping_information_type == "ByPolygon") {
 
                         if(fbx_face_index > mesh_geometry.material.indices.size()) {
                             std::cout << "Mesh [" << serialized_mesh.name << "] (geometry : " << mesh_geometry.name << ") : ";
@@ -816,7 +844,7 @@ namespace DataPackerGUI
                                 if(!found) serialized_mesh.materials.push_back(std::pair<std::string, std::vector<uint32_t>>(material_name, current_face_indices));
                             }
                         }
-                    }
+                    }*/
 
                     fbx_face_index++;
                 }
@@ -843,7 +871,7 @@ namespace DataPackerGUI
                 normal = normal.Normalize();
 
             // Un mesh qui n'a pas de texture n'a pas besoin d'UV
-            bool has_texture = false;
+            /*bool has_texture = false;
             for(auto& mesh_material : serialized_mesh.materials) {
                 for(auto& engine_material : this->materials) {
                     if(mesh_material.first == engine_material.name && !engine_material.textures.empty()) {
@@ -856,7 +884,7 @@ namespace DataPackerGUI
             if(!has_texture) {
                 serialized_mesh.uv_buffer.clear();
                 serialized_mesh.uv_index.clear();
-            }
+            }*/
 
             std::cout << "Mesh [" << serialized_mesh.name << "] (geometry : " << mesh_geometry.name << ") : ";
             Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
@@ -1080,7 +1108,7 @@ namespace DataPackerGUI
                 }
             }
 
-            Model::Mesh::MATERIAL engine_material;
+            /*Model::Mesh::MATERIAL engine_material;
             engine_material.ambient = {
                 static_cast<float>(material.AmbientColor[0]),
                 static_cast<float>(material.AmbientColor[1]),
@@ -1106,7 +1134,7 @@ namespace DataPackerGUI
                 && !material.textures["DiffuseColor"]->RelativeFilename.empty())
                 engine_material.texture = Tools::GetFileName(material.textures["DiffuseColor"]->RelativeFilename);
 
-            this->engine_materials[material.name] = engine_material;
+            this->engine_materials[material.name] = engine_material;*/
 
             std::cout << "Material[" << material.name << "] : ";
             Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);

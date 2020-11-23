@@ -3,11 +3,10 @@
 #include <chrono>
 
 #include <Maths.h>
+#include <Singleton.hpp>
 #include "./Frustum/Frustum.h"
 #include "../Platform/Common/Mouse/Mouse.h"
-#include "../Vulkan/Vulkan.h"
-#include "../DataBank/DataBank.h"
-#include "../DescriptorSet/DescriptorSet.h"
+#include "../GlobalData/GlobalData.h"
 
 #if defined(DISPLAY_LOGS)
 #include <iostream>
@@ -15,8 +14,10 @@
 
 namespace Engine
 {
-    class Camera : public IMouseListener
+    class Camera : public Singleton<Camera>, public IMouseListener
     {
+        friend Singleton<Camera>;
+
         public:
 
             struct CAMERA_UBO {
@@ -27,10 +28,7 @@ namespace Engine
                 bool operator!=(CAMERA_UBO other) { return this->projection != other.projection || this->view != other.view || this->position != other.position; }
             };
 
-            // Singleton
-            static void DestroyInstance();
-            static inline Camera& CreateInstance() { if(Camera::instance == nullptr) Camera::instance = new Camera; return *Camera::instance; }
-            static inline Camera& GetInstance() { return *Camera::instance; }
+            // static Camera*& CreateInstance(InstancedBuffer& buffer) { if(Camera::instance == nullptr) Camera::instance = new Camera(buffer); return Camera::instance; }
 
             inline CAMERA_UBO& GetUniformBuffer() { return this->camera; }  // Récupère la transformation finale
             void SetPosition(Maths::Vector3 const& position);               // Modifie la position
@@ -42,7 +40,6 @@ namespace Engine
             inline Maths::Vector3 GetUpVector() const { return {-this->camera.view[1], -this->camera.view[5], -this->camera.view[9]}; }
             inline float GetNearClipDistance() const { return this->near_clip_distance; }
             inline float GetFarClipDistance() const { return this->far_clip_distance; }
-            inline DescriptorSet& GetDescriptorSet() { return this->camera_descriptor; }
             inline void Freeze() { this->frozen = true; }
             inline void UnFreeze() { this->frozen = false; }
             inline bool IsRtsMode() { return this->rts_mode; }
@@ -61,7 +58,7 @@ namespace Engine
 
         private:
 
-            static Camera* instance;
+            // static Camera* instance;
             float near_clip_distance;
             float far_clip_distance;
 
@@ -86,7 +83,6 @@ namespace Engine
             Maths::Matrix4x4 rotation;              // Matrice de rotation
 
             Frustum frustum;                        // Frustum de la caméra
-            DescriptorSet camera_descriptor;
 
             Camera();
             virtual ~Camera();

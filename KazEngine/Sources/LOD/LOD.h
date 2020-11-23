@@ -1,8 +1,7 @@
 #pragma once
 
 #include <Model.h>
-#include "../DataBank/DataBank.h"
-#include "../DescriptorSet/DescriptorSet.h"
+#include "../GlobalData/GlobalData.h"
 
 #define MAX_LOD_COUNT   5
 
@@ -40,33 +39,32 @@ namespace Engine
                 Maths::Vector3 far_right_top_point;
             };
 
+            LODGroup();
             ~LODGroup();
-            void AddLOD(std::shared_ptr<Model::Mesh> mesh, uint8_t level);
-            bool Build(std::map<std::string, uint32_t>& textures);
-            inline uint16_t GetRenderMask() const { return this->meshes[0]->render_mask; }
-            inline std::vector<std::pair<std::string, std::vector<uint32_t>>> const& GetMeshMaterials() const { return this->meshes[0]->materials; }
-            inline std::string const& GetMeshSkeleton() const { return this->meshes[0]->skeleton; }
-            inline std::shared_ptr<Model::Mesh> GetMesh(uint8_t level = 0) const { return this->meshes[level]; }
-            inline void SetHitBox(HIT_BOX hit_box) { if(this->hit_box == nullptr) this->hit_box = new HIT_BOX; *this->hit_box = hit_box; }
-            inline HIT_BOX* GetHitBox() const { return this->hit_box; }
-            inline uint32_t GetLodIndex() const { return static_cast<uint32_t>(this->lod_chunk->offset / (sizeof(LOD) * MAX_LOD_COUNT)); }
-            void Render(VkCommandBuffer command_buffer, uint32_t instance_id, VkPipelineLayout layout, uint32_t instance_count,
-                        std::vector<std::pair<bool, std::shared_ptr<Chunk>>> instance_buffer_chunks, size_t indirect_offset) const;
+            void AddLOD(std::shared_ptr<Model::Mesh> lod, uint8_t level);
+            bool Build();
+            std::string const GetSkeleton() const { for(auto lod : this->lods) if(!lod->skeleton.empty()) return lod->skeleton; return {}; }
+            std::string const GetTexture() const { for(auto lod : this->lods) if(!lod->texture.empty()) return lod->texture; return {}; }
+            std::shared_ptr<Model::Mesh> GetLOD(uint8_t level = 0) const { return this->lods[level]; }
+            void SetHitBox(HIT_BOX hit_box) { if(this->hit_box == nullptr) this->hit_box = new HIT_BOX; *this->hit_box = hit_box; }
+            HIT_BOX* GetHitBox() const { return this->hit_box; }
+            uint32_t GetLodIndex() const { return static_cast<uint32_t>(this->lod_chunk->offset / (sizeof(LOD) * MAX_LOD_COUNT)); }
+            /*void Render(VkCommandBuffer command_buffer, uint32_t instance_id, VkPipelineLayout layout, uint32_t instance_count,
+                        std::vector<std::pair<bool, std::shared_ptr<Chunk>>> instance_buffer_chunks, size_t indirect_offset, VkBuffer buffer) const;*/
+            void SetTextureID(int32_t id) { this->texture_id = id; }
+            // size_t GetVertexBufferOffset() { return this->vertex_buffer_chunk->offset; }
 
-            static bool Initialize();
-            static void Clear();
-            static inline DescriptorSet& GetDescriptor() { return LODGroup::lod_descriptor; }
-            static inline bool UpdateDescriptor(uint8_t instance_id) { return LODGroup::lod_descriptor.Update(instance_id); }
+            // static bool Initialize();
+            // static void Clear();
+            // static InstancedDescriptorSet& GetDescriptor() { return *LODGroup::lod_descriptor; }
 
         private :
 
-            std::vector<PUSH_CONSTANT_MATERIAL> materials;
             std::shared_ptr<Chunk> lod_chunk;
-            std::shared_ptr<Chunk> vertex_buffer;
-            std::vector<std::shared_ptr<Model::Mesh>> meshes;
+            // std::shared_ptr<Chunk> vertex_buffer;
+            std::vector<std::shared_ptr<Model::Mesh>> lods;
             std::shared_ptr<Chunk> vertex_buffer_chunk;
-            HIT_BOX* hit_box = nullptr;
-
-            static DescriptorSet lod_descriptor;
+            int32_t texture_id;
+            HIT_BOX* hit_box;
     };
 }
