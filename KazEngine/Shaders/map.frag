@@ -13,17 +13,6 @@ layout (set=3, binding=0) readonly buffer Entity
 	mat4 model[];
 };
 
-struct MOVEMENT_DATA {
-	vec2 destination;
-	int moving;
-	float radius;
-};
-
-layout (set=3, binding=3) readonly buffer EntityMovement
-{
-	MOVEMENT_DATA movement[];
-};
-
 layout (set=4, binding=0) readonly uniform MovementGroupCount
 {
 	uint movement_group_count;

@@ -3,6 +3,7 @@
 #include <locale>
 #include <codecvt>
 #include <Windows.h>
+// #include <algorithm>
 
 // #include <Tools.h>
 #include <Types.hpp>

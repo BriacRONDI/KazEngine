@@ -4,6 +4,7 @@ namespace Engine
 {
     bool MovementController::Initialize()
     {
+        this->new_group = UINT32_MAX;
         GlobalData::GetInstance()->group_descriptor.AddListener(this);
         UserInterface::GetInstance()->AddListener(this);
 
@@ -63,10 +64,12 @@ namespace Engine
         group.destination = {destination.x, destination.z};
         group.scale = 2;
         group.unit_radius = 0.5f;
-        group.unit_count = 0;
+        group.unit_count = *reinterpret_cast<int32_t*>(GlobalData::GetInstance()->selection_descriptor.AccessData(0));
         group.inside_count = 0;
         group.fill_count = 0;
         group.padding = 0;
+
+        if(group.unit_count == 0) return;
 
         uint32_t group_id = *this->group_count;
         for(uint8_t i=0; i<*this->group_count; i++) {
@@ -77,27 +80,25 @@ namespace Engine
             }
         }
 
+        /*std::vector<DynamicEntity*> moving_entities;
         for(auto& entity : DynamicEntityRenderer::GetInstance()->GetEntities()) {
             if(entity->selected && (entity->Matrix()[12] != destination.x || entity->Matrix()[14] != destination.z)) {
                 group.unit_count++;
-            }
-        }
-
-        if(group.unit_count == 0) return;
-
-        std::vector<DynamicEntity*> moving_entities;
-        for(auto& entity : DynamicEntityRenderer::GetInstance()->GetEntities()) {
-            if(entity->selected && (entity->Matrix()[12] != destination.x || entity->Matrix()[14] != destination.z)) {
-                if(entity->Movement().moving != -1) {
-                    uint32_t gid = entity->Movement().moving >= 0 ? entity->Movement().moving : -entity->Movement().moving - 2;
-                    if(this->groups_array[gid].unit_count > 0) this->groups_array[gid].unit_count--;
-                }
-
-                entity->Movement().destination = {destination.x, destination.z};
-                entity->Movement().moving = group_id;
                 moving_entities.push_back(entity);
             }
-        }
+        }*/
+
+        // if(group.unit_count == 0) return;
+        
+        /*for(auto entity : moving_entities) {
+            if(entity->Movement().moving != -1) {
+                uint32_t gid = entity->Movement().moving >= 0 ? entity->Movement().moving : -entity->Movement().moving - 2;
+                if(this->groups_array[gid].unit_count > 0) this->groups_array[gid].unit_count--;
+            }
+
+            entity->Movement().destination = {destination.x, destination.z};
+            entity->Movement().moving = group_id;
+        }*/
 
         if(group_id == *this->group_count) {
             auto chunk = GlobalData::GetInstance()->group_descriptor.ReserveRange(sizeof(MOVEMENT_GROUP), GROUP_DATA_BINDING);
@@ -112,32 +113,6 @@ namespace Engine
         }
         
         this->groups_array[group_id] = group;
-    }
-
-    void MovementController::Update()
-    {
-        for(uint8_t i=0; i<*this->group_count; i++) {
-            MOVEMENT_GROUP& group_check = this->groups_array[i];
-
-            if(group_check.inside_count >= group_check.unit_count) {
-                group_check.unit_count = 0;
-            }else{
-                uint32_t max_count = 1;
-		        for(int i=1; i<group_check.scale; i++) max_count += i * 6;
-                if(group_check.inside_count >= max_count) group_check.scale++;
-            }
-
-            group_check.fill_count = 0;
-            group_check.inside_count = 0;
-        }
-
-        /*uint32_t count = *this->group_count - 1;
-        for(uint8_t i=count; i>=0; i--) {
-            MOVEMENT_GROUP& group_check = this->groups_array[i];
-            if(group_check.unit_count = 0) (*this->group_count)--;
-            else break;
-        }*/
-
-        GlobalData::GetInstance()->mapped_buffer.Flush();
+        this->new_group = group_id;
     }
 }

@@ -12,6 +12,7 @@ namespace Engine
         vkDeviceWaitIdle(Vulkan::GetDevice());
 
         // Compute Shader
+        this->init_group_shader.Clear();
         this->collision_shader.Clear();
         this->movement_shader.Clear();
         this->cull_lod_shader.Clear();
@@ -26,7 +27,9 @@ namespace Engine
         UserInterface::GetInstance()->DestroyInstance();
 
         // Compute Shader Semaphores
-        for(auto semaphore : this->compute_semaphores) vk::Destroy(semaphore);
+        for(auto semaphore : this->compute_semaphores_1) vk::Destroy(semaphore);
+        for(auto semaphore : this->compute_semaphores_2) vk::Destroy(semaphore);
+        for(auto semaphore : this->compute_semaphores_3) vk::Destroy(semaphore);
 
         // Entity Renderer
         DynamicEntityRenderer::GetInstance()->DestroyInstance();
@@ -54,7 +57,9 @@ namespace Engine
     {
         this->resources.resize(Vulkan::GetSwapChainImageCount());
         this->present_semaphores.resize(Vulkan::GetSwapChainImageCount());
-        this->compute_semaphores.resize(Vulkan::GetSwapChainImageCount());
+        this->compute_semaphores_1.resize(Vulkan::GetSwapChainImageCount());
+        this->compute_semaphores_2.resize(Vulkan::GetSwapChainImageCount());
+        this->compute_semaphores_3.resize(Vulkan::GetSwapChainImageCount());
 
         if(!vk::CreateCommandPool(this->command_pool, Vulkan::GetGraphicsQueue().index)) return false;
 
@@ -68,13 +73,14 @@ namespace Engine
             if(!vk::CreateSemaphore(semaphore)) return false;
         }
 
-        for(auto& semaphore : this->compute_semaphores) {
-            if(!vk::CreateSemaphore(semaphore)) return false;
-        }
+        for(auto& semaphore : this->compute_semaphores_1) if(!vk::CreateSemaphore(semaphore)) return false;
+        for(auto& semaphore : this->compute_semaphores_2) if(!vk::CreateSemaphore(semaphore)) return false;
+        for(auto& semaphore : this->compute_semaphores_3) if(!vk::CreateSemaphore(semaphore)) return false;
 
         GlobalData::CreateInstance();
         GlobalData::GetInstance()->dynamic_entity_descriptor.AddListener(this);
         GlobalData::GetInstance()->group_descriptor.AddListener(this);
+        GlobalData::GetInstance()->grid_descriptor.AddListener(this);
 
         Camera::CreateInstance();
         DynamicEntityRenderer::CreateInstance();
@@ -93,19 +99,35 @@ namespace Engine
             GlobalData::GetInstance()->dynamic_entity_descriptor.GetLayout(),
             GlobalData::GetInstance()->indirect_descriptor.GetLayout(),
             GlobalData::GetInstance()->lod_descriptor.GetLayout(),
-            GlobalData::GetInstance()->time_descriptor.GetLayout()
+            GlobalData::GetInstance()->time_descriptor.GetLayout(),
+            GlobalData::GetInstance()->grid_descriptor.GetLayout()
         })) return false;
 
         if(!this->movement_shader.Load("./Shaders/move_groups.comp.spv", {
             GlobalData::GetInstance()->dynamic_entity_descriptor.GetLayout(),
             GlobalData::GetInstance()->group_descriptor.GetLayout(),
-            GlobalData::GetInstance()->time_descriptor.GetLayout()
+            GlobalData::GetInstance()->time_descriptor.GetLayout(),
+            GlobalData::GetInstance()->skeleton_descriptor.GetLayout()
         })) return false;
 
         if(!this->collision_shader.Load("./Shaders/move_collision.comp.spv", {
             GlobalData::GetInstance()->dynamic_entity_descriptor.GetLayout(),
-            GlobalData::GetInstance()->time_descriptor.GetLayout()
+            GlobalData::GetInstance()->time_descriptor.GetLayout(),
+            GlobalData::GetInstance()->grid_descriptor.GetLayout()
         })) return false;
+
+        VkPushConstantRange group_destination;
+        group_destination.offset = 0;
+        group_destination.size = sizeof(uint32_t);
+        group_destination.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+        if(!this->init_group_shader.Load("./Shaders/init_group.comp.spv", {
+            GlobalData::GetInstance()->dynamic_entity_descriptor.GetLayout(),
+            GlobalData::GetInstance()->group_descriptor.GetLayout(),
+            GlobalData::GetInstance()->selection_descriptor.GetLayout(),
+            GlobalData::GetInstance()->skeleton_descriptor.GetLayout(),
+            GlobalData::GetInstance()->time_descriptor.GetLayout()
+        }, {group_destination})) return false;
 
         return true;
     }
@@ -114,11 +136,6 @@ namespace Engine
     {
         vkDeviceWaitIdle(Vulkan::GetDevice());
         descriptor->Update(binding);
-
-        /*if(descriptor == &GlobalData::GetInstance()->dynamic_entity_descriptor && binding == ENTITY_MOVEMENT_BINDING) {
-            this->movement_shader.Refresh();
-            this->collision_shader.Refresh();
-        }*/
     }
 
     bool Core::AddToScene(DynamicEntity& entity)
@@ -126,7 +143,7 @@ namespace Engine
         return DynamicEntityRenderer::GetInstance()->AddToScene(entity);
     }
 
-    bool Core::LoadSkeleton(Model::Bone skeleton)
+    bool Core::LoadSkeleton(Model::Bone skeleton, std::string idle, std::string move, std::string attack)
     {
         /////////////////////////
         //   Mesh offsets SBO  //
@@ -162,30 +179,45 @@ namespace Engine
         uint32_t animation_offset = 0;
         uint32_t frame_id = 0;
 
-        for(uint8_t i=0; i<animations.size(); i++) {
+        GlobalData::TRIGGERED_ANIMATIONS triggered_animations;
+
+        for(int32_t i=0; i<animations.size(); i++) {
 
             GlobalData::BAKED_ANIMATION baked_animation;
-            baked_animation.animation_id = i;
-            baked_animation.duration = skeleton.GetAnimationTotalDuration(animations[i].name);
+            baked_animation.id = i;
+            baked_animation.duration_ms = static_cast<uint32_t>(skeleton.GetAnimationTotalDuration(animations[i].name).count());
 
             // Build buffer
             std::vector<char> skeleton_sbo;
             uint32_t bone_count;
             skeleton.BuildAnimationSBO(skeleton_sbo, animations[i].name, baked_animation.frame_count, bone_count, 30);
+
+            if(animations[i].name == idle) triggered_animations.idle = baked_animation;
+            else if(animations[i].name == move) triggered_animations.move = baked_animation;
+            else if(animations[i].name == attack) triggered_animations.attack = baked_animation;
             
             // Write the bone count before frame offsets
-            if(!i) GlobalData::GetInstance()->skeleton_descriptor.WriteData(&bone_count, sizeof(uint32_t), 0, SKELETON_ANIMATIONS_BINDING);
+            if(!i) GlobalData::GetInstance()->skeleton_descriptor.WriteData(&bone_count, sizeof(uint32_t), 0, SKELETON_ANIM_OFFSETS_BINDING);
 
             // Write the frame offset
-            GlobalData::GetInstance()->skeleton_descriptor.WriteData(&frame_id, sizeof(uint32_t), sizeof(uint32_t) * (i + 1), SKELETON_ANIMATIONS_BINDING);
+            GlobalData::GetInstance()->skeleton_descriptor.WriteData(&frame_id, sizeof(uint32_t), sizeof(uint32_t) * (i + 1), SKELETON_ANIM_OFFSETS_BINDING);
 
             // Write animation to GPU memory
             GlobalData::GetInstance()->skeleton_descriptor.WriteData(skeleton_sbo.data(), skeleton_sbo.size(), animation_offset, SKELETON_BONES_BINDING);
 
             frame_id += static_cast<uint32_t>(skeleton_sbo.size() / sizeof(Maths::Matrix4x4));
-            animation_offset += static_cast<uint32_t>((static_cast<uint32_t>(skeleton_sbo.size()) + sbo_alignment - 1) & ~(sbo_alignment - 1));
+            animation_offset += static_cast<uint32_t>(skeleton_sbo.size());
             GlobalData::GetInstance()->animations[animations[i].name] = baked_animation;
         }
+
+        auto chunk = GlobalData::GetInstance()->skeleton_descriptor.ReserveRange(sizeof(GlobalData::TRIGGERED_ANIMATIONS), SKELETON_TRIGGER_ANIM_BINDING);
+        if(chunk == nullptr) {
+            #if defined(DISPLAY_LOGS)
+            std::cout << "Core::LoadSkeleton() => Not enough memory" << std::endl;
+            #endif
+            return false;
+        }
+        GlobalData::GetInstance()->skeleton_descriptor.WriteData(&triggered_animations, sizeof(GlobalData::TRIGGERED_ANIMATIONS), chunk->offset, SKELETON_TRIGGER_ANIM_BINDING);
 
         // Success
         return true;
@@ -244,9 +276,9 @@ namespace Engine
         if(surface.width > 0 && surface.height > 0) {
             VkCommandBuffer command_buffers[2] = {
                 DynamicEntityRenderer::GetInstance()->BuildCommandBuffer(frame_index, frame_buffer),
-                Map::GetInstance()->BuildCommandBuffer(frame_index, frame_buffer)
+                // Map::GetInstance()->BuildCommandBuffer(frame_index, frame_buffer)
             };
-            vkCmdExecuteCommands(command_buffer, 2, command_buffers);
+            vkCmdExecuteCommands(command_buffer, 1, command_buffers);
         }
 
         vkCmdEndRenderPass(command_buffer);
@@ -381,8 +413,6 @@ namespace Engine
         static uint8_t semaphore_index = 0;
         uint32_t frame_index;
 
-        std::chrono::steady_clock::time_point monitor_start = std::chrono::steady_clock::now();
-
         if(!Vulkan::GetInstance()->AcquireNextImage(frame_index, this->present_semaphores[semaphore_index])) {
             DynamicEntityRenderer::GetInstance()->Refresh();
             Map::GetInstance()->Refresh();
@@ -396,35 +426,59 @@ namespace Engine
             return;
         }
 
-        std::chrono::steady_clock::time_point monitor_wait_draw = std::chrono::steady_clock::now();
-
         Timer::Update(frame_index);
         bool skeleton_updated = GlobalData::GetInstance()->skeleton_descriptor.Update(frame_index);
         bool indirect_updated = GlobalData::GetInstance()->indirect_descriptor.Update(frame_index);
         bool lod_updated = GlobalData::GetInstance()->lod_descriptor.Update(frame_index);
-        bool selection_updated = GlobalData::GetInstance()->selection_descriptor.Update(frame_index);
 
         if(skeleton_updated || indirect_updated || lod_updated) this->cull_lod_shader.Refresh(frame_index);
-
-        std::chrono::steady_clock::time_point monitor_descriptor_updates = std::chrono::steady_clock::now();
 
         Camera::GetInstance()->Update(frame_index);
         UserInterface::GetInstance()->Update(frame_index);
         GlobalData::GetInstance()->instanced_buffer.Flush(frame_index);
         GlobalData::GetInstance()->mapped_buffer.Flush();
 
-        std::chrono::steady_clock::time_point monitor_flush_data = std::chrono::steady_clock::now();
-
-        MovementController::GetInstance()->Update();
-
         uint32_t lod_count = DynamicEntityRenderer::GetInstance()->GetLodCount();
         uint32_t group_count = MovementController::GetInstance()->GroupCount();
         uint32_t entity_count = static_cast<uint32_t>(DynamicEntityRenderer::GetInstance()->GetEntities().size());
-        VkSemaphore wait_semaphore;
+
+        VkSemaphore wait_semaphore1;
+        if(MovementController::GetInstance()->HasNewGroup()) {
+            wait_semaphore1 = this->compute_semaphores_1[frame_index];
+
+            uint32_t selection_count = *reinterpret_cast<uint32_t*>(GlobalData::GetInstance()->selection_descriptor.AccessData(0));
+            std::array<uint32_t,3> shader_count = {selection_count, 1, 1};
+            this->init_group_shader.Refresh(frame_index);
+
+            std::vector<VkDescriptorSet> descriptor_sets = {
+                GlobalData::GetInstance()->dynamic_entity_descriptor.Get(),
+                GlobalData::GetInstance()->group_descriptor.Get(),
+                GlobalData::GetInstance()->selection_descriptor.Get(),
+                GlobalData::GetInstance()->skeleton_descriptor.Get(frame_index),
+                GlobalData::GetInstance()->time_descriptor.Get(frame_index)
+            };
+
+            uint32_t group_id = MovementController::GetInstance()->GetNewGroup();
+            VkCommandBuffer command_buffer = this->init_group_shader.BuildCommandBuffer(frame_index, descriptor_sets, shader_count, {&group_id});
+
+            vk::SubmitQueue(
+                {command_buffer},
+                {this->present_semaphores[semaphore_index]},
+                {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
+                {this->compute_semaphores_1[frame_index]},
+                Vulkan::GetComputeQueue().handle,
+                nullptr
+            );
+
+        }else{
+            wait_semaphore1 = this->present_semaphores[semaphore_index];
+        }
+
+        VkSemaphore wait_semaphore2;
         if(lod_count > 0 || group_count > 0 || entity_count > 0) {
             
             std::vector<VkCommandBuffer> shader_command_buffers;
-            wait_semaphore = this->compute_semaphores[frame_index];
+            wait_semaphore2 = this->compute_semaphores_2[frame_index];
             
             if(lod_count > 0) {
                 std::array<uint32_t,3> cull_lod_shader_count = {lod_count, 1, 1};
@@ -435,7 +489,8 @@ namespace Engine
                     GlobalData::GetInstance()->dynamic_entity_descriptor.Get(),
                     GlobalData::GetInstance()->indirect_descriptor.Get(frame_index),
                     GlobalData::GetInstance()->lod_descriptor.Get(frame_index),
-                    GlobalData::GetInstance()->time_descriptor.Get(frame_index)
+                    GlobalData::GetInstance()->time_descriptor.Get(frame_index),
+                    GlobalData::GetInstance()->grid_descriptor.Get()
                 };
             
                 shader_command_buffers.push_back(
@@ -450,7 +505,8 @@ namespace Engine
                 std::vector<VkDescriptorSet> movement_descriptor_sets = {
                     GlobalData::GetInstance()->dynamic_entity_descriptor.Get(),
                     GlobalData::GetInstance()->group_descriptor.Get(),
-                    GlobalData::GetInstance()->time_descriptor.Get(frame_index)
+                    GlobalData::GetInstance()->time_descriptor.Get(frame_index),
+                    GlobalData::GetInstance()->skeleton_descriptor.Get(frame_index)
                 };
 
                 shader_command_buffers.push_back(
@@ -458,33 +514,42 @@ namespace Engine
                 );
             }
 
-            if(entity_count > 0) {
-                std::array<uint32_t,3> collision_shader_count = {entity_count, entity_count, 1};
-                if(collision_shader_count != this->collision_shader.GetCount(frame_index)) this->collision_shader.Refresh(frame_index);
-
-                std::vector<VkDescriptorSet> collision_descriptor_sets = {
-                    GlobalData::GetInstance()->dynamic_entity_descriptor.Get(),
-                    GlobalData::GetInstance()->time_descriptor.Get(frame_index)
-                };
-
-                shader_command_buffers.push_back(
-                    this->collision_shader.BuildCommandBuffer(frame_index, collision_descriptor_sets, collision_shader_count)
-                );
-            }
-
             vk::SubmitQueue(
                 shader_command_buffers,
-                {this->present_semaphores[semaphore_index]},
+                {wait_semaphore1},
                 {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
-                {this->compute_semaphores[frame_index]},
+                {this->compute_semaphores_2[frame_index]},
                 Vulkan::GetComputeQueue().handle,
                 nullptr
             );
         }else{
-            wait_semaphore = this->present_semaphores[semaphore_index];
+            wait_semaphore2 = wait_semaphore1;
         }
 
-        std::chrono::steady_clock::time_point monitor_submit_compute = std::chrono::steady_clock::now();
+        VkSemaphore wait_semaphore3 = wait_semaphore2;
+        if(entity_count > 0) {
+            std::array<uint32_t,3> collision_shader_count = {entity_count, 1, 1};
+            if(collision_shader_count != this->collision_shader.GetCount(frame_index)) this->collision_shader.Refresh(frame_index);
+
+            wait_semaphore3 = this->compute_semaphores_3[frame_index];
+
+            std::vector<VkDescriptorSet> collision_descriptor_sets = {
+                GlobalData::GetInstance()->dynamic_entity_descriptor.Get(),
+                GlobalData::GetInstance()->time_descriptor.Get(frame_index),
+                GlobalData::GetInstance()->grid_descriptor.Get()
+            };
+
+            VkCommandBuffer command_buffer = this->collision_shader.BuildCommandBuffer(frame_index, collision_descriptor_sets, collision_shader_count);
+
+            vk::SubmitQueue(
+                {command_buffer},
+                {wait_semaphore2},
+                {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
+                {this->compute_semaphores_3[frame_index]},
+                Vulkan::GetComputeQueue().handle,
+                nullptr
+            );
+        }
 
         this->BuildRenderPass(frame_index);
         std::vector<VkCommandBuffer> submit_command_buffers = {this->resources[frame_index].command_buffer};
@@ -496,14 +561,12 @@ namespace Engine
 
         vk::SubmitQueue(
             submit_command_buffers,
-            {wait_semaphore},
+            {wait_semaphore3},
             {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT},
             {this->resources[frame_index].draw_semaphore},
             Vulkan::GetGraphicsQueue().handle,
             this->resources[frame_index].fence
         );
-
-        std::chrono::steady_clock::time_point monitor_submit_draw = std::chrono::steady_clock::now();
 
         if(!Vulkan::GetInstance()->PresentImage({this->resources[frame_index].draw_semaphore}, frame_index)) {
             DynamicEntityRenderer::GetInstance()->Refresh();
@@ -511,22 +574,5 @@ namespace Engine
         }
 
         semaphore_index = (semaphore_index + 1) % Vulkan::GetSwapChainImageCount();
-
-        std::chrono::steady_clock::time_point monitor_finish = std::chrono::steady_clock::now();
-
-        auto perf_wait_draw = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_wait_draw - monitor_start).count();
-        auto perf_descriptor_updates = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_descriptor_updates - monitor_wait_draw).count();
-        auto perf_flush_data = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_flush_data - monitor_descriptor_updates).count();
-        auto perf_submit_compute = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_submit_compute - monitor_flush_data).count();
-        auto perf_submit_draw = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_submit_draw - monitor_submit_compute).count();
-        auto perf_finish = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_finish - monitor_submit_draw).count();
-        auto perf_total = std::chrono::duration_cast<std::chrono::nanoseconds>(monitor_finish - monitor_start).count();
-
-        float ratio_wait_draw = (perf_wait_draw * 100.0f) / perf_total;
-        float ratio_descriptor_updates = (perf_descriptor_updates * 100.0f) / perf_total;
-        float ratio_flush_data = (perf_flush_data * 100.0f) / perf_total;
-        float ratio_submit_compute = (perf_submit_compute * 100.0f) / perf_total;
-        float ratio_submit_draw = (perf_submit_draw * 100.0f) / perf_total;
-        float ratio_finish = (perf_finish * 100.0f) / perf_total;
     }
 }

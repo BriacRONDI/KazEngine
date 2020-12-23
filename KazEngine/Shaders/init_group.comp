@@ -1,0 +1,143 @@
+#version 450
+
+layout (set=0, binding=0) buffer Entity
+{
+	mat4 model[];
+};
+
+struct FRAME
+{
+	int animation_id;
+	uint frame_id;
+};
+
+layout (set=0, binding=1, std430) writeonly buffer EntityFrame
+{
+	FRAME frame[];
+};
+
+struct ANIMATION
+{
+	uint frame_count;
+	uint loop;
+	uint play;
+	uint duration;
+	uint start;
+	float speed;
+};
+
+layout (set=0, binding=2, std430) writeonly buffer EntityAnimation
+{
+	ANIMATION animation[];
+};
+
+struct MOVEMENT_DATA {
+	vec2 destination;
+	int moving;
+	float radius;
+	int grid_position[4];
+	int skeleton_id;
+	int padding[3];
+};
+
+layout (set=0, binding=3) buffer EntityMovement
+{
+	MOVEMENT_DATA movement[];
+};
+
+layout (set=1, binding=0) uniform GroupCount
+{
+	uint movement_group_count;
+};
+
+struct MOVEMENT_GROUP {
+	vec2 destination;
+	int scale;
+	float unit_radius;
+	int unit_count;
+	uint fill_count;
+	uint inside_count;
+	uint padding;
+};
+
+layout (set=1, binding=1) buffer GroupData
+{
+	MOVEMENT_GROUP group[];
+};
+
+layout (set=2, binding=0) readonly buffer Selection
+{
+	uint count;
+	uint id[];
+}selection;
+
+struct BAKED_ANIMATION {
+	int id;
+	uint frame_count;
+	uint duration_ms;
+	uint padding;
+};
+			
+struct TRIGGERED_ANIMATIONS {
+	BAKED_ANIMATION idle;
+	BAKED_ANIMATION move;
+	BAKED_ANIMATION attack;
+};
+
+layout (set=3, binding=4) buffer SkeletonAnimations
+{
+	TRIGGERED_ANIMATIONS skeleton[];
+};
+
+layout (set=4, binding=0) readonly uniform GlobalTime
+{
+	uint now;
+	float delta;
+}time;
+
+layout(push_constant) uniform GroupDestination
+{
+	layout(offset = 0) uint group_id;
+};
+
+mat4 RotationMatrix(float angle, vec3 axis)
+{
+    axis = normalize(axis);
+    float s = sin(angle);
+    float c = cos(angle);
+    float oc = 1.0 - c;
+    
+    return mat4(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,
+                oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,
+                oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,
+                0.0,                                0.0,                                0.0,                                1.0);
+}
+
+void main()
+{
+	uint entity_id = selection.id[gl_GlobalInvocationID.x];
+	
+	if(movement[entity_id].moving != -1) {
+		int gid = movement[entity_id].moving >= 0 ? movement[entity_id].moving : -movement[entity_id].moving - 2;
+		if(group[gid].unit_count > 0) atomicAdd(group[gid].unit_count, -1);
+	}
+	
+	movement[entity_id].destination = group[group_id].destination;
+	movement[entity_id].moving = int(group_id);
+	
+	animation[entity_id].frame_count = skeleton[0].move.frame_count;
+	animation[entity_id].duration = skeleton[0].move.duration_ms;
+	animation[entity_id].loop = 1;
+	animation[entity_id].play = 1;
+	animation[entity_id].start = time.now;
+	animation[entity_id].speed = 2.0;
+	frame[entity_id].frame_id = 0;
+	frame[entity_id].animation_id = skeleton[0].move.id;
+	
+	vec4 position = model[entity_id][3];
+	vec2 direction = group[group_id].destination - position.xz;
+	float angle = atan(direction.y / direction.x);
+	if(direction.x > 0) model[entity_id] = RotationMatrix(angle - 1.5708, vec3(0, 1, 0));
+	else model[entity_id] = RotationMatrix(angle + 1.5708, vec3(0, 1, 0));
+	model[entity_id][3] = position;
+}

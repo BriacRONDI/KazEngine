@@ -34,6 +34,8 @@ namespace Engine
         (*this->movement).destination = {};
         (*this->movement).moving = -1;
         (*this->movement).radius = 0.5f;
+        (*this->movement).grid_position = {-1, -1, -1, -1};
+        (*this->movement).skeleton_id = 0;
 
         GlobalData::GetInstance()->dynamic_entity_descriptor.AddListener(this);
     }
@@ -66,15 +68,22 @@ namespace Engine
             this->animation->speed = speed;
 
             this->frame->frame_id = 0;
-            this->frame->animation_id = GlobalData::GetInstance()->animations[animation].animation_id;
+            this->frame->animation_id = GlobalData::GetInstance()->animations[animation].id;
             this->animation->frame_count = GlobalData::GetInstance()->animations[animation].frame_count;
-            this->animation->duration = static_cast<uint32_t>(GlobalData::GetInstance()->animations[animation].duration.count());
+            this->animation->duration = GlobalData::GetInstance()->animations[animation].duration_ms;
 
             this->animation->loop = loop ? 1 : 0;
             this->animation->play = 1;
 
             this->animation->start = static_cast<uint32_t>(Timer::EngineStartDuration().count());
         }
+    }
+
+    void DynamicEntity::StopAnimation()
+    {
+        this->frame->frame_id = 0;
+        this->frame->animation_id = -1;
+        this->animation = {};
     }
 
     bool DynamicEntity::InSelectBox(Maths::Plane left_plane, Maths::Plane right_plane, Maths::Plane top_plane, Maths::Plane bottom_plane)

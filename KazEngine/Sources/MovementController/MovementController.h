@@ -16,7 +16,7 @@ namespace Engine
                 Maths::Vector2 destination;
 		        int scale;
 		        float unit_radius;
-                uint32_t unit_count;
+                int unit_count;
                 uint32_t fill_count;
                 uint32_t inside_count;
                 uint32_t padding;
@@ -25,7 +25,9 @@ namespace Engine
             bool Initialize();
             void Clear();
             uint32_t& GroupCount() { return *this->group_count; }
-            void Update();
+            MOVEMENT_GROUP& Group(uint32_t id) { return this->groups_array[id]; }
+            bool HasNewGroup() { return this->new_group != UINT32_MAX; }
+            uint32_t GetNewGroup() { uint32_t val = this->new_group; this->new_group = UINT32_MAX; return val; }
 
             ////////////////////////////////
             // IUserInteraction interface //
@@ -45,6 +47,7 @@ namespace Engine
 
             uint32_t* group_count;
             MOVEMENT_GROUP* groups_array;
+            uint32_t new_group;
 
             MovementController(){};
             ~MovementController(){};

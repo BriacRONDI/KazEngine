@@ -53,20 +53,16 @@ namespace DataPackerGUI
         this->ParseMeshes(nodes);
 
         bool skeep = false;
-        for(auto& tree : this->bone_trees)
+        for(auto& tree : this->bone_trees) {
+            auto gt_bone = this->BuildGlobalTransformBone(tree.second);
             this->RebuildBoneTree(tree.second, skeep);
+        }
         this->ComputeAnimations();
 
         // Création des conteneurs pour textures et meshes
         std::vector<char> memory;
         std::vector<std::string> added_textures;
         std::vector<std::string> added_materials;
-        // DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "textures", {}, 0);
-        // DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "materials", {}, 0);
-        // DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "meshes", {}, 0);
-
-        // if(!this->bone_trees.empty())
-        //    DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::PARENT_NODE, "bones", {}, 0);
 
         // Empaquetage des squelettes
         for(auto const& tree : this->bone_trees) {
@@ -114,67 +110,6 @@ namespace DataPackerGUI
                 }
             }
 
-            // Si le matériau n'est pas déjà empaqueté, on s'en charge
-            //for(auto& material : mesh.materials) {
-
-            //    // Add material dependancy
-            //    dependancies.push_back(package_directory + "/" + material.first);
-
-            //    if(std::find(added_materials.begin(), added_materials.end(), material.first) == added_materials.end()
-            //    && this->engine_materials.count(material.first) > 0) {
-
-            //        // Empaquetage du matériau
-            //        uint32_t serialized_material_size;
-            //        std::unique_ptr<char> serialized_material = this->engine_materials[material.first].Serialize(serialized_material_size);
-            //        std::cout << "Empaquetage de matériau [" << material.first << "] : ";
-            //        std::vector<std::string> textures;
-            //        if(!this->engine_materials[material.first].texture.empty()) textures.push_back(package_directory + "/" + this->engine_materials[material.first].texture);
-            //        DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::MATERIAL_DATA, material.first, serialized_material, serialized_material_size, textures);
-
-            //        Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
-            //        std::cout << "OK" << std::endl;
-            //        Log::Terminal::SetTextColor();
-
-            //        // On valide la présence du matériau dans le package
-            //        added_materials.push_back(material.first);
-
-            //        // Si le matériau est associé à une texture, on la stocke également
-            //        if(!this->engine_materials[material.first].texture.empty()
-            //        && std::find(added_textures.begin(), added_textures.end(), this->engine_materials[material.first].texture) == added_textures.end()) {
-            //            std::string filename = this->engine_materials[material.first].texture;
-
-            //            // Recherche et lecture du fichier
-            //            std::cout << "Empaquetage de texture [" << filename << "] : ";
-            //            std::vector<char> file_content;
-            //            for(auto& texture : this->textures) {
-            //                if(Tools::GetFileName(texture.RelativeFilename) == filename) {
-            //                    file_content = Tools::GetBinaryFileContents(texture_directory + '/' + texture.RelativeFilename);
-            //                    break;
-            //                }
-            //            }
-            //            if(file_content.empty()) {
-            //                Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::RED);
-            //                std::cout << "Fichier introuvable" << std::endl;
-            //                Log::Terminal::SetTextColor();
-
-            //            }else{
-            //                // Empaquetage de la texture
-            //                std::unique_ptr<char> file_content_ptr(file_content.data());
-            //                DataPacker::Packer::PackToMemory(memory, "/", DataPacker::Packer::DATA_TYPE::IMAGE_FILE, filename,
-            //                                                 file_content_ptr, static_cast<uint32_t>(file_content.size()));
-            //                file_content_ptr.release();
-            //            
-            //                Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
-            //                std::cout << "OK" << std::endl;
-            //                Log::Terminal::SetTextColor();
-
-            //                // On valide la présence de la texture dans le package
-            //                added_textures.push_back(filename);
-            //            }
-            //        }
-            //    }
-            //}
-
             // Empaquetage du mesh
             uint32_t serialized_mesh_size;
             std::unique_ptr<char> serialized_mesh = mesh.Serialize(serialized_mesh_size);
@@ -192,6 +127,19 @@ namespace DataPackerGUI
         Log::Terminal::SetTextColor();
 
         return memory;
+    }
+
+    FbxParser::GLOBAL_TRANSFORM_BONE FbxParser::BuildGlobalTransformBone(Model::Bone in_bone, Maths::Matrix4x4 parent_transform)
+    {
+        GLOBAL_TRANSFORM_BONE out_bone;
+        out_bone.id = in_bone.index;
+        out_bone.name = in_bone.name;
+        out_bone.transform = parent_transform * in_bone.transformation;
+
+        for(auto& child : in_bone.children)
+            out_bone.children.push_back(this->BuildGlobalTransformBone(child, out_bone.transform));
+
+        return out_bone;
     }
 
     FbxParser::FBX_NODE FbxParser::GetRootModel(FBX_NODE const& node, std::vector<FBX_NODE> const& models)
@@ -352,11 +300,38 @@ namespace DataPackerGUI
             }
         }
 
-        for(auto& keycompnent : keyframes)
+        std::array<std::vector<Model::KEYFRAME>, 3> final_keyframes;
+        for(int c=0; c<final_keyframes.size(); c++) {
+            int idx = -1;
+            float val;
+            std::chrono::milliseconds time_offset;
+
+            if(!keyframes[c].empty() && keyframes[c][0].time.count() > 0) {
+                time_offset = keyframes[c][0].time;
+            }
+
+            for(int i=0; i<keyframes[c].size(); i++) {
+                if(final_keyframes[c].empty()) {
+                    final_keyframes[c].push_back({keyframes[c][i].time - time_offset, keyframes[c][i].value});
+                    idx = i;
+                    val = keyframes[c][i].value;
+                }else if(keyframes[c][i].value != val){
+                    if(idx != i-1)
+                        final_keyframes[c].push_back({keyframes[c][i-1].time - time_offset, keyframes[c][i-1].value});
+                    final_keyframes[c].push_back({keyframes[c][i].time - time_offset, keyframes[c][i].value});
+                    idx = i;
+                    val = keyframes[c][i].value;
+                }
+            }   
+        }
+
+        // for(auto& keycompnent : keyframes)
+        for(auto& keycompnent : final_keyframes)
             if(keycompnent.size() == 2 && keycompnent[0].value == keycompnent[1].value)
                 keycompnent.resize(1);
 
-        return keyframes;
+        // return keyframes;
+        return final_keyframes;
     }
 
     void FbxParser::ParseAnimationStack(std::vector<FBX_NODE> const& nodes)
@@ -373,6 +348,7 @@ namespace DataPackerGUI
                 for(auto& layer : this->animation_layers) {
                     if(layer.id == child.id) {
                         layer.duration = std::chrono::duration_cast<std::chrono::milliseconds>(animation_time);
+                        // layer.name = node.attribute_name;
 
                         std::cout << "AnimationStack [" << layer.name << "] : ";
                         Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
@@ -390,13 +366,24 @@ namespace DataPackerGUI
         std::vector<FbxParser::FBX_NODE> const animation_layers = this->GetObjectNode("AnimationLayer", nodes);
         std::vector<FbxParser::FBX_NODE> const models = this->GetObjectNode("Model", nodes);
         std::vector<FbxParser::FBX_NODE> const deformers = this->GetObjectNode("Deformer", nodes);
+        std::vector<FbxParser::FBX_NODE> const animation_stack = this->GetObjectNode("AnimationStack", nodes);
 
         for(auto const& node : animation_layers) {
             FBX_ANIMATION_LAYER animation_layer;
             animation_layer.id = node.id;
-            animation_layer.name = node.attribute_name;
 
             if(this->connections.count(node.id)) {
+
+                for(auto& parent : this->connections[node.id].parents) {
+                    for(auto const& stack : animation_stack) {
+                        if(parent.id == stack.id) {
+                            animation_layer.name = stack.attribute_name;
+                            break;
+                        }
+                    }
+                    if(!animation_layer.name.empty()) break;
+                }
+
                 for(auto& child : this->connections[node.id].children) {
                     for(auto& curve_node : this->curve_nodes) {
                         if(curve_node.id == child.id) {
@@ -550,65 +537,100 @@ namespace DataPackerGUI
 
         for(auto deformer : deformer_nodes) {
 
-            // On filtre les Skin
-            if(deformer.attribute_type != "Skin") continue;
+            /*if(deformer.attribute_type == "BlendShape") {
+                int a = 0;
+            }*/
 
-            FBX_SKELETON skeleton;
-            skeleton.id = deformer.id;
-            skeleton.name = deformer.attribute_name;
+            if(deformer.attribute_type == "Skin") {
 
-            for(auto const& parent : this->connections[skeleton.id].parents) {
-                for(auto& geo : geometry_nodes) {
-                    if(geo.id == parent.id) {
-                        skeleton.mesh_name = geo.attribute_name;
-                        break;
-                    }
-                }
-            }
+                FBX_SKELETON skeleton;
+                skeleton.id = deformer.id;
+                skeleton.name = deformer.attribute_name;
 
-            for(auto child : this->connections[skeleton.id].children) {
-                for(auto const& bone_node : deformer_nodes) {
-                    if(bone_node.id == child.id) {
-                        FBX_BONE bone;
-                        bone.id = bone_node.id;
-                        bone.name = bone_node.attribute_name;
-
-                        std::vector<double> matrix = this->ParseFloat64Array(FBX_PROPERTY_DATA(bone_node.children,"TransformLink"));
-                        for(uint32_t i=0; i<matrix.size(); i++) bone.transform_link[i] = static_cast<float>(matrix[i]);
-
-                        matrix = this->ParseFloat64Array(FBX_PROPERTY_DATA(bone_node.children,"Transform"));
-                        for(uint32_t i=0; i<matrix.size(); i++) bone.transform[i] = static_cast<float>(matrix[i]);
-
-                        if(bone_node.children.count("Mode") > 0)
-                            bone.link_mode = DataPacker::Packer::ParseInt32(*this->data, FBX_PROPERTY_DATA(bone_node.children,"Mode").position);
-
-                        if(bone_node.children.count("Indexes") > 0) {
-                            bone.indices = this->ParseInt32Array(FBX_PROPERTY_DATA(bone_node.children,"Indexes"));
-                            bone.weights = this->ParseFloat64Array(FBX_PROPERTY_DATA(bone_node.children,"Weights"));
-                        }
-
-                        bone.bone_id = -1;
-                        for(auto const& model : model_nodes) {
-                            for(auto parent : this->connections[model.id].parents) {
-                                if(bone.id == parent.id) {
-                                    bone.bone_id = model.id;
-                                    break;
+                for(auto const& parent : this->connections[skeleton.id].parents) {
+                    for(auto& geo : geometry_nodes) {
+                        if(geo.id == parent.id) {
+                            if(!geo.attribute_name.empty()) {
+                                skeleton.mesh_name = geo.attribute_name;
+                            }else{
+                                for(auto& geo_parent : this->connections[geo.id].parents) {
+                                    for(auto& model : model_nodes) {
+                                        if(model.id == geo_parent.id) {
+                                            skeleton.mesh_name = model.attribute_name;
+                                            break;
+                                        }
+                                    }
+                                    if(!skeleton.mesh_name.empty()) break;
                                 }
                             }
-                            if(bone.bone_id >= 0) break;
+                            break;
                         }
+                    }
+                    if(!skeleton.mesh_name.empty()) break;
+                }
 
-                        skeleton.bones.push_back(bone);
+                for(auto child : this->connections[skeleton.id].children) {
+                    for(auto const& bone_node : deformer_nodes) {
+                        if(bone_node.id == child.id) {
+                            FBX_BONE bone;
+                            bone.id = bone_node.id;
+                            bone.name = bone_node.attribute_name;
+
+                            std::vector<double> matrix = this->ParseFloat64Array(FBX_PROPERTY_DATA(bone_node.children,"TransformLink"));
+                            for(uint32_t i=0; i<matrix.size(); i++) bone.transform_link[i] = static_cast<float>(matrix[i]);
+
+                            // matrix = this->ParseFloat64Array(FBX_PROPERTY_DATA(bone_node.children,"Transform"));
+                            // for(uint32_t i=0; i<matrix.size(); i++) bone.transform[i] = static_cast<float>(matrix[i]);
+
+                            // matrix = this->ParseFloat64Array(FBX_PROPERTY_DATA(bone_node.children,"TransformAssociateModel"));
+                            // for(uint32_t i=0; i<matrix.size(); i++) bone.transform_associate_model[i] = static_cast<float>(matrix[i]);
+
+                            if(bone_node.children.count("Mode") > 0)
+                                bone.link_mode = DataPacker::Packer::ParseInt32(*this->data, FBX_PROPERTY_DATA(bone_node.children,"Mode").position);
+
+                            if(bone_node.children.count("Indexes") > 0) {
+                                bone.indices = this->ParseInt32Array(FBX_PROPERTY_DATA(bone_node.children,"Indexes"));
+                                bone.weights = this->ParseFloat64Array(FBX_PROPERTY_DATA(bone_node.children,"Weights"));
+                            }
+
+                            bone.bone_id = -1;
+                            for(auto const& model : model_nodes) {
+                                for(auto parent : this->connections[model.id].parents) {
+                                    if(bone.id == parent.id) {
+                                        bone.bone_id = model.id;
+
+                                        // uint32_t ref_id = UINT32_MAX;
+                                        uint32_t bone_id = UINT32_MAX;
+                                        if(this->referenced_bones.count(model.id)) bone_id = this->referenced_bones[model.id];
+                                        // if(this->used_bones.count(ref_id)) bone_id = this->used_bones[ref_id];
+                                        // if(this->unused_bones.count(ref_id)) bone_id = this->unused_bones[ref_id];
+
+                                        for(auto& tree : this->bone_trees) {
+                                            Model::Bone& bone_tree = this->FindBone(bone_id, tree.second);
+                                            if(bone_tree.index != UINT32_MAX) {
+                                                int a = 0;
+                                                break;
+                                            }
+                                        }
+
+                                        break;
+                                    }
+                                }
+                                if(bone.bone_id >= 0) break;
+                            }
+
+                            skeleton.bones.push_back(bone);
+                        }
                     }
                 }
-            }
 
-            if(skeleton.bones.size() > 0) {
-                std::cout << "Squelette[" << skeleton.mesh_name << "] : ";
-                Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
-                std::cout << "OK" << std::endl;
-                Log::Terminal::SetTextColor();
-                this->skeletons.push_back(skeleton);
+                if(skeleton.bones.size() > 0) {
+                    std::cout << "Squelette[" << skeleton.mesh_name << "] : ";
+                    Log::Terminal::SetTextColor(Log::Terminal::TEXT_COLOR::GREEN);
+                    std::cout << "OK" << std::endl;
+                    Log::Terminal::SetTextColor();
+                    this->skeletons.push_back(skeleton);
+                }
             }
         }
     }
@@ -740,6 +762,16 @@ namespace DataPackerGUI
                                 new_bone_id = this->next_used_bone_id;
                                 this->next_used_bone_id++;
                                 this->used_bones[current_bone_id] = new_bone_id;
+                            }
+
+                            if(serialized_mesh.skeleton.empty()) {
+                                for(auto& bone : this->bone_trees) {
+                                    auto& found = this->FindBone(current_bone_id, bone.second);
+                                    if(found.index != UINT32_MAX) {
+                                        serialized_mesh.skeleton = bone.second.name;
+                                        break;
+                                    }
+                                }
                             }
 
                             serialized_mesh.deformers[cluster.indices[i]].AddBone(static_cast<uint32_t>(new_bone_id), static_cast<float>(cluster.weights[i]));
@@ -981,6 +1013,9 @@ namespace DataPackerGUI
                 if(mesh_geometry.model.id >= 0) break;
             }
             if(mesh_geometry.model.id < 0) return;
+
+            if(mesh_geometry.name.empty())
+                mesh_geometry.name = mesh_geometry.model.attribute_name;
 
             for(auto parent : this->connections[mesh_geometry.model.id].parents) {
                 for(FBX_NODE const& model : models) {
@@ -1280,12 +1315,12 @@ namespace DataPackerGUI
 
         if(properties70.count("Lcl_Rotation") > 0) {
             Maths::Vector3 vector(this->ParseVector(properties70["Lcl_Rotation"]));
-            lPreRotationM = Maths::Matrix4x4::EulerRotation(lPreRotationM, vector.ToRadians(), euler_order);
+            lRotationM = Maths::Matrix4x4::EulerRotation(lRotationM, vector.ToRadians(), euler_order);
         }
 
         if(properties70.count("PostRotation") > 0) {
             Maths::Vector3 vector(this->ParseVector(properties70["PostRotation"]));
-            lPreRotationM = Maths::Matrix4x4::EulerRotation(lPreRotationM, vector.ToRadians(), euler_order);
+            lPostRotationM = Maths::Matrix4x4::EulerRotation(lPostRotationM, vector.ToRadians(), euler_order);
         }
 
         if(properties70.count("Lcl_Scaling") > 0) {

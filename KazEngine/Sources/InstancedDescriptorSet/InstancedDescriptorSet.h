@@ -24,7 +24,7 @@ namespace Engine
             void Clear();
             static VkDescriptorSetLayoutBinding CreateSimpleBinding(uint32_t binding, VkDescriptorType type, VkShaderStageFlags stage_flags);
             bool Create(std::vector<BINDING_INFOS> infos);
-            VkDescriptorSet Get(uint32_t instance_id = 0) const { return this->sets[instance_id]; }
+            VkDescriptorSet Get(uint32_t instance_id) const { return this->sets[instance_id]; }
             const VkDescriptorSetLayout GetLayout() const { return this->layout; }
             const std::shared_ptr<Chunk> GetChunk(uint8_t binding = 0) const { return this->bindings[binding].chunk; }
             std::shared_ptr<Chunk> ReserveRange(size_t size, uint8_t binding = 0);

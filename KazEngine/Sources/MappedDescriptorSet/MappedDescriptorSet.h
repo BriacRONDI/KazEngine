@@ -16,6 +16,9 @@ namespace Engine
                 VkDescriptorType type;
                 VkShaderStageFlags stage;
                 VkDeviceSize size;
+
+                BINDING_INFOS() : type(VK_DESCRIPTOR_TYPE_MAX_ENUM), stage(VK_SHADER_STAGE_ALL), size(0) {}
+                BINDING_INFOS(VkDescriptorType type, VkShaderStageFlags stage, VkDeviceSize size = 0) : type(type), stage(stage), size(size) {}
             };
             
             MappedDescriptorSet();
@@ -47,5 +50,7 @@ namespace Engine
             VkDescriptorSet set;
             std::vector<VkDescriptorSetLayoutBinding> layout_bindings;
             std::vector<DESCRIPTOR_SET_BINDING> bindings;
+
+            size_t GetBindingAlignment(uint8_t binding);
     };
 }

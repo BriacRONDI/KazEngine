@@ -18,11 +18,12 @@ namespace Engine
         this->count.clear();
     }
 
-    bool ComputeShader::Load(std::string path, std::vector<VkDescriptorSetLayout> descriptor_set_layouts)
+    bool ComputeShader::Load(std::string path, std::vector<VkDescriptorSetLayout> descriptor_set_layouts, std::vector<VkPushConstantRange> push_constant_ranges)
     {
         this->refresh.resize(Vulkan::GetSwapChainImageCount(), true);
         this->command_buffers.resize(Vulkan::GetSwapChainImageCount());
         this->count.resize(Vulkan::GetSwapChainImageCount());
+        this->push_constant_ranges = push_constant_ranges;
 
         if(!vk::CreateCommandPool(this->command_pool, Vulkan::GetComputeQueue().index)) {
             this->Clear();
@@ -37,7 +38,7 @@ namespace Engine
         }
 
         auto compute_shader_stage = vk::LoadShaderModule(path, VK_SHADER_STAGE_COMPUTE_BIT);
-        bool success = vk::CreateComputePipeline(compute_shader_stage, descriptor_set_layouts, {}, pipeline);
+        bool success = vk::CreateComputePipeline(compute_shader_stage, descriptor_set_layouts, push_constant_ranges, pipeline);
 
         vk::Destroy(compute_shader_stage);
 
@@ -53,7 +54,7 @@ namespace Engine
         return true;
     }
 
-    VkCommandBuffer ComputeShader::BuildCommandBuffer(uint8_t frame_index, std::vector<VkDescriptorSet> descriptor_sets, std::array<uint32_t, 3> count)
+    VkCommandBuffer ComputeShader::BuildCommandBuffer(uint8_t frame_index, std::vector<VkDescriptorSet> descriptor_sets, std::array<uint32_t, 3> count, std::vector<const void*> push_constants)
     {
         VkCommandBuffer command_buffer = this->command_buffers[frame_index];
 
@@ -77,6 +78,13 @@ namespace Engine
         }
 
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->pipeline.handle);
+
+        for(uint8_t i=0; i<this->push_constant_ranges.size(); i++) {
+            vkCmdPushConstants(
+                command_buffer, this->pipeline.layout, VK_SHADER_STAGE_COMPUTE_BIT,
+                this->push_constant_ranges[i].offset, this->push_constant_ranges[i].size,
+                push_constants[i]);
+        }
 
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, this->pipeline.layout, 0,
                                 static_cast<uint32_t>(descriptor_sets.size()), descriptor_sets.data(), 0, nullptr);

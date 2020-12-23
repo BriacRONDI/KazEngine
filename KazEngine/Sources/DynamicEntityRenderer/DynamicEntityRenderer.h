@@ -7,6 +7,7 @@
 #include "../DynamicEntity/DynamicEntity.h"
 #include "../InstancedDescriptorSet/IInstancedDescriptorListener.h"
 #include "../MappedDescriptorSet/IMappedDescriptorListener.h"
+#include "../Map/Map.h"
 
 namespace Engine
 {
@@ -30,12 +31,18 @@ namespace Engine
 
         private :
 
+            struct COLLISION_GRID {
+                uint32_t width;
+                uint32_t height;
+                uint32_t depth;
+            };
+
             VkCommandPool command_pool;
             std::vector<bool> refresh;
             std::vector<VkCommandBuffer> command_buffers;
             vk::PIPELINE pipeline;
             uint32_t lod_count;
-
+            COLLISION_GRID collision_grid;
             std::vector<DynamicEntity*> entities;
 
             DynamicEntityRenderer();

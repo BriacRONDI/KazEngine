@@ -6,10 +6,39 @@ layout (set=0, binding=0, std140) buffer Entity
 	mat4 model[];
 };
 
+struct FRAME
+{
+	int animation_id;
+	uint frame_id;
+};
+
+layout (set=0, binding=1, std430) writeonly buffer EntityFrame
+{
+	FRAME frame[];
+};
+
+struct ANIMATION
+{
+	uint frame_count;
+	uint loop;
+	uint play;
+	uint duration;
+	uint start;
+	float speed;
+};
+
+layout (set=0, binding=2, std430) writeonly buffer EntityAnimation
+{
+	ANIMATION animation[];
+};
+
 struct MOVEMENT_DATA {
 	vec2 destination;
 	int moving;
 	float radius;
+	int grid_position[4];
+	int skeleton_id;
+	int padding[3];
 };
 
 layout (set=0, binding=3) buffer EntityMovement
@@ -26,7 +55,7 @@ struct MOVEMENT_GROUP {
 	vec2 destination;
 	int scale;
 	float unit_radius;
-	uint unit_count;
+	int unit_count;
 	uint fill_count;
 	uint inside_count;
 	uint padding;
@@ -43,10 +72,65 @@ layout (set=2, binding=0) readonly uniform GlobalTime
 	float delta;
 }time;
 
+struct BAKED_ANIMATION {
+	int id;
+	uint frame_count;
+	uint duration_ms;
+	uint padding;
+};
+			
+struct TRIGGERED_ANIMATIONS {
+	BAKED_ANIMATION idle;
+	BAKED_ANIMATION move;
+	BAKED_ANIMATION attack;
+};
+
+layout (set=3, binding=4) buffer SkeletonAnimations
+{
+	TRIGGERED_ANIMATIONS skeleton[];
+};
+
+void Move(uint entity_id)
+{
+	animation[entity_id].frame_count = skeleton[0].move.frame_count;
+	animation[entity_id].duration = skeleton[0].move.duration_ms;
+	animation[entity_id].loop = 1;
+	animation[entity_id].play = 1;
+	animation[entity_id].start = time.now;
+	animation[entity_id].speed = 2.0;
+	frame[entity_id].frame_id = 0;
+	frame[entity_id].animation_id = skeleton[0].move.id;
+}
+
+void StopMoving(uint entity_id)
+{
+	animation[entity_id].frame_count = skeleton[0].idle.frame_count;
+	animation[entity_id].duration = skeleton[0].idle.duration_ms;
+	animation[entity_id].loop = 1;
+	animation[entity_id].play = 1;
+	animation[entity_id].start = time.now;
+	animation[entity_id].speed = 1.0;
+	frame[entity_id].frame_id = 0;
+	frame[entity_id].animation_id = skeleton[0].idle.id;
+}
+
 void main()
 {
 	uint entity_id = gl_GlobalInvocationID.x;
 	uint group_id = gl_GlobalInvocationID.y;
+	
+	if(entity_id == 0 && group[group_id].unit_count > 0) {
+		if(group[group_id].fill_count >= group[group_id].unit_count) {
+			atomicExchange(group[group_id].unit_count, 0);
+		}else{
+			uint max_count = 1;
+			for(int i=1; i<group[group_id].scale; i++) max_count += i * 6;
+			if(group[group_id].inside_count >= max_count) atomicAdd(group[group_id].scale, 1);
+		}
+
+		atomicExchange(group[group_id].fill_count, 0);
+		atomicExchange(group[group_id].inside_count, 0);
+	}
 	
 	float move_speed = 10.0;
 	int gid = movement[entity_id].moving;
@@ -56,6 +140,7 @@ void main()
 	
 		if(group[gid].unit_count == 0) {
 			movement[entity_id].moving = -1;
+			StopMoving(entity_id);
 			
 		}else{
 		
@@ -63,8 +148,9 @@ void main()
 			
 				if(model[entity_id][3].xz == movement[entity_id].destination) {
 					if(group[gid].unit_count == 1) {
-						movement[entity_id].moving = -1;
+						atomicExchange(movement[entity_id].moving, -1);
 						atomicExchange(group[gid].unit_count, 0);
+						StopMoving(entity_id);
 					}
 				}else{
 			
@@ -73,8 +159,9 @@ void main()
 					
 					if(length(unit_movement) >= length(direction)) {
 						if(group[gid].unit_count == 1) {
-							movement[entity_id].moving = -1;
+							atomicExchange(movement[entity_id].moving, -1);
 							atomicExchange(group[gid].unit_count, 0);
+							StopMoving(entity_id);
 						}
 						model[entity_id][3].xz = movement[entity_id].destination;
 					}else{
@@ -87,23 +174,27 @@ void main()
 				float group_radius = (2 * group[gid].scale - 1) * group[gid].unit_radius;
 				vec2 segment = model[entity_id][3].xz - group[gid].destination;
 				float distance_to_center = length(segment);
-				if((distance_to_center - movement[entity_id].radius) <= group_radius) atomicAdd(group[gid].fill_count, 1);
-				
-				if(group[gid].fill_count >= group[gid].unit_count) {
-					movement[entity_id].moving = -1;
-					atomicExchange(group[gid].unit_count, 0);
-				}else{
-					if((distance_to_center + movement[entity_id].radius) > group_radius) movement[entity_id].moving = gid;
-					else movement[entity_id].moving = -gid - 2;
+				if((distance_to_center + movement[entity_id].radius) <= group_radius) {
+					atomicAdd(group[gid].fill_count, 1);
+				}
+
+				if((distance_to_center + movement[entity_id].radius) > group_radius) {
+					if(movement[entity_id].moving < 0) {
+						atomicExchange(movement[entity_id].moving, gid); //movement[entity_id].moving = gid;
+						Move(entity_id);
+					}
+				} else {
+					atomicExchange(movement[entity_id].moving, -gid - 2); //movement[entity_id].moving = -gid - 2;
+					StopMoving(entity_id);
 				}
 			}
 		}
 	}
 	
-	if(group[group_id].unit_count > 1) {
+	if(group[group_id].unit_count > 1 && movement[entity_id].moving != -1) {
 		float group_radius = (2 * group[group_id].scale - 1) * group[group_id].unit_radius;
 		vec2 segment = model[entity_id][3].xz - group[group_id].destination;
-		float distance_to_center = length(segment) - movement[entity_id].radius;
-		if(distance_to_center <= group_radius) atomicAdd(group[group_id].inside_count, 1);
+		float distance_to_center = length(segment);
+		if((distance_to_center - movement[entity_id].radius) <= group_radius) atomicAdd(group[group_id].inside_count, 1);
 	}
 }

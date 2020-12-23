@@ -14,6 +14,7 @@ CALL :COMPILE cull_lod.comp
 CALL :COMPILE cull_lod_anim.comp
 CALL :COMPILE move_collision.comp
 CALL :COMPILE move_groups.comp
+CALL :COMPILE init_group.comp
 pause
 
 :COMPILE

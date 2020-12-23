@@ -10,6 +10,9 @@ struct MOVEMENT_DATA {
 	vec2 destination;
 	int moving;
 	float radius;
+	int grid_position[4];
+	int skeleton_id;
+	int padding[3];
 };
 
 layout (set=0, binding=3) buffer EntityMovement
@@ -17,62 +20,64 @@ layout (set=0, binding=3) buffer EntityMovement
 	MOVEMENT_DATA movement[];
 };
 
-// layout (set=1, binding=0) uniform GroupCount
-// {
-	// uint movement_group_count;
-// };
-
-// struct MOVEMENT_GROUP {
-	// vec2 destination;
-	// int scale;
-	// float unit_radius;
-	// uint unit_count;
-	// uint fill_count;
-	// uint inside_count;
-	// uint padding;
-// };
-
-// layout (set=1, binding=1) buffer GroupData
-// {
-	// MOVEMENT_GROUP group[];
-// };
-
 layout (set=1, binding=0) readonly uniform GlobalTime
 {
 	uint now;
 	float delta;
 }time;
 
+layout (set=2, binding=0) readonly uniform GridMeta
+{
+	uint width;
+	uint height;
+	uint depth;
+	float size;
+}grid_meta;
+
+layout (set=2, binding=1) buffer GridData
+{
+	int grid[];
+};
+
 float rand(float n){return fract(sin(n) * 43758.5453123);}
+
+void ResolveCollision(uint id1, uint id2)
+{
+	if(model[id1][3].xz == model[id2][3].xz) {
+		float angle = rand(time.delta) * 6.2831852;
+		vec2 random_dir = vec2(cos(angle), sin(angle));
+		vec2 direction = normalize(random_dir) * time.delta;
+		
+		model[id1][3].xz += direction;
+		model[id2][3].xz -= direction;
+		
+	}else{
+		vec2 segment = model[id1][3].xz - model[id2][3].xz;
+		float seg_length = length(segment);
+		float radius_sum = movement[id1].radius + movement[id2].radius;
+
+		if(seg_length < radius_sum) {
+			
+			float collision = seg_length - radius_sum;
+			float max_mov = collision / -2.0;
+			float min_mov = 0.001f;
+			vec2 move = max(min_mov, max_mov) * normalize(segment);
+			model[id1][3].xz += move;
+			model[id2][3].xz -= move;
+		}
+	}
+}
 
 void main()
 {
-	uint i = gl_GlobalInvocationID.x;
-	uint j = gl_GlobalInvocationID.y;
+	uint idx = gl_GlobalInvocationID.x;
 	
-	if(j > i) {
-		if(model[i][3].xz == model[j][3].xz) {
-			float angle = rand(time.delta * 3.14);
-			vec2 random_dir = vec2(cos(angle), sin(angle));
-			vec2 direction = normalize(random_dir);
-			
-			model[i][3].xz += direction * time.delta;
-			model[j][3].xz -= direction * time.delta;
-			
-		}else{
-			vec2 segment = model[i][3].xz - model[j][3].xz;
-			float seg_length = length(segment);
-			float radius_sum = movement[i].radius + movement[j].radius;
-
-			if(seg_length < radius_sum) {
-				
-				float collision = seg_length - radius_sum;
-				float max_mov = collision / -2.0;
-				float min_mov = 0.001f;
-				vec2 move = max(min_mov, max_mov) * normalize(segment);
-				model[i][3].xz += move;
-				model[j][3].xz -= move;
-			}
+	for(int i=0; i<4; i++) {
+		int grid_square = int(grid_meta.depth * floor(movement[idx].grid_position[i] / grid_meta.depth));
+		for(int j=0; j<grid_meta.depth; j++) {
+			int grid_id = grid_square + j;
+			if(grid[grid_id] < 0) break;
+			if(grid[grid_id] > idx) ResolveCollision(idx, uint(grid[grid_id]));
 		}
 	}
 }

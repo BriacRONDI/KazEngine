@@ -204,6 +204,12 @@ namespace Model
         return output;
     }
 
+    void Mesh::MirrorY()
+    {
+        for(auto& vertex : this->vertex_buffer)
+            vertex.y = -vertex.y;
+    }
+
     /**
      * Désérialization
      */

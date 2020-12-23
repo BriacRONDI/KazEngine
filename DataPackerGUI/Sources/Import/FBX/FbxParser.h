@@ -120,6 +120,7 @@ namespace DataPackerGUI
                 std::string name;
                 Maths::Matrix4x4 transform_link;
                 Maths::Matrix4x4 transform;
+                Maths::Matrix4x4 transform_associate_model;
                 Maths::Matrix4x4 deformation;
                 uint32_t link_mode;
                 std::vector<double> weights;
@@ -210,6 +211,19 @@ namespace DataPackerGUI
                 CONNECTION_TREE() : CONNECTION_TREE(-1) {}
                 CONNECTION_TREE(int64_t id) : id(id) {}
             };
+
+            ///////////
+            // DEBUG //
+            ///////////
+
+            struct GLOBAL_TRANSFORM_BONE {
+                std::string name;
+                uint32_t id;
+                Maths::Matrix4x4 transform;
+                std::vector<GLOBAL_TRANSFORM_BONE> children;
+            };
+
+            GLOBAL_TRANSFORM_BONE BuildGlobalTransformBone(Model::Bone in_bone, Maths::Matrix4x4 parent_transform = IDENTITY_MATRIX);
 
             /////////////
             // Membres //

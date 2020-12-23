@@ -819,6 +819,11 @@ namespace Engine { namespace vk
                         offset += sizeof(uint32_t);
                         break;
 
+                    case VERTEX_BINDING_ATTRIBUTE::INT_ID :
+                        attribute.format = VK_FORMAT_R32_SINT;
+                        offset += sizeof(int32_t);
+                        break;
+
                     default :
                         attribute.format = VK_FORMAT_UNDEFINED;
                 }

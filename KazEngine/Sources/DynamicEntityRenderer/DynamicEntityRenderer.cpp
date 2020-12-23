@@ -5,6 +5,7 @@ namespace Engine
     DynamicEntityRenderer::DynamicEntityRenderer()
     {
         this->lod_count = 0;
+        this->collision_grid = {};
         this->refresh.resize(Vulkan::GetSwapChainImageCount(), true);
         this->command_buffers.resize(Vulkan::GetSwapChainImageCount());
 
@@ -22,7 +23,7 @@ namespace Engine
         std::vector<VkVertexInputAttributeDescription> vertex_attribute_description = vk::CreateVertexInputDescription({
             {vk::POSITION, vk::UV, vk::BONE_WEIGHTS, vk::BONE_IDS},
             {vk::MATRIX},
-            {vk::UINT_ID, vk::UINT_ID}
+            {vk::INT_ID, vk::UINT_ID}
         }, vertex_binding_description);
 
         bool success = vk::CreateGraphicsPipeline(
@@ -30,7 +31,8 @@ namespace Engine
             {
                 GlobalData::GetInstance()->texture_descriptor.GetLayout(),
                 GlobalData::GetInstance()->camera_descriptor.GetLayout(),
-                GlobalData::GetInstance()->skeleton_descriptor.GetLayout()
+                GlobalData::GetInstance()->skeleton_descriptor.GetLayout(),
+                GlobalData::GetInstance()->debug_descriptor.GetLayout()
             },
             shader_stages, vertex_binding_description, vertex_attribute_description, {}, this->pipeline
         );
@@ -122,7 +124,8 @@ namespace Engine
         std::vector<VkDescriptorSet> bind_descriptor_sets = {
             GlobalData::GetInstance()->texture_descriptor.Get(),
             GlobalData::GetInstance()->camera_descriptor.Get(frame_index),
-            GlobalData::GetInstance()->skeleton_descriptor.Get(frame_index)
+            GlobalData::GetInstance()->skeleton_descriptor.Get(frame_index),
+            GlobalData::GetInstance()->debug_descriptor.Get()
         };
 
         vkCmdBindDescriptorSets(

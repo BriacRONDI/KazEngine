@@ -79,20 +79,9 @@ namespace Engine
             this->bindings[i].layout.descriptorCount = 1;
             this->bindings[i].layout.pImmutableSamplers = nullptr;
 
-            VkDeviceSize alignment = 0;
-            switch(this->bindings[i].layout.descriptorType) {
-                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER :
-                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC :
-                    alignment = Vulkan::UboAlignment();
-                    break;
-
-                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
-                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC :
-                    alignment = Vulkan::SboAlignment();
-                    break;
-            }
-
-            this->bindings[i].chunk = GlobalData::GetInstance()->mapped_buffer.GetChunk()->ReserveRange(infos[i].size, alignment);
+            size_t alignment = this->GetBindingAlignment(i);
+            if(infos[i].size > 0)
+                this->bindings[i].chunk = GlobalData::GetInstance()->mapped_buffer.GetChunk()->ReserveRange(infos[i].size, alignment);
             layout_bindings.push_back(this->bindings[i].layout);
         }
 
@@ -169,6 +158,8 @@ namespace Engine
 
         for(uint8_t i=0; i<bindings.size(); i++) {
 
+            if(this->bindings[i].chunk == nullptr) continue;
+
             VkWriteDescriptorSet write;
             write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             write.pNext = nullptr;
@@ -180,11 +171,9 @@ namespace Engine
             write.pImageInfo = nullptr;
 
             buffer_infos[i] = GlobalData::GetInstance()->mapped_buffer.GetBufferInfos(this->bindings[i].chunk);
-            if(buffer_infos[i].range > 0) {
-                write.dstSet = this->set;
-                write.pBufferInfo = &buffer_infos[i];
-                writes.push_back(write);
-            }
+            write.dstSet = this->set;
+            write.pBufferInfo = &buffer_infos[i];
+            writes.push_back(write);
         }
         
         vkUpdateDescriptorSets(Vulkan::GetDevice(), static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
@@ -194,22 +183,21 @@ namespace Engine
 
     std::shared_ptr<Chunk> MappedDescriptorSet::ReserveRange(size_t size, uint8_t binding)
     {
+        if(this->bindings[binding].chunk == nullptr) {
+            size_t alignment = this->GetBindingAlignment(binding);
+            this->bindings[binding].chunk = GlobalData::GetInstance()->mapped_buffer.GetChunk()->ReserveRange(size, alignment);
+            if(this->bindings[binding].chunk != nullptr) {
+                std::shared_ptr<Chunk> chunk = this->bindings[binding].chunk->ReserveRange(size);
+                for(auto listener : this->Listeners) listener->MappedDescriptorSetUpdated(this, binding);
+                return chunk;
+            }else{
+                return nullptr;
+            }
+        }
+
         std::shared_ptr<Chunk> chunk = this->bindings[binding].chunk->ReserveRange(size);
 
         if(chunk == nullptr) {
-
-            VkDeviceSize binding_alignment = 0;
-            switch(this->bindings[binding].layout.descriptorType) {
-                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER :
-                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC :
-                    binding_alignment = Vulkan::UboAlignment();
-                    break;
-
-                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
-                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC :
-                    binding_alignment = Vulkan::SboAlignment();
-                    break;
-            }
 
             bool relocated;
             size_t old_offset = this->bindings[binding].chunk->offset;
@@ -217,7 +205,7 @@ namespace Engine
             if(GlobalData::GetInstance()->mapped_buffer.GetChunk()->ResizeChild(
                 this->bindings[binding].chunk,
                 this->bindings[binding].chunk->range + size,
-                relocated, binding_alignment))
+                relocated, this->GetBindingAlignment(binding)))
             {
                 if(relocated) GlobalData::GetInstance()->mapped_buffer.MoveData(old_offset, this->bindings[binding].chunk->offset, old_size);
                 chunk = this->bindings[binding].chunk->ReserveRange(size);
@@ -247,5 +235,21 @@ namespace Engine
         write.pBufferInfo = &buffer_infos;
 
         vkUpdateDescriptorSets(Vulkan::GetDevice(), 1, &write, 0, nullptr);
+    }
+
+    size_t MappedDescriptorSet::GetBindingAlignment(uint8_t binding)
+    {
+        switch(this->bindings[binding].layout.descriptorType) {
+            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER :
+            case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC :
+                return Vulkan::UboAlignment();
+
+            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
+            case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC :
+                return Vulkan::SboAlignment();
+
+            default :
+                return 0;
+        }
     }
 }

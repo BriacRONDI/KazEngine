@@ -9,7 +9,7 @@ layout (location = 3)  in ivec4 inBoneIDs;
 
 layout (location = 4)  in mat4 model;
 
-layout (location = 8)  in uint animation_id;
+layout (location = 8)  in int animation_id;
 layout (location = 9)  in uint frame_id;
 
 layout (set=1, binding=0) uniform Camera
@@ -39,6 +39,12 @@ layout (set=2, binding=3) buffer Animations
 	uint first_frame_id[];
 } animations;
 
+layout (set=3, binding=0) uniform Debug
+{
+	uint bone_depth;
+	int move_item;
+} debug;
+
 layout (location = 0) out vec2 outUV;
 
 vec3 MatrixMultT(mat4 matrix, vec3 vertex)
@@ -59,11 +65,21 @@ void main()
 
 	outUV = inUV;
 
-	for(int i=0; i<MAX_BONE_PER_VERTEX; i++) {
-		if(inBoneWeights[i] == 0) break;
-		boneTransform += skeleton.bones[animations.bone_count * frame_id + inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
-		total_weight += inBoneWeights[i];
-		has_bone = true;
+	if(animation_id >= 0) {
+		for(int i=0; i<MAX_BONE_PER_VERTEX; i++) {
+			if(inBoneWeights[i] == 0) break;
+			
+			if(debug.move_item >= 0 && inBoneIDs[i] == uint(debug.move_item)) {
+				boneTransform += skeleton.bones[animations.first_frame_id[animation_id] + animations.bone_count * frame_id + inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
+				total_weight += inBoneWeights[i];
+				has_bone = true;
+			}else if(inBoneIDs[i] < debug.bone_depth) {
+			
+				boneTransform += skeleton.bones[animations.first_frame_id[animation_id] + animations.bone_count * frame_id + inBoneIDs[i]] * offsets[offset_ids[inBoneIDs[i]]] * inBoneWeights[i];
+				total_weight += inBoneWeights[i];
+				has_bone = true;
+			}
+		}
 	}
 	
 	if(!has_bone) {

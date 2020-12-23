@@ -17,11 +17,11 @@ layout (set=1, binding=0, std140) readonly buffer Entity
 
 struct FRAME
 {
-	uint animation_id;
+	int animation_id;
 	uint frame_id;
 };
 
-layout (set=1, binding=1, std430) writeonly buffer Frame
+layout (set=1, binding=1, std430) writeonly buffer EntityFrame
 {
 	FRAME frames[];
 };
@@ -36,11 +36,24 @@ struct ANIMATION
 	float speed;
 };
 
-layout (set=1, binding=2, std430) readonly buffer Animation
+layout (set=1, binding=2, std430) readonly buffer EntityAnimation
 {
 	ANIMATION animations[];
 };
 
+struct MOVEMENT_DATA {
+	vec2 destination;
+	int moving;
+	float radius;
+	int grid_position[4];
+	int skeleton_id;
+	int padding[3];
+};
+
+layout (set=1, binding=3) buffer EntityMovement
+{
+	MOVEMENT_DATA movement[];
+};
 
 struct INDIRECT_COMMAND 
 {
@@ -80,6 +93,19 @@ layout (set=4, binding=0) readonly uniform GlobalTime
 	float delta;
 }time;
 
+layout (set=5, binding=0) readonly uniform GridMeta
+{
+	uint width;
+	uint height;
+	uint depth;
+	float size;
+}grid_meta;
+
+layout (set=5, binding=1) buffer GridData
+{
+	int grid[];
+};
+
 bool InsideFrustum(vec4 pos, float radius)
 {
 	for(int i=0; i<6; i++)
@@ -91,8 +117,7 @@ void main()
 {
 	uint idx = gl_GlobalInvocationID.x;
 	
-	vec4 entity_positon = model[idx][3];
-	if(!InsideFrustum(entity_positon, 2.0)) {
+	if(!InsideFrustum(model[idx][3], 2.0)) {
 		indirect_draws[idx].instanceCount = 0;
 	} else {
 		indirect_draws[idx].instanceCount = 1;
@@ -107,7 +132,7 @@ void main()
 			}else{
 			
 				// TODO : Play animation once
-				frames[idx].frame_id = 0;
+				// frames[idx].frame_id = 0;
 			}
 		}else{
 		
@@ -115,7 +140,7 @@ void main()
 		}
 		
 		LOD selected_lod = lod[indirect_draws[idx].lodIndex].stack[0];
-		float distance_to_camera = distance(camera.position.xyz, entity_positon.xyz);
+		float distance_to_camera = distance(camera.position.xyz, model[idx][3].xyz);
 		for(int i=1; i<max_lod_count; i++) {
 			LOD current_lod = lod[indirect_draws[idx].lodIndex].stack[i];
 			if(current_lod.valid == 0) break;
@@ -124,5 +149,33 @@ void main()
 		
 		indirect_draws[idx].firstVertex = selected_lod.first_vertex;
 		indirect_draws[idx].indexCount = selected_lod.vertex_count;
+	}
+	
+	for(int i=0; i<4; i++) {
+		int grid_id = movement[idx].grid_position[i];
+		if(grid_id >= 0) {
+			grid[grid_id] = -1;
+			movement[idx].grid_position[i] = -1;
+		}
+	}
+	
+	uint half_width = grid_meta.width / 2;
+	ivec2 grid_min = ivec2(floor(model[idx][3].x - movement[idx].radius) + half_width, floor(model[idx][3].z - movement[idx].radius) + half_width);
+	ivec2 grid_max = ivec2(floor(model[idx][3].x + movement[idx].radius) + half_width, floor(model[idx][3].z + movement[idx].radius) + half_width);
+	
+	int grid_record = 0;
+	for(uint y = grid_min.y; y <= grid_max.y; y++) {
+		for(uint x = grid_min.x; x <= grid_max.x; x++) {
+			uint grid_square = (y * grid_meta.width + x) * grid_meta.depth;
+			for(uint z=0; z<grid_meta.depth; z++) {
+				int grid_id = int(grid_square + z);
+				if(grid[grid_id] < 0) {
+					grid[grid_id] = int(idx);
+					movement[idx].grid_position[grid_record] = grid_id;
+					grid_record++;
+					break;
+				}
+			}
+		}
 	}
 }

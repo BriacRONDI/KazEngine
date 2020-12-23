@@ -56,7 +56,8 @@ namespace Engine { namespace vk
         BONE_IDS        = 5,
         POSITION_2D     = 6,
         MATRIX          = 7,
-        UINT_ID         = 8
+        UINT_ID         = 8,
+        INT_ID          = 9
     };
 
     IMAGE_BUFFER CreateImageBuffer(VkImageUsageFlags usage, VkImageAspectFlags aspect, uint32_t width, uint32_t height, VkFormat format = VK_FORMAT_R8G8B8A8_UNORM);

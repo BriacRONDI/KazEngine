@@ -6,7 +6,6 @@
 #include "../MappedDescriptorSet/IMappedDescriptorListener.h"
 #include "../GlobalData/GlobalData.h"
 #include "../Platform/Common/Timer/Timer.h"
-// #include "../MovementControler/MovementControler.h"
 
 namespace Engine
 {
@@ -15,7 +14,7 @@ namespace Engine
         public :
 
             struct FRAME_DATA {
-                uint32_t animation_id;
+                int32_t animation_id;
                 uint32_t frame_id;
                 FRAME_DATA() : animation_id(0), frame_id(0) {}
             };
@@ -30,10 +29,15 @@ namespace Engine
                 ANIMATION_DATA() : frame_count(0), loop(0), play(0), duration(0), start(0), speed(0.0f) {}
             };
 
-            struct MOVEMENT_DATA {
-                Maths::Vector2 destination;
-                int moving;
-                float radius;
+            class MOVEMENT_DATA {
+                public :
+                    Maths::Vector2 destination;
+                    int32_t moving;
+                    float radius;
+                    std::array<int32_t, 4> grid_position;
+                    int32_t skeleton_id;
+                private :
+	                std::array<int32_t, 3> padding = {};
             };
 
             bool selected;
@@ -43,6 +47,7 @@ namespace Engine
             std::vector<LODGroup*> const GetModels() { return this->models; }
             uint32_t InstanceId() const { return this->instance_id; }
             void PlayAnimation(std::string animation, float speed, bool loop);
+            void StopAnimation();
             bool InSelectBox(Maths::Plane left_plane, Maths::Plane right_plane, Maths::Plane top_plane, Maths::Plane bottom_plane);
             bool IntersectRay(Maths::Vector3 const& ray_origin, Maths::Vector3 const& ray_direction);
 

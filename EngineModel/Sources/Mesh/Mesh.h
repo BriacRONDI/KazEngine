@@ -29,6 +29,7 @@ namespace Model
             std::unique_ptr<char> BuildVBO(size_t& output_size, size_t& index_buffer_offset);
             std::unique_ptr<char> Serialize(uint32_t& output_size);
             size_t Deserialize(const char* data);
+            void MirrorY();
             ~Mesh();
 
         protected :

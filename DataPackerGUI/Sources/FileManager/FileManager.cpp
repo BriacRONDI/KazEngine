@@ -281,7 +281,8 @@ namespace DataPackerGUI
 
             // Check file extension
             std::wstring lower_path = path;
-            std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(), std::tolower);
+            std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(), [](wchar_t c){ return std::tolower(c); });
+
             size_t ext_pos = lower_path.find_last_of('.');
             if(ext_pos != std::wstring::npos) {
                 std::wstring extension = lower_path.substr(ext_pos + 1, lower_path.size() - ext_pos - 1);
@@ -337,7 +338,9 @@ namespace DataPackerGUI
             }
         }
 
+        #if defined(NDEBUG)
         Log::Terminal::Close();
+        #endif
 
         // Refresh treeview control and title
         this->RefreshTreeView();

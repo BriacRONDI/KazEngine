@@ -16,6 +16,7 @@ namespace Engine
 
     bool Map::Initialize()
     {
+        this->size = {2000, 2000};
         this->refresh.resize(Vulkan::GetSwapChainImageCount(), true);
         this->command_buffers.resize(Vulkan::GetSwapChainImageCount());
 
@@ -42,12 +43,29 @@ namespace Engine
             return false;
         }
 
+        GlobalData::GRID_METADATA grid_meta;
+        grid_meta.width = 2000;
+        grid_meta.height = 2000;
+        grid_meta.depth = 4;
+        grid_meta.size = 1.0f;
+
+        GlobalData::GetInstance()->grid_descriptor.WriteData(&grid_meta, sizeof(GlobalData::GRID_METADATA), 0, GRID_META_BINDING);
+        GlobalData::GetInstance()->grid_descriptor.ReserveRange(this->size.Width * this->size.Height * sizeof(int32_t) * 4, GRID_DATA_BINDING);
+        int32_t* grid = reinterpret_cast<int32_t*>(GlobalData::GetInstance()->grid_descriptor.AccessData(0, GRID_DATA_BINDING));
+        std::memset(grid, -1, this->size.Width * this->size.Height * sizeof(int32_t) * 4);
+
         GlobalData::GetInstance()->dynamic_entity_descriptor.AddListener(this);
         GlobalData::GetInstance()->selection_descriptor.AddListener(this);
         GlobalData::GetInstance()->group_descriptor.AddListener(this);
 
         return true;
     }
+
+    /*void Map::ResetGrid()
+    {
+        int32_t* grid = reinterpret_cast<int32_t*>(GlobalData::GetInstance()->grid_descriptor.AccessData(0, GRID_DATA_BINDING));
+        std::memset(grid, -1, this->size.Width * this->size.Height * sizeof(int32_t) * 4);
+    }*/
 
     bool Map::SetupPipeline()
     {
@@ -154,7 +172,7 @@ namespace Engine
         std::vector<VkDescriptorSet> bind_descriptor_sets = {
             GlobalData::GetInstance()->camera_descriptor.Get(frame_index),
             GlobalData::GetInstance()->texture_descriptor.Get(),
-            GlobalData::GetInstance()->selection_descriptor.Get(frame_index),
+            GlobalData::GetInstance()->selection_descriptor.Get(),
             GlobalData::GetInstance()->dynamic_entity_descriptor.Get(),
             GlobalData::GetInstance()->group_descriptor.Get()
         };
